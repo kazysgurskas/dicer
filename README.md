@@ -1,4 +1,7 @@
-# Dicer
+<h1>
+  <img src="docs/static/images/logo.svg" alt="" width="40" height="40" align="top">
+  Dicer
+</h1>
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/konradasb/dicer/badge)](https://scorecard.dev/viewer/?uri=github.com/konradasb/dicer)
 [![test](https://github.com/konradasb/dicer/actions/workflows/test.yaml/badge.svg)](https://github.com/konradasb/dicer/actions/workflows/test.yaml)
