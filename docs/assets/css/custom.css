@@ -437,3 +437,450 @@ body:has(.dicer-hero) {
   border-left: 1px solid var(--dicer-line);
   font-size: 0.85rem;
 }
+/*
+ * The home page's picture: the same images under Docker or under Dicer, as
+ * the switch in its command says, and what a breach of one of them does on
+ * each side. What belongs to one side only is marked dicer-stack-docker or
+ * dicer-stack-dicer, and fades with its side.
+ */
+
+.dicer-stack {
+  /* The space between the machines and the host. */
+  --dicer-stack-gap: 1.5rem;
+  /* How long a breach takes to play out, before it plays again. */
+  --dicer-stack-breach: 6s;
+  --dicer-stack-danger: #f43f5e;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dicer-stack-gap);
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+/* Both sides' text in one cell, so that nothing moves as they swap. */
+.dicer-stack-host,
+.dicer-stack-caption {
+  display: grid;
+}
+
+.dicer-stack-host > *,
+.dicer-stack-caption > * {
+  grid-area: 1 / 1;
+}
+
+.dicer-stack-docker,
+.dicer-stack-dicer {
+  transition: opacity 0.45s ease-in-out, visibility 0.45s;
+}
+
+/* Hidden, not only faded, so that a screen reader reads one side. */
+.dicer-stack[data-side="dicer"] .dicer-stack-docker,
+.dicer-stack[data-side="docker"] .dicer-stack-dicer {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* The command, and the switch that is its first word. */
+
+.dicer-stack-command {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dicer-stack-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--dicer-line);
+  border-radius: 999px;
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  font-size: 0.9rem;
+  color: var(--dicer-ink);
+  background: var(--dicer-surface);
+  box-shadow: 0 10px 30px -18px rgb(2 6 23 / 0.35);
+}
+
+.dicer-stack-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--dicer-line);
+  border-radius: 999px;
+  background: var(--dicer-line);
+}
+
+.dicer-stack-toggle button {
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font: inherit;
+  color: var(--dicer-muted);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.dicer-stack-toggle button:hover {
+  color: var(--dicer-ink);
+}
+
+.dicer-stack-toggle button:focus-visible {
+  outline: 2px solid var(--dicer-cyan);
+  outline-offset: 1px;
+}
+
+.dicer-stack-toggle button[aria-pressed="true"] {
+  color: var(--dicer-ink);
+  background: var(--dicer-surface);
+  box-shadow: 0 2px 8px -3px rgb(2 6 23 / 0.35);
+}
+
+.dicer-stack-toggle button[data-side="dicer"][aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--dicer-cyan);
+}
+
+/* Until the switch is used, docker asks to be tried, and a line says why. */
+.dicer-stack:not([data-used]) .dicer-stack-toggle button[data-side="docker"] {
+  animation: dicer-stack-beckon 2.4s ease-in-out infinite;
+}
+
+@keyframes dicer-stack-beckon {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(6 182 212 / 0); }
+  50% { box-shadow: 0 0 0 4px rgb(6 182 212 / 0.25); }
+}
+
+.dicer-stack-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--dicer-muted);
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+.dicer-stack[data-used] .dicer-stack-hint {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* The images, and under each, a line to the shared kernel or a kernel of its own. */
+
+.dicer-stack-machines {
+  display: grid;
+  /* Equal whatever they hold: a long name is cut short, not given room. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  padding: 1rem 0.9rem 0;
+}
+
+.dicer-stack-machine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The machine Dicer puts around each image and its kernel. */
+.dicer-stack-vm {
+  position: absolute;
+  inset: -0.7rem;
+  border: 1.5px solid rgb(6 182 212 / 0.55);
+  border-radius: 1.1rem;
+  background: rgb(6 182 212 / 0.05);
+  box-shadow: 0 0 36px -10px rgb(6 182 212 / 0.6);
+  transition: opacity 0.45s ease-in-out, transform 0.45s ease-in-out;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-vm {
+  opacity: 0;
+  transform: scale(1.08);
+}
+
+.dicer-stack-vm span {
+  position: absolute;
+  padding: 0 0.35rem;
+  border-radius: 0.3rem;
+  font-size: 0.6rem;
+  background: var(--dicer-surface);
+}
+
+.dicer-stack-vm-label {
+  top: -0.6rem;
+  left: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dicer-cyan);
+}
+
+.dicer-stack-vm-started {
+  right: 0.7rem;
+  bottom: -0.55rem;
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  color: var(--dicer-muted);
+}
+
+.dicer-stack-app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem 0.4rem;
+  border: 1px solid var(--dicer-line);
+  border-radius: 0.8rem;
+  color: var(--dicer-muted);
+  background: var(--dicer-surface);
+  box-shadow: 0 10px 30px -18px rgb(2 6 23 / 0.35);
+}
+
+.dicer-stack-app svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-bottom: 0.25rem;
+  fill: currentColor;
+}
+
+.dicer-stack-app strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dicer-ink);
+}
+
+.dicer-stack-app em {
+  font-size: 0.66rem;
+  font-style: normal;
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+}
+
+.dicer-stack-alert {
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--dicer-stack-danger);
+  opacity: 0;
+  transform: translateX(-50%);
+}
+
+.dicer-stack-slot {
+  position: relative;
+  display: grid;
+  height: 4.3rem;
+}
+
+.dicer-stack-slot > * {
+  grid-area: 1 / 1;
+}
+
+/* Straight down to the host's kernel: a container's calls go to it directly. */
+.dicer-stack-link {
+  position: relative;
+  justify-self: center;
+  width: 0;
+  height: calc(100% + var(--dicer-stack-gap));
+  border-left: 1.5px dashed rgb(100 116 139 / 0.6);
+}
+
+/* What travels along it when a breach does. */
+.dicer-stack-link::after {
+  content: "";
+  position: absolute;
+  left: -4.75px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dicer-stack-danger);
+  box-shadow: 0 0 10px var(--dicer-stack-danger);
+  opacity: 0;
+}
+
+/* Under each image in its machine: its kernel, and the process that runs it. */
+.dicer-stack-guest {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: 0.35rem;
+}
+
+.dicer-stack-kernel {
+  padding: 0.3rem 0;
+  border-radius: 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  text-align: center;
+  color: #fff;
+  background: linear-gradient(90deg, var(--dicer-cyan), var(--dicer-teal));
+}
+
+.dicer-stack-vmm {
+  padding: 0.25rem 0;
+  border: 1px solid rgb(6 182 212 / 0.45);
+  border-radius: 0.5rem;
+  font-size: 0.62rem;
+  font-family: var(--hx-font-mono, ui-monospace, monospace);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dicer-ink);
+  background: var(--dicer-surface);
+}
+
+/* The host both sides share. */
+.dicer-stack-layer {
+  display: grid;
+  place-items: center;
+  height: 2.5rem;
+  padding-inline: 1rem;
+  border: 1px solid var(--dicer-line);
+  border-radius: 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--dicer-ink);
+  background: var(--dicer-surface);
+}
+
+.dicer-stack-caption {
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--dicer-muted);
+}
+
+/*
+ * The breach. Under Docker: web is breached, and it runs down to the
+ * shared kernel and up into db and cache. Under Dicer: it reaches web's own
+ * kernel and stops at web's machine. Each plays from its start whenever its
+ * side is shown.
+ */
+
+.dicer-stack[data-side="docker"] .dicer-stack-breached .dicer-stack-app,
+.dicer-stack[data-side="dicer"] .dicer-stack-breached .dicer-stack-app {
+  animation: dicer-stack-breach var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-alert,
+.dicer-stack[data-side="dicer"] .dicer-stack-alert {
+  animation: dicer-stack-alert var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-breached .dicer-stack-link::after {
+  animation: dicer-stack-down var(--dicer-stack-breach) ease-in infinite;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-host {
+  animation: dicer-stack-breach-host var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-machine:not(.dicer-stack-breached) .dicer-stack-link::after {
+  animation: dicer-stack-up var(--dicer-stack-breach) ease-out infinite;
+}
+
+.dicer-stack[data-side="docker"] .dicer-stack-machine:not(.dicer-stack-breached) .dicer-stack-app {
+  animation: dicer-stack-breach-late var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+.dicer-stack[data-side="dicer"] .dicer-stack-breached .dicer-stack-kernel {
+  animation: dicer-stack-breach-kernel var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+.dicer-stack[data-side="dicer"] .dicer-stack-breached .dicer-stack-vm {
+  animation: dicer-stack-contain var(--dicer-stack-breach) ease-in-out infinite;
+}
+
+@keyframes dicer-stack-breach {
+  0%, 6%, 100% { border-color: var(--dicer-line); box-shadow: 0 0 0 0 rgb(244 63 94 / 0), 0 10px 30px -18px rgb(2 6 23 / 0.35); }
+  12%, 92% {
+    border-color: var(--dicer-stack-danger);
+    box-shadow: 0 0 0 3px rgb(244 63 94 / 0.15), 0 0 28px -8px rgb(244 63 94 / 0.8);
+  }
+}
+
+@keyframes dicer-stack-alert {
+  0%, 6%, 96%, 100% { opacity: 0; }
+  12%, 90% { opacity: 1; }
+}
+
+@keyframes dicer-stack-down {
+  0%, 14% { top: 0; opacity: 0; }
+  16% { top: 0; opacity: 1; }
+  36% { top: 100%; opacity: 1; }
+  40%, 100% { top: 100%; opacity: 0; }
+}
+
+@keyframes dicer-stack-breach-host {
+  0%, 34%, 100% { border-color: var(--dicer-line); color: var(--dicer-ink); box-shadow: 0 0 28px -8px rgb(244 63 94 / 0); }
+  40%, 92% {
+    border-color: var(--dicer-stack-danger);
+    color: var(--dicer-stack-danger);
+    box-shadow: 0 0 28px -8px rgb(244 63 94 / 0.8);
+  }
+}
+
+@keyframes dicer-stack-up {
+  0%, 42% { top: 100%; opacity: 0; }
+  44% { top: 100%; opacity: 1; }
+  64% { top: 0; opacity: 1; }
+  68%, 100% { top: 0; opacity: 0; }
+}
+
+@keyframes dicer-stack-breach-late {
+  0%, 62%, 100% { border-color: var(--dicer-line); box-shadow: 0 0 0 0 rgb(244 63 94 / 0), 0 10px 30px -18px rgb(2 6 23 / 0.35); }
+  68%, 92% {
+    border-color: var(--dicer-stack-danger);
+    box-shadow: 0 0 0 3px rgb(244 63 94 / 0.15), 0 0 28px -8px rgb(244 63 94 / 0.8);
+  }
+}
+
+@keyframes dicer-stack-breach-kernel {
+  0%, 22%, 100% { filter: none; }
+  28%, 92% { filter: hue-rotate(155deg) saturate(1.3); }
+}
+
+@keyframes dicer-stack-contain {
+  0%, 36%, 100% {
+    border-color: rgb(6 182 212 / 0.55);
+    box-shadow: 0 0 0 4px rgb(244 63 94 / 0), 0 0 36px -10px rgb(6 182 212 / 0.6);
+  }
+  44%, 92% {
+    border-color: var(--dicer-stack-danger);
+    box-shadow: 0 0 0 4px rgb(244 63 94 / 0.12), 0 0 36px -10px rgb(244 63 94 / 0.7);
+  }
+}
+
+/* Without motion, each side shows how its breach ends. */
+@media (prefers-reduced-motion: reduce) {
+  .dicer-stack * {
+    transition: none !important;
+  }
+
+  .dicer-stack *,
+  .dicer-stack *::after {
+    animation-delay: calc(var(--dicer-stack-breach) * -0.8) !important;
+    animation-play-state: paused !important;
+  }
+}
+
+/* On a phone the tiles are too narrow for an image's name as well. */
+@media (max-width: 30rem) {
+  .dicer-stack-app em,
+  .dicer-stack-vm-started {
+    display: none;
+  }
+
+  .dicer-stack-machines {
+    gap: 1.6rem;
+  }
+
+  .dicer-stack-vmm {
+    font-size: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+}
