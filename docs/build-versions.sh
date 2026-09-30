@@ -5,8 +5,8 @@
 #
 # Builds every version of the documentation that docs/versions lists into
 # one directory, as the site is published: each under its own path, with a
-# switcher between them, the ones that are not the latest release saying
-# so, and the site's root leading to the latest.
+# switcher between them, the ones that are not the latest saying so, and
+# the site's root leading to the latest.
 #
 #   docs/build-versions.sh HUGO OUT
 #
@@ -42,15 +42,8 @@ if ((${#names[@]} == 0)); then
   exit 1
 fi
 
-# The latest is the first release listed; until there is one, the first
-# version.
+# The latest is the first version listed.
 latest=${names[0]}
-for name in "${names[@]}"; do
-  if [[ $name != dev ]]; then
-    latest=$name
-    break
-  fi
-done
 
 work=$(mktemp -d)
 cleanup() {

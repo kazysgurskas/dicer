@@ -2,8 +2,8 @@
 # first: a name, which is also its path on the site, and the Git ref it is
 # built from, where "." is the working tree.
 #
-# dev is main, which is not released yet. The first release listed is the
-# latest, where the site's root leads; until there is one, dev is.
+# The first listed is the latest, where the site's root leads. It is dev,
+# main, which the install script builds by default.
 dev   .
 v0.2  v0.2.0
 v0.1  v0.1.0
