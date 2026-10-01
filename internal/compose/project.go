@@ -101,7 +101,8 @@ type Network struct {
 	Name string
 	// External networks are not created or deleted with the project.
 	External bool
-	// Request creates the network. Nil for an external one.
+	// Request creates the network. Nil for an external one. Its subnet is
+	// empty if the file gives none: up picks a free one, with FreeSubnet.
 	Request *dicerdv1.CreateNetworkRequest
 }
 

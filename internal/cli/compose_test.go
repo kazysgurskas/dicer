@@ -6,7 +6,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"maps"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,7 +29,7 @@ import (
 type composeDaemon struct {
 	*fakeInstanceDaemon
 
-	networkNames map[string]bool
+	networkNames map[string]string
 	volumeNames  map[string]bool
 
 	// healthyAfter is how many looks at a checked instance pass before it
@@ -37,12 +39,16 @@ type composeDaemon struct {
 	// exits says what a started instance's workload exits with, at once,
 	// by name.
 	exits map[string]int32
+
+	// beforeCreateNetwork, if set, runs as a network is created, under the
+	// lock: what happens on the host meanwhile.
+	beforeCreateNetwork func()
 }
 
 func newComposeDaemon(instances ...*dicerdv1.Instance) *composeDaemon {
 	d := &composeDaemon{
 		fakeInstanceDaemon: newFakeInstanceDaemon(instances...),
-		networkNames:       make(map[string]bool),
+		networkNames:       make(map[string]string),
 		volumeNames:        make(map[string]bool),
 		looks:              make(map[string]int),
 		exits:              make(map[string]int32),
@@ -133,26 +139,53 @@ func (d *composeDaemon) GetNetwork(_ context.Context, req *dicerdv1.GetNetworkRe
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.networkNames[req.GetName()] {
+	subnet, ok := d.networkNames[req.GetName()]
+	if !ok {
 		return nil, errdefs.NotFound("no network %q", req.GetName())
 	}
-	return &dicerdv1.Network{Name: req.GetName()}, nil
+	return &dicerdv1.Network{Name: req.GetName(), Subnet: subnet}, nil
 }
 
 func (d *composeDaemon) CreateNetwork(_ context.Context, req *dicerdv1.CreateNetworkRequest) (*dicerdv1.Network, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.record("create network " + req.GetName())
-	d.networkNames[req.GetName()] = true
+	if d.beforeCreateNetwork != nil {
+		d.beforeCreateNetwork()
+	}
+	// As the daemon does, a subnet another network has is refused.
+	want, err := netip.ParsePrefix(req.GetSubnet())
+	if err != nil {
+		return nil, errdefs.InvalidArgument("subnet is required")
+	}
+	for name, subnet := range d.networkNames {
+		if have, err := netip.ParsePrefix(subnet); err == nil && have.Overlaps(want) {
+			return nil, errdefs.InvalidArgument("subnet %s overlaps network %q (%s)", want, name, subnet)
+		}
+	}
+
+	d.record("create network " + req.GetName() + " " + req.GetSubnet())
+	d.networkNames[req.GetName()] = req.GetSubnet()
 	return &dicerdv1.Network{Name: req.GetName(), Subnet: req.GetSubnet()}, nil
+}
+
+// ListNetworks lists the networks there are, with their subnets.
+func (d *composeDaemon) ListNetworks(context.Context, *dicerdv1.ListNetworksRequest) (*dicerdv1.ListNetworksResponse, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	resp := &dicerdv1.ListNetworksResponse{}
+	for _, name := range slices.Sorted(maps.Keys(d.networkNames)) {
+		resp.Networks = append(resp.Networks, &dicerdv1.Network{Name: name, Subnet: d.networkNames[name]})
+	}
+	return resp, nil
 }
 
 func (d *composeDaemon) DeleteNetwork(_ context.Context, req *dicerdv1.DeleteNetworkRequest) (*emptypb.Empty, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.networkNames[req.GetName()] {
+	if _, ok := d.networkNames[req.GetName()]; !ok {
 		return nil, errdefs.NotFound("no network %q", req.GetName())
 	}
 	d.record("delete network " + req.GetName())
@@ -303,8 +336,13 @@ networks:
 	}
 
 	calls := d.calledWith()
-	if want := []string{"create network shop-backend", "create volume shop-data", "create shop-db"}; !slices.Equal(calls[:3], want) {
-		t.Errorf("first calls = %q, want %q", calls[:3], want)
+	// web names no network, so the project gets one of its own, given a
+	// free subnet.
+	if want := []string{
+		"create network shop-backend 172.30.0.0/24", "create network shop-default 10.213.0.0/24",
+		"create volume shop-data", "create shop-db",
+	}; !slices.Equal(calls[:4], want) {
+		t.Errorf("first calls = %q, want %q", calls[:4], want)
 	}
 	before := func(a, b string) bool {
 		i, j := slices.Index(calls, a), slices.Index(calls, b)
@@ -487,6 +525,66 @@ networks:
 	}
 }
 
+func TestComposeProjectsGetNetworksOfTheirOwn(t *testing.T) {
+	d := newComposeDaemon()
+	// The daemon's own network is there already.
+	d.networkNames["default"] = "172.20.0.0/16"
+	serveComposeDaemon(t, d)
+
+	shop := composeProject(t, "services: {db: {image: postgres:17}}")
+	blogDir := filepath.Join(t.TempDir(), "blog")
+	if err := os.MkdirAll(blogDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	blog := filepath.Join(blogDir, "compose.yaml")
+	if err := os.WriteFile(blog, []byte("services: {db: {image: postgres:17}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range []string{shop, blog} {
+		if out, err := runCompose(t, file, "up", "-d"); err != nil {
+			t.Fatalf("up %s: %v\n%s", file, err, out)
+		}
+	}
+
+	// Each db is on its own project's network, as db, so neither project's
+	// db answers for the other's.
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if got := d.networkNames; got["shop-default"] != "10.213.0.0/24" || got["blog-default"] != "10.213.1.0/24" {
+		t.Errorf("networks = %v, want a free subnet each", got)
+	}
+	for project, network := range map[string]string{"shop-db": "shop-default", "blog-db": "blog-default"} {
+		inst := d.instances[project]
+		if inst.GetNetworkName() != network {
+			t.Errorf("%s is on %q, want %q", project, inst.GetNetworkName(), network)
+		}
+	}
+	if created := d.created; created.GetHostname() != "db" {
+		t.Errorf("hostname = %q, want the service's name, which the network's DNS answers for", created.GetHostname())
+	}
+}
+
+func TestComposeUpPicksAnotherSubnetWhenOneIsTaken(t *testing.T) {
+	d := newComposeDaemon()
+	// Another network takes the subnet up picked, between its look at the
+	// networks and its asking for one.
+	d.beforeCreateNetwork = func() {
+		d.beforeCreateNetwork = nil
+		d.networkNames["sneaky"] = "10.213.0.0/24"
+	}
+	serveComposeDaemon(t, d)
+	file := composeProject(t, "services: {web: {image: nginx:1.27}}")
+
+	out, err := runCompose(t, file, "up", "-d")
+	if err != nil {
+		t.Fatalf("up: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Network shop-default created (10.213.1.0/24)") {
+		t.Errorf("output = %q, want the next free subnet", out)
+	}
+}
+
 func TestComposeUpRefusesAnInstanceNotItsOwn(t *testing.T) {
 	d := newComposeDaemon(&dicerdv1.Instance{Name: "shop-web", State: stateRunning})
 	serveComposeDaemon(t, d)
@@ -521,7 +619,9 @@ services:
 	if err != nil {
 		t.Fatalf("up: %v\n%s", err, out)
 	}
-	if calls := d.calledWith(); !slices.Equal(calls, []string{"create shop-migrate", "create shop-app"}) {
+	if calls := d.calledWith(); !slices.Equal(calls, []string{
+		"create network shop-default 10.213.0.0/24", "create shop-migrate", "create shop-app",
+	}) {
 		t.Errorf("calls = %q, want app started after migrate finished\n%s", calls, out)
 	}
 
@@ -673,7 +773,9 @@ func TestComposeDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("down: %v\n%s", err, out)
 	}
-	want := []string{"delete shop-web", "delete shop-api", "delete shop-db", "delete network shop-backend"}
+	want := []string{
+		"delete shop-web", "delete shop-api", "delete shop-db", "delete network shop-backend", "delete network shop-default",
+	}
 	if calls := d.calledWith(); !slices.Equal(calls, want) {
 		t.Errorf("calls = %q, want %q: instances in reverse order, then the network, and the volume kept", calls, want)
 	}

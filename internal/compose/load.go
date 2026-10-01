@@ -358,7 +358,7 @@ var unsupported = map[string]string{
 	"cap_drop":     "a guest is a whole machine, and its workload already has it to itself",
 	"devices":      "instances cannot be given host devices",
 	"network_mode": "an instance joins one network, named with networks",
-	"links":        "reach other services by address: see networks and ipv4_address",
+	"links":        "services on a network find each other by name already",
 	"extra_hosts":  "an instance's /etc/hosts cannot be added to",
 	"dns":          "set nameservers on the network instead",
 	"user":         "the image's user runs the command",
@@ -465,6 +465,18 @@ func (b *builder) project(raw *rawFile, name string) (*Project, error) {
 			return nil, fmt.Errorf("network %s: %w", key, err)
 		}
 		b.p.Networks[key] = network
+	}
+	// Services that name no network join one of the project's own, so that
+	// their names are theirs alone: a db of another project's is not on it.
+	if _, ok := b.p.Networks["default"]; !ok && slices.ContainsFunc(
+		slices.Collect(maps.Values(raw.Services)),
+		func(s *rawService) bool { return s != nil && len(s.Networks.names) == 0 },
+	) {
+		network, err := b.network("default", nil)
+		if err != nil {
+			return nil, fmt.Errorf("network default: %w", err)
+		}
+		b.p.Networks["default"] = network
 	}
 	for key, v := range raw.Volumes {
 		volume, err := b.volume(key, v)
