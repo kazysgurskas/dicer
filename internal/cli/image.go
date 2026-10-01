@@ -144,15 +144,18 @@ func newImageShowCommand() *cobra.Command {
 
 func newImageDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "delete REF...",
-		Short:             "Delete one or more unused images",
-		Args:              oneOrMore("image"),
+		Use:   "delete (REF... | --all)",
+		Short: "Delete one or more unused images, or all of them",
+		Long: "Deletes the images named, or with --all every image, asking first on a\n" +
+			"terminal. An image an instance is defined to boot from is refused unless\n" +
+			"-f is given; to delete only the unused ones, see dicer image prune.",
+		Args:              namesOrAll("image"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listImages),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			force, _ := cmd.Flags().GetBool("force")
 
-			return eachName(cmd, args, listImages, func(client *dicer.Client, ref string) error {
+			return eachNameOrAll(cmd, args, listImages, "images", func(client *dicer.Client, ref string) error {
 				if _, err := client.DeleteImage(cmd.Context(), &dicerdv1.DeleteImageRequest{Ref: ref, Force: force}); err != nil {
 					return withHint(err, codes.FailedPrecondition, "use -f to delete it anyway")
 				}
@@ -164,6 +167,7 @@ func newImageDeleteCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("force", "f", false, "Force deletion of an image that is in use by one or more instances")
+	addDeleteAllFlags(cmd, "images")
 
 	return cmd
 }

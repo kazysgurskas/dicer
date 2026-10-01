@@ -11,6 +11,6 @@ Manage volumes.
 | Command | Description |
 |---|---|
 | [`dicer volume create`]({{< relref "/docs/reference/cli/dicer_volume_create" >}}) | Create a volume. |
-| [`dicer volume delete`]({{< relref "/docs/reference/cli/dicer_volume_delete" >}}) | Delete one or more volumes no instance uses. |
+| [`dicer volume delete`]({{< relref "/docs/reference/cli/dicer_volume_delete" >}}) | Delete one or more volumes no instance uses, or all of them. |
 | [`dicer volume list`]({{< relref "/docs/reference/cli/dicer_volume_list" >}}) | List volumes. |
 | [`dicer volume show`]({{< relref "/docs/reference/cli/dicer_volume_show" >}}) | Show a volume. |

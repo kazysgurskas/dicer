@@ -180,15 +180,20 @@ func newInstanceResumeCommand() *cobra.Command {
 
 func newInstanceDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "delete NAME...",
-		Short:             "Delete one or more instances",
-		Args:              oneOrMore("instance name"),
+		Use:   "delete (NAME... | --all)",
+		Short: "Delete one or more instances, or all of them",
+		Long: "Deletes the instances named, or with --all every instance, asking first on a\n" +
+			"terminal. A running instance is refused unless -f stops it first.",
+		Example: "  dicer rm web\n" +
+			"  dicer rm -f web worker\n" +
+			"  dicer rm --all -f",
+		Args:              namesOrAll("instance name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, instancesIn()),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			force, _ := cmd.Flags().GetBool("force")
 
-			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, instancesIn(), "instances", func(client *dicer.Client, name string) error {
 				_, err := client.DeleteInstance(cmd.Context(), &dicerdv1.DeleteInstanceRequest{Name: name, Force: force})
 				if err != nil {
 					return withHint(err, codes.FailedPrecondition, "stop it first or use -f")
@@ -201,6 +206,7 @@ func newInstanceDeleteCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("force", "f", false, "Stop an instance first if it is running")
+	addDeleteAllFlags(cmd, "instances")
 
 	return cmd
 }

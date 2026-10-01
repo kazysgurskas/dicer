@@ -10,7 +10,7 @@ Manage images.
 
 | Command | Description |
 |---|---|
-| [`dicer image delete`]({{< relref "/docs/reference/cli/dicer_image_delete" >}}) | Delete one or more unused images. |
+| [`dicer image delete`]({{< relref "/docs/reference/cli/dicer_image_delete" >}}) | Delete one or more unused images, or all of them. |
 | [`dicer image list`]({{< relref "/docs/reference/cli/dicer_image_list" >}}) | List pulled images. |
 | [`dicer image prune`]({{< relref "/docs/reference/cli/dicer_image_prune" >}}) | Delete every unused image. |
 | [`dicer image pull`]({{< relref "/docs/reference/cli/dicer_image_pull" >}}) | Pull an image and convert it to a bootable disk. |

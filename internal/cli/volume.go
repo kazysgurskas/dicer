@@ -129,14 +129,16 @@ func newVolumeShowCommand() *cobra.Command {
 }
 
 func newVolumeDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:               "delete NAME...",
-		Short:             "Delete one or more volumes no instance uses",
-		Args:              oneOrMore("volume name"),
+	cmd := &cobra.Command{
+		Use:   "delete (NAME... | --all)",
+		Short: "Delete one or more volumes no instance uses, or all of them",
+		Long: "Deletes the volumes named, or with --all every volume, asking first on a\n" +
+			"terminal. A volume an instance is defined to mount is refused.",
+		Args:              namesOrAll("volume name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listVolumes),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return eachName(cmd, args, listVolumes, func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, listVolumes, "volumes", func(client *dicer.Client, name string) error {
 				if _, err := client.DeleteVolume(cmd.Context(), &dicerdv1.DeleteVolumeRequest{Name: name}); err != nil {
 					return err
 				}
@@ -146,4 +148,7 @@ func newVolumeDeleteCommand() *cobra.Command {
 			})
 		},
 	}
+	addDeleteAllFlags(cmd, "volumes")
+
+	return cmd
 }
