@@ -76,11 +76,16 @@ func TestCreateRefusesWhatCouldNeverStart(t *testing.T) {
 	foreignIP.Mounts, foreignIP.StaticIP = nil, "192.168.9.9"
 	missingKernel := foreignIP
 	missingKernel.StaticIP, missingKernel.KernelName = "", "gone"
+	// The harness's manager allows no directory.
+	directoryNotAllowed := foreignIP
+	directoryNotAllowed.StaticIP = ""
+	directoryNotAllowed.Mounts = []Mount{{Type: MountTypeDirectory, Source: t.TempDir(), Target: "/app"}}
 
 	for name, spec := range map[string]Spec{
 		"a missing volume":                 missingVolume,
 		"a static IP the network lacks":    foreignIP,
 		"a missing kernel":                 missingKernel,
+		"a directory not allowed":          directoryNotAllowed,
 		"an invalid definition (no image)": {ID: "new-id", Name: "new", VCPUs: 1},
 	} {
 		t.Run(name, func(t *testing.T) {

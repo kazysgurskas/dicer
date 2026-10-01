@@ -75,6 +75,66 @@ image. For a directory of files, mount each file, or put them on a volume.
   as the host's root account.
 {{< /callout >}}
 
+## Directories
+
+A `directory` mount shares a directory on the daemon's host with the guest
+while it runs: what either side changes, the other sees. It suits
+development, with the source on the host, in your editor, and the workload in
+the guest.
+
+The daemon shares only the directories its host's administrator allows, each
+with everything under it. List them in `/etc/dicerd/config.yaml`, then
+restart the daemon:
+
+```yaml {filename="/etc/dicerd/config.yaml"}
+mounts:
+  allowed_directories:
+    - /home/dev/projects
+```
+
+With none listed, which is the default, no instance can mount a directory.
+Then mount one, or one under it:
+
+```console
+$ dicer run -d --name site -p 8000:8000 \
+    --mount type=directory,source=/home/dev/projects/site,target=/site \
+    python:3.13 python -m http.server 8000 -d /site
+```
+
+Edit a file in `/home/dev/projects/site`, and the next request serves the
+change.
+
+The source is an absolute path on the daemon's host, which need not be the
+machine you run `dicer` on. A symbolic link under an allowed directory is
+followed only as far as it, as though it were the root directory, so a link
+cannot reach the rest of the host. Which directories are allowed is checked
+each time the instance starts, so removing one from the list stops
+instances mounting it from their next start.
+
+Files keep the owners and permissions they have on the host, so the workload
+may need to run as the user that owns them. `readonly` stops the guest
+writing to it: virtiofsd, which serves the directory to the guest, refuses
+the writes itself, so root in the guest cannot remount it writable. Without
+`readonly`, the guest can change anything in the directory, as root.
+
+Directory mounts need Cloud Hypervisor, the default hypervisor: an instance
+on Firecracker cannot mount a directory. Nothing needs installing on the
+host: `dicerd` carries virtiofsd, as it does the hypervisors.
+
+A few things work differently from a disk:
+
+- **The guest is told of a change on the host when it next looks**, within
+  a second, not at once. A tool that watches files for changes, such as a
+  development server reloading on save, should poll rather than wait to be
+  told; most have an option for it.
+- **An instance that mounts a directory can be snapshotted or forked only
+  while it is stopped**, and cannot be put on standby. The hypervisor cannot
+  freeze the device that shares the directory.
+- **If virtiofsd stops while the guest runs**, the guest's reads and writes
+  under the mount fail until the instance is restarted. Its log,
+  `virtiofsd-N.log` in the instance's directory under the daemon's
+  `data_dir`, says why.
+
 ## Volumes
 
 A volume is a disk of its own, for data that must outlive any one instance,

@@ -81,7 +81,8 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	flags.StringArrayP("publish", "p", nil,
 		"Publish a guest port on the host, as [hostIP:]hostPort:guestPort[/tcp|udp] (repeatable)")
 	flags.StringArray("mount", nil,
-		"Mount a volume, a file on this machine or a tmpfs, as [type=volume|file|tmpfs,][source=...,]target=/path[,readonly] (repeatable)")
+		"Mount a volume, a file on this machine, a directory on the daemon's host or a tmpfs, as "+
+			"[type=volume|file|directory|tmpfs,][source=...,]target=/path[,readonly] (repeatable)")
 	flags.StringArrayP("env", "e", nil,
 		"Environment variable as KEY=VALUE, or KEY to pass this shell's value (repeatable)")
 	flags.StringArray("env-file", nil, "Read environment variables from a file of KEY=VALUE lines (repeatable)")
@@ -486,7 +487,8 @@ func parseEach[T any](specs []string, parse func(string) (T, error)) ([]T, error
 // separated key=value pairs, e.g. type=volume,source=data,target=/data,readonly.
 // src and dst or destination may stand for source and target, and ro for
 // readonly. The type defaults to volume. A file mount's source is a file on
-// this machine, which is read now, so that its contents are sent.
+// this machine, which is read now, so that its contents are sent. A
+// directory mount's source is a directory on the daemon's host.
 func parseMount(s string) (dicer.Mount, error) {
 	m := dicer.Mount{Type: dicer.MountTypeVolume}
 

@@ -186,6 +186,15 @@ func TestValidate(t *testing.T) {
 		{name: "registry helper and password", mutate: func(c *Config) {
 			c.Registries = map[string]RegistryConfig{"ghcr.io": {CredentialHelper: "ecr-login", Username: "bot"}}
 		}, wantErr: true},
+		{name: "allowed directories", mutate: func(c *Config) {
+			c.Mounts.AllowedDirectories = []string{"/srv/shared", "/home/dev/projects"}
+		}},
+		{name: "relative allowed directory", mutate: func(c *Config) {
+			c.Mounts.AllowedDirectories = []string{"srv/shared"}
+		}, wantErr: true},
+		{name: "root allowed", mutate: func(c *Config) {
+			c.Mounts.AllowedDirectories = []string{"/"}
+		}, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -207,6 +216,12 @@ func TestValidate(t *testing.T) {
 func TestLoadConfigRejectsInvalidValues(t *testing.T) {
 	if _, err := loadConfig(writeConfig(t, "log_level: verbose\n")); err == nil {
 		t.Error("expected loadConfig to validate what it parsed")
+	}
+}
+
+func TestNoDirectoriesAreAllowedByDefault(t *testing.T) {
+	if dirs := defaultConfig().Mounts.AllowedDirectories; len(dirs) != 0 {
+		t.Errorf("Mounts.AllowedDirectories = %v by default, want none: a request must not reach the host's files unless its administrator says so", dirs)
 	}
 }
 

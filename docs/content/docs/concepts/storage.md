@@ -74,13 +74,15 @@ enforces them. See [Rate limits](../../guides/running-workloads#rate-limits).
 
 ## Mounts
 
-Besides volumes, an instance can mount a copy of a file from the host, and
-an empty in-memory filesystem. Each kind suits a different job:
+Besides volumes, an instance can mount a copy of a file from the host, a
+directory on the host, and an empty in-memory filesystem. Each kind suits a
+different job:
 
 | Type | For | Source | Lifetime |
 |---|---|---|---|
 | `volume` | Data that must outlive the instance | A volume | Until the volume is deleted. It outlives the instance. |
 | `file` | Configuration from the host | A file on the host | A copy, made at each start. A change on the host reaches the guest at its next start, and a change made in the guest is lost when it stops. |
+| `directory` | Working on files from the host | A directory on the daemon's host, which its configuration allows | Shared while the guest runs. A change on either side is seen on the other. Cloud Hypervisor only. |
 | `tmpfs` | Scratch space | None | In the guest's memory. Its contents are lost when the guest stops. |
 
 [Files and volumes](../../guides/files-and-volumes) shows how to use each.

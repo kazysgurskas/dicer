@@ -49,6 +49,10 @@ snapshotted.
 
 A memory snapshot is refused for an instance that can write to a volume.
 See [Volumes and frozen guests](../files-and-volumes#volumes-and-frozen-guests).
+It is also refused for an instance that mounts a
+[host directory](../files-and-volumes#directories), because the hypervisor
+cannot save the device that shares it. Stop the instance first to take a
+disk snapshot.
 
 ## Restoring
 

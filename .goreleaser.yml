@@ -8,8 +8,9 @@ project_name: dicer
 
 before:
   hooks:
-    # Builds the guest binaries and downloads the hypervisor binaries
-    # for every architecture; each dicerd build embeds only its own.
+    # Builds the guest binaries and downloads the hypervisor binaries and
+    # virtiofsd for every architecture; each dicerd build embeds only its
+    # own. It downloads virtiofsd's licences, which dicerd ships with.
     - make release-prep
     # The shell completions the package installs.
     - make completions
@@ -68,6 +69,9 @@ archives:
     files:
       - LICENSE
       - README.md
+      # dicerd embeds virtiofsd, which is distributed under these.
+      - src: internal/virtiofs/bin/LICENSE-*
+        dst: licenses/virtiofsd
 
 # The Linux package, published to the apt and dnf repository at pkg.dicer.sh
 # by .github/workflows/packages.yaml: the daemon and its service, with the
@@ -95,8 +99,9 @@ nfpms:
       Run virtual machines from container images, on one host
       Dicer pulls an OCI image, converts it to a read-only root filesystem and
       boots it as a VM under Cloud Hypervisor or Firecracker, which this
-      package carries. It is the daemon, dicerd, as a systemd service, and the
-      dicer command line. It needs KVM.
+      package carries, as it does virtiofsd, for directory mounts. It is the
+      daemon, dicerd, as a systemd service, and the dicer command line. It
+      needs KVM.
     section: admin
     bindir: /usr/bin
     file_name_template: "{{ .ConventionalFileName }}"
@@ -135,6 +140,13 @@ nfpms:
         packager: deb
       - src: LICENSE
         dst: /usr/share/licenses/dicer/LICENSE
+        packager: rpm
+      # dicerd embeds virtiofsd, which is distributed under these.
+      - src: internal/virtiofs/bin/LICENSE-*
+        dst: /usr/share/doc/dicer/virtiofsd/
+        packager: deb
+      - src: internal/virtiofs/bin/LICENSE-*
+        dst: /usr/share/licenses/dicer/virtiofsd/
         packager: rpm
     rpm:
       signature:

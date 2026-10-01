@@ -21,6 +21,8 @@ import (
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/process"
+	"github.com/konradasb/dicer/internal/virtiofs"
 )
 
 // start is Start, for an instance its caller has looked up.
@@ -115,7 +117,15 @@ func (m *Manager) boot(ctx context.Context, instance Spec, restarts int) error {
 	}
 	cu.Add(setup.cleanup)
 
-	if err := m.writeGuestDisks(ctx, instance, starter, boot.image, boot.mounts, setup, guest.Status{}); err != nil {
+	// virtiofsd listens before the VMM, which connects to it as it starts.
+	filesystems, stopShares, err := m.startShares(ctx, instance, boot.mounts.shares)
+	if err != nil {
+		return err
+	}
+	cu.Add(stopShares)
+	boot.filesystems = filesystems
+
+	if err := m.writeGuestDisks(ctx, instance, starter, boot.image, boot.mounts.guest, setup, guest.Status{}); err != nil {
 		return err
 	}
 
@@ -175,12 +185,14 @@ func (m *Manager) setStoppedByUser(ctx context.Context, instance Spec, stopped b
 
 // bootAssets is what an instance boots from, resolved at start.
 type bootAssets struct {
-	image       *image.Image
-	kernelPath  string
-	kernelArgs  string
-	initrdPath  string
-	mounts      []guest.Mount
-	volumeDisks []hypervisor.DiskConfig
+	image      *image.Image
+	kernelPath string
+	kernelArgs string
+	initrdPath string
+	mounts     resolvedMounts
+	// filesystems are the devices that share mounts.shares, once virtiofsd
+	// serves them.
+	filesystems []hypervisor.FilesystemConfig
 }
 
 // resolveBoot resolves the image, kernel, initrd and mounts instance boots
@@ -208,7 +220,7 @@ func (m *Manager) resolveBoot(ctx context.Context, instance Spec, starter hyperv
 	if b.initrdPath, err = m.initrds.Prepare(ctx); err != nil {
 		return b, fmt.Errorf("prepare initrd: %w", err)
 	}
-	if b.mounts, b.volumeDisks, err = m.resolveMounts(instance); err != nil {
+	if b.mounts, err = m.resolveMounts(instance); err != nil {
 		return b, err
 	}
 	return b, nil
@@ -232,7 +244,7 @@ func (m *Manager) vmSpec(instance Spec, b bootAssets, nic hypervisor.NetworkInte
 		{Path: overlayDiskFile},
 		{Path: configDiskFile, ReadOnly: true},
 		{Path: statusDiskFile},
-	}, b.volumeDisks...)
+	}, b.mounts.disks...)
 	for i := range disks {
 		disks[i].RateLimitBytesPerSecond = instance.DiskBytesPerSecond
 		disks[i].RateLimitIOPS = instance.DiskIOPS
@@ -250,6 +262,7 @@ func (m *Manager) vmSpec(instance Spec, b bootAssets, nic hypervisor.NetworkInte
 			HotplugBytes: max(instance.MaxMemoryBytes-instance.MemoryBytes, 0),
 		},
 		Disks:             disks,
+		Filesystems:       b.filesystems,
 		NetworkInterfaces: []hypervisor.NetworkInterfaceConfig{nic},
 		Console:           hypervisor.ConsoleConfig{Path: serialLogFile},
 		Vsock: &hypervisor.VsockConfig{
@@ -259,17 +272,35 @@ func (m *Manager) vmSpec(instance Spec, b bootAssets, nic hypervisor.NetworkInte
 	}
 }
 
-// resolveMounts turns instance's mounts into the guest's mount table and the
-// disks behind its volumes, which follow the four fixed disks in order.
-func (m *Manager) resolveMounts(instance Spec) ([]guest.Mount, []hypervisor.DiskConfig, error) {
+// directoryShare is a host directory an instance mounts, by the tag the
+// guest mounts it with.
+type directoryShare struct {
+	tag, source, target string
+	readOnly            bool
+}
+
+// resolvedMounts is what an instance's mounts become at start.
+type resolvedMounts struct {
+	// guest is the guest's mount table.
+	guest []guest.Mount
+	// disks are the disks behind the volumes, which follow the four fixed
+	// disks in order.
+	disks []hypervisor.DiskConfig
+	// shares are the host directories shared with the guest.
+	shares []directoryShare
+}
+
+// resolveMounts turns instance's mounts into the guest's mount table, the
+// disks behind its volumes and the host directories it shares. Each
+// directory is found under the directories the daemon allows mounting,
+// now, so a change to what is allowed applies from the next start.
+func (m *Manager) resolveMounts(instance Spec) (resolvedMounts, error) {
+	var r resolvedMounts
 	if len(instance.Mounts) == 0 {
-		return nil, nil, nil
+		return r, nil
 	}
 
-	var (
-		mounts = make([]guest.Mount, 0, len(instance.Mounts))
-		disks  []hypervisor.DiskConfig
-	)
+	r.guest = make([]guest.Mount, 0, len(instance.Mounts))
 	for _, mount := range instance.Mounts {
 		guestMount := guest.Mount{Target: mount.Target, ReadOnly: mount.ReadOnly}
 
@@ -277,22 +308,83 @@ func (m *Manager) resolveMounts(instance Spec) ([]guest.Mount, []hypervisor.Disk
 		case MountTypeVolume:
 			path, err := m.volumeDisk(mount.Source)
 			if err != nil {
-				return nil, nil, err
+				return resolvedMounts{}, err
 			}
-			guestMount.Volume = &guest.VolumeSource{Device: fmt.Sprintf("/dev/vd%c", 'e'+len(disks))}
-			disks = append(disks, hypervisor.DiskConfig{Path: path, ReadOnly: mount.ReadOnly})
+			guestMount.Volume = &guest.VolumeSource{Device: fmt.Sprintf("/dev/vd%c", 'e'+len(r.disks))}
+			r.disks = append(r.disks, hypervisor.DiskConfig{Path: path, ReadOnly: mount.ReadOnly})
 		case MountTypeFile:
 			guestMount.File = &guest.FileSource{Data: mount.Content, Mode: mount.FileMode()}
+		case MountTypeDirectory:
+			source, err := m.allowedDirectories.Resolve(mount.Source)
+			if err != nil {
+				return resolvedMounts{}, fmt.Errorf("mount on %s: %w", mount.Target, err)
+			}
+			share := directoryShare{
+				tag:      fmt.Sprintf("dicerfs%d", len(r.shares)),
+				source:   source,
+				target:   mount.Target,
+				readOnly: mount.ReadOnly,
+			}
+			guestMount.Directory = &guest.DirectorySource{Tag: share.tag}
+			r.shares = append(r.shares, share)
 		case MountTypeTmpfs:
 			guestMount.Tmpfs = &guest.TmpfsSource{}
 		default:
-			return nil, nil, fmt.Errorf("mount on %s: unknown type %q", mount.Target, mount.Type)
+			return resolvedMounts{}, fmt.Errorf("mount on %s: unknown type %q", mount.Target, mount.Type)
 		}
 
-		mounts = append(mounts, guestMount)
+		r.guest = append(r.guest, guestMount)
 	}
 
-	return mounts, disks, nil
+	return r, nil
+}
+
+// errNoShares is why an instance that mounts a host directory cannot start
+// when dicerd could not set virtiofsd up.
+var errNoShares = errdefs.InvalidState(
+	"this host cannot share directories with guests: dicerd logged why when it started")
+
+// startShares starts virtiofsd for each directory an instance shares, and
+// returns the devices that share them and a function that stops them. They
+// stop of their own accord when the VMM that connects to them does.
+func (m *Manager) startShares(
+	ctx context.Context, instance Spec, shares []directoryShare,
+) ([]hypervisor.FilesystemConfig, func(), error) {
+	if len(shares) == 0 {
+		return nil, func() {}, nil
+	}
+	if m.shares == nil {
+		return nil, nil, errNoShares
+	}
+	if hv := instance.EffectiveHypervisorType(); hv != hypervisor.TypeCloudHypervisor {
+		return nil, nil, errdefs.InvalidState("directory mounts need %s, not %s",
+			hypervisor.TypeCloudHypervisor, hv)
+	}
+
+	var procs []*process.Process
+	stop := func() {
+		for _, p := range procs {
+			p.Terminate()
+		}
+	}
+
+	filesystems := make([]hypervisor.FilesystemConfig, 0, len(shares))
+	for i, share := range shares {
+		p, err := m.shares.Start(ctx, virtiofs.Share{
+			Dir:      share.source,
+			Socket:   m.shareSocketPath(instance.ID, i),
+			ReadOnly: share.readOnly,
+			Log:      m.shareLogPath(instance, i),
+		})
+		if err != nil {
+			stop()
+			return nil, nil, fmt.Errorf("mount on %s: %w", share.target, err)
+		}
+		procs = append(procs, p)
+		// The VMM, in the runtime directory, is given the socket by name.
+		filesystems = append(filesystems, hypervisor.FilesystemConfig{Tag: share.tag, Socket: shareSocketFile(i)})
+	}
+	return filesystems, stop, nil
 }
 
 // volumeDisk finds the disk of the named volume.

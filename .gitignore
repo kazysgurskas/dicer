@@ -6,6 +6,7 @@
 /internal/kernel/bin/
 /internal/hypervisor/cloudhypervisor/bin/
 /internal/hypervisor/firecracker/bin/
+/internal/virtiofs/bin/
 
 # Test binaries and coverage profiles.
 *.test

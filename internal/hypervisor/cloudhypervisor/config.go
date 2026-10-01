@@ -24,8 +24,9 @@ func vmConfig(spec hypervisor.VMSpec) VmConfig {
 			Initramfs: ptr(spec.Boot.InitrdPath),
 		},
 		Cpus:    ptr(cpusConfig(spec.CPU)),
-		Memory:  ptr(memoryConfig(spec.Memory)),
+		Memory:  ptr(memoryConfig(spec.Memory, len(spec.Filesystems) > 0)),
 		Disks:   ptr(mapSlice(spec.Disks, diskConfig)),
+		Fs:      optionalSlice(mapSlice(spec.Filesystems, fsConfig)),
 		Serial:  &SerialConfig{Mode: ConsoleModeFile, File: ptr(spec.Console.Path)},
 		Console: &ConsoleConfig{Mode: ConsoleModeOff},
 		Net:     optionalSlice(mapSlice(spec.NetworkInterfaces, netConfig)),
@@ -60,9 +61,14 @@ func cpusConfig(c hypervisor.CPUConfig) CpusConfig {
 const virtioMemAlignment = 128 << 20
 
 // memoryConfig translates the memory, rounding what is set aside for hotplug
-// up to virtioMemAlignment.
-func memoryConfig(m hypervisor.MemoryConfig) MemoryConfig {
+// up to virtioMemAlignment. A vhost-user device, as a shared directory is,
+// reaches into guest memory from another process, so the memory must be
+// shared with it.
+func memoryConfig(m hypervisor.MemoryConfig, shared bool) MemoryConfig {
 	memory := MemoryConfig{Size: m.SizeBytes}
+	if shared {
+		memory.Shared = ptr(true)
+	}
 	if m.HotplugBytes > 0 {
 		memory.HotplugSize = ptr((m.HotplugBytes + virtioMemAlignment - 1) / virtioMemAlignment * virtioMemAlignment)
 		memory.HotplugMethod = ptr("VirtioMem")
@@ -97,6 +103,17 @@ func perSecondBucket(n int64) *TokenBucket {
 		return nil
 	}
 	return &TokenBucket{Size: n, RefillTime: 1000}
+}
+
+// A shared directory's request queues, as virtiofsd serves them by default.
+const (
+	fsNumQueues = 1
+	fsQueueSize = 1024
+)
+
+// fsConfig translates a shared directory.
+func fsConfig(f hypervisor.FilesystemConfig) FsConfig {
+	return FsConfig{Tag: f.Tag, Socket: f.Socket, NumQueues: fsNumQueues, QueueSize: fsQueueSize}
 }
 
 func netConfig(n hypervisor.NetworkInterfaceConfig) NetConfig {

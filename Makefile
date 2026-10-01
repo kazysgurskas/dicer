@@ -57,6 +57,7 @@ INITRD_BIN := internal/initrd/bin
 KERNEL_BIN := internal/kernel/bin
 CH_BIN    := internal/hypervisor/cloudhypervisor/bin
 FC_BIN    := internal/hypervisor/firecracker/bin
+VIRTIOFSD_BIN := internal/virtiofs/bin
 CH_SPEC   := specs/cloud-hypervisor/v0.3.0/spec.yaml
 # Cloud Hypervisor directory names are the full semver; its release tags
 # drop the patch, e.g. v49.0.0 is released as v49.0. Oldest first: the client
@@ -78,6 +79,21 @@ KERNEL_ASSET_amd64   := vmlinux-x86_64
 KERNEL_ASSET_arm64   := Image-arm64
 KERNEL_SHA256_amd64  := ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669
 KERNEL_SHA256_arm64  := 1ce335854bc05535584dd57638f10832db91c4a20cbb76bab7851890c3d14568
+# virtiofsd, which shares directories with guests, is the static build of
+# https://github.com/konradasb/virtiofsd-static. Its downloads are checked
+# against their SHA-256s, pinned here. Keep the version in step with
+# virtiofs.Version.
+VIRTIOFSD_VERSION := v1.14.0-1
+VIRTIOFSD_RELEASE := https://github.com/konradasb/virtiofsd-static/releases/download/$(VIRTIOFSD_VERSION)
+VIRTIOFSD_ASSET_amd64 := virtiofsd-x86_64
+VIRTIOFSD_ASSET_arm64 := virtiofsd-aarch64
+VIRTIOFSD_SHA256_virtiofsd-x86_64     := 8f78a45904fd7b456184f36143e6226b1b144d6bd1ee8a911ac60ccb439cd0a1
+VIRTIOFSD_SHA256_virtiofsd-aarch64    := 8ad9ce643063a8c8583b15721d55d99f67a26065c7544169f83dae388de47a31
+VIRTIOFSD_SHA256_LICENSE-APACHE       := cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+VIRTIOFSD_SHA256_LICENSE-BSD-3-Clause := a6d3ebd1c2f37d4fd83d0676621f695fc0cc2d8c6e646cdbb831b46e0650c208
+# The licences virtiofsd is distributed under, which the release archives
+# and packages carry beside dicerd.
+VIRTIOFSD_LICENSES := $(VIRTIOFSD_BIN)/LICENSE-APACHE $(VIRTIOFSD_BIN)/LICENSE-BSD-3-Clause
 
 LICENSE_IGNORE := -ignore 'bin/**' -ignore '**/bin/**' -ignore 'specs/**' -ignore 'docs/public/**' -ignore 'docs/resources/**' -ignore 'docs/site/**' -ignore 'dist/**' -ignore 'completions/**'
 
@@ -114,10 +130,11 @@ $(KERNEL_BIN)/%/$(KERNEL_VERSION)/vmlinux.zst:
 	zstd -19 -q --rm -f -o $@ $(@D)/vmlinux
 
 host_binaries = $(foreach v,$(CH_VERSIONS),$(CH_BIN)/$(1)/$(v)/cloud-hypervisor) \
-	$(foreach v,$(FC_VERSIONS),$(FC_BIN)/$(1)/$(v)/firecracker)
+	$(foreach v,$(FC_VERSIONS),$(FC_BIN)/$(1)/$(v)/firecracker) \
+	$(VIRTIOFSD_BIN)/$(1)/$(VIRTIOFSD_VERSION)/virtiofsd
 
 .PHONY: host-binaries
-host-binaries: $(call host_binaries,$(GOARCH)) ## Download the host binaries dicerd embeds: the hypervisors
+host-binaries: $(call host_binaries,$(GOARCH)) ## Download the host binaries dicerd embeds: the hypervisors and virtiofsd
 
 .PHONY: host-binaries-all
 host-binaries-all: $(foreach a,$(ARCHES),$(call host_binaries,$(a)))
@@ -142,8 +159,20 @@ $(FC_BIN)/$(1)/$(2)/firecracker:
 endef
 $(foreach a,$(ARCHES),$(foreach v,$(FC_VERSIONS),$(eval $(call fc_download,$(a),$(v)))))
 
+# virtiofsd_download downloads asset $(2) of virtiofsd's release to $(1),
+# keeping it only if its SHA-256 is the one pinned for it.
+define virtiofsd_download
+$(1):
+	@mkdir -p $$(@D)
+	curl -fsSL -o $$@.part $(VIRTIOFSD_RELEASE)/$(2)
+	echo '$(VIRTIOFSD_SHA256_$(2))  $$@.part' | shasum -a 256 -c -
+	mv $$@.part $$@
+endef
+$(foreach a,$(ARCHES),$(eval $(call virtiofsd_download,$(VIRTIOFSD_BIN)/$(a)/$(VIRTIOFSD_VERSION)/virtiofsd,$(VIRTIOFSD_ASSET_$(a)))))
+$(foreach f,$(VIRTIOFSD_LICENSES),$(eval $(call virtiofsd_download,$(f),$(notdir $(f)))))
+
 .PHONY: release-prep
-release-prep: guest-binaries-all host-binaries-all ## Prepare every architecture's embedded binaries (run by GoReleaser)
+release-prep: guest-binaries-all host-binaries-all $(VIRTIOFSD_LICENSES) ## Prepare every architecture's embedded binaries (run by GoReleaser)
 
 COMPLETIONS_DIR := completions
 
@@ -346,7 +375,7 @@ deploy: ## Build dicer and dicerd for Linux and install them on DEPLOY_HOST, res
 
 .PHONY: clean
 clean: ## Remove build output and downloaded binaries
-	rm -rf $(BIN_DIR) $(INITRD_BIN) $(KERNEL_BIN) $(CH_BIN) $(FC_BIN) $(COMPLETIONS_DIR)
+	rm -rf $(BIN_DIR) $(INITRD_BIN) $(KERNEL_BIN) $(CH_BIN) $(FC_BIN) $(VIRTIOFSD_BIN) $(COMPLETIONS_DIR)
 
 .PHONY: help
 help: ## Show this help

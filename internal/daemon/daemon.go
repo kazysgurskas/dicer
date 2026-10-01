@@ -24,6 +24,7 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/hostfs"
 	"github.com/konradasb/dicer/internal/hostinfo"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/hypervisor"
@@ -36,6 +37,7 @@ import (
 	"github.com/konradasb/dicer/internal/registry"
 	"github.com/konradasb/dicer/internal/token"
 	"github.com/konradasb/dicer/internal/version"
+	"github.com/konradasb/dicer/internal/virtiofs"
 	"github.com/konradasb/dicer/internal/volume"
 )
 
@@ -338,6 +340,16 @@ func (d *daemon) initServices() error {
 		return err
 	}
 
+	// virtiofsd is set up only where some directory may be mounted. Without
+	// it, instances cannot mount directories, and the rest of the daemon
+	// works.
+	var shares *virtiofs.Daemon
+	if len(d.cfg.Mounts.AllowedDirectories) > 0 {
+		if shares, err = d.newDirectoryShares(); err != nil {
+			d.logger.Warn("instances cannot mount host directories", "reason", err)
+		}
+	}
+
 	instanceCfg := instance.Config{
 		Store:       d.store,
 		Networks:    d.networkManager,
@@ -351,6 +363,8 @@ func (d *daemon) initServices() error {
 		Capacity:    capacity,
 		Events:      d.events,
 		Logger:      d.logger,
+
+		AllowedDirectories: hostfs.AllowedDirectories(d.cfg.Mounts.AllowedDirectories),
 	}
 	if d.cfg.Network.DNS {
 		// The servers ask the instance manager about the networks'
@@ -362,6 +376,9 @@ func (d *daemon) initServices() error {
 		})
 
 		instanceCfg.DNSServers = d.dnsServers
+	}
+	if shares != nil {
+		instanceCfg.Shares = shares
 	}
 	d.instanceManager = instance.NewManager(instanceCfg)
 
@@ -407,4 +424,16 @@ func (d *daemon) hostCapacity() (instance.Capacity, error) {
 		"allocatable_vcpus", allocatable.VCPUs, "allocatable_memory_bytes", allocatable.MemoryBytes)
 
 	return capacity, nil
+}
+
+// newDirectoryShares returns what shares host directories with guests: the
+// virtiofsd dicerd embeds, extracted beside the hypervisors. It is run in the
+// host's mount namespace, which has the data directory where the daemon's
+// does.
+func (d *daemon) newDirectoryShares() (*virtiofs.Daemon, error) {
+	path, err := virtiofs.Extract(filepath.Join(d.cfg.DataDir, "bin", "virtiofsd", virtiofs.Version, "virtiofsd"))
+	if err != nil {
+		return nil, err
+	}
+	return virtiofs.New(path)
 }

@@ -36,6 +36,7 @@ which keeps them consistent.
 │   ├── overlay.img           its overlay disk (sparse)
 │   ├── serial.log            its console log: dicer logs
 │   ├── hypervisor.log        its hypervisor's log: dicer logs --source hypervisor
+│   ├── virtiofsd-N.log       virtiofsd's log for its N-th directory mount
 │   └── standby/              on standby, its frozen memory and device state
 ├── snapshots/<name>/
 │   ├── config.yaml           the snapshot's definition
@@ -57,7 +58,7 @@ which keeps them consistent.
 ├── oci-cache/                downloaded layers, shared between images
 ├── tmp/                      images being unpacked
 ├── initrd/<arch>/initrd      the guest initramfs, built from dicer-init and dicer-agent
-├── bin/<hypervisor>/<version>/   the hypervisor binaries dicerd carries
+├── bin/<binary>/<version>/   the hypervisors and virtiofsd, as dicerd carries them
 └── events.jsonl              the events log: dicer events
 ```
 
@@ -78,6 +79,7 @@ take.
     ├── status.img            the disk the guest reports how it ended on
     ├── overlay.img           a link to its overlay disk
     ├── serial.log            a link to its console log
+    ├── fsN.sock              virtiofsd's socket for its N-th directory mount
     └── logs/vmm.log          a link to its hypervisor's log
 ```
 

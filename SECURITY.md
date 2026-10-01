@@ -49,7 +49,8 @@ The following are in scope for security reports:
   on an `--isolated` network, that the rules should stop
 - Files crossing the boundary — `dicer cp` writing outside the path it was
   given on either side, and any way to make the daemon read or write a file
-  on its host that a request names
+  on its host that a request names, outside the directories its
+  `mounts.allowed_directories` lists
 - Integrity — images not matching their digest, or a kernel not matching the
   `--sha256` it was imported with
 - Dependency vulnerabilities with a direct, exploitable path in Dicer

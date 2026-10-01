@@ -191,6 +191,41 @@ services:
 	}
 }
 
+func TestLoadHostDirectoriesAndFiles(t *testing.T) {
+	root := writeProjectFiles(t, "shop", map[string]string{
+		"compose.yaml": `
+services:
+  web:
+    image: nginx
+    volumes:
+      - ./src:/app
+      - ./app.conf:/etc/app.conf:ro
+      - type: directory
+        source: /srv/on-the-daemon
+        target: /srv
+`,
+		"src/index.html": "hello",
+		"app.conf":       "k=v",
+	})
+	p, err := Load(Options{WorkDir: root, Lookup: lookupIn(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := p.Services["web"].Instance.Mounts
+	want := []dicer.Mount{
+		// A directory here is taken to be on the daemon's host too.
+		{Type: dicer.MountTypeDirectory, Source: filepath.Join(root, "src"), Target: "/app"},
+		// A file is read here and its contents sent.
+		{Type: dicer.MountTypeFile, Target: "/etc/app.conf", ReadOnly: true, Content: []byte("k=v"), Mode: 0o600},
+		// A directory only the daemon's host has is said to be one.
+		{Type: dicer.MountTypeDirectory, Source: "/srv/on-the-daemon", Target: "/srv"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("mounts = %+v, want %+v", got, want)
+	}
+}
+
 func TestLoadDefaults(t *testing.T) {
 	p := mustLoad(t, `
 services:

@@ -26,6 +26,11 @@ const (
 
 	// MountTypeTmpfs is an empty in-memory filesystem, lost when the guest stops.
 	MountTypeTmpfs MountType = "tmpfs"
+
+	// MountTypeDirectory shares a host directory with the guest while it
+	// runs, over virtio-fs: what either side changes, the other sees. Only
+	// Cloud Hypervisor has virtio-fs.
+	MountTypeDirectory MountType = "directory"
 )
 
 // MaxFileMountBytes is how much an instance's file mounts can hold between
@@ -36,12 +41,13 @@ const MaxFileMountBytes = 1 << 20
 // defaultFileMountMode is the permission bits of a file mount given none.
 const defaultFileMountMode = 0o644
 
-// Mount attaches a volume, a file or a tmpfs at Target in the guest.
+// Mount attaches a volume, a file, a host directory or a tmpfs at Target in
+// the guest.
 type Mount struct {
 	Type MountType `yaml:"type" json:"type"`
 
-	// Source is the volume's name for a volume. A file and a tmpfs have
-	// none.
+	// Source is the volume's name for a volume, and the host directory's
+	// absolute path for a directory. A file and a tmpfs have none.
 	Source string `yaml:"source,omitempty" json:"source,omitempty"`
 
 	// Target is the absolute path the mount appears at in the guest.
@@ -158,6 +164,10 @@ func (m Mount) validate() error {
 		if m.Mode&^0o777 != 0 {
 			return errdefs.InvalidArgument("mount %s: mode %#o is not permission bits", m, m.Mode)
 		}
+	case MountTypeDirectory:
+		if !path.IsAbs(m.Source) {
+			return errdefs.InvalidArgument("mount %s: a directory mount needs an absolute host path as its source", m)
+		}
 	case MountTypeTmpfs:
 		if m.Source != "" {
 			return errdefs.InvalidArgument("mount %s: a tmpfs has no source", m)
@@ -166,9 +176,20 @@ func (m Mount) validate() error {
 			return errdefs.InvalidArgument("mount %s: a read-only tmpfs would always be empty", m)
 		}
 	default:
-		return errdefs.InvalidArgument("mount %s: unknown type %q: want %s, %s or %s",
-			m, m.Type, MountTypeVolume, MountTypeFile, MountTypeTmpfs)
+		return errdefs.InvalidArgument("mount %s: unknown type %q: want %s, %s, %s or %s",
+			m, m.Type, MountTypeVolume, MountTypeFile, MountTypeDirectory, MountTypeTmpfs)
 	}
 
 	return nil
+}
+
+// HasDirectoryMount reports whether the instance shares a host directory,
+// which only Cloud Hypervisor can, and which stops it being snapshotted.
+func (s Spec) HasDirectoryMount() bool {
+	for _, m := range s.Mounts {
+		if m.Type == MountTypeDirectory {
+			return true
+		}
+	}
+	return false
 }
