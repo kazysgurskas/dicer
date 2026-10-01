@@ -12,7 +12,7 @@ Manage instances.
 |---|---|
 | [`dicer instance cp`]({{< relref "/docs/reference/cli/dicer_instance_cp" >}}) | Copy files between this machine and a running instance. |
 | [`dicer instance create`]({{< relref "/docs/reference/cli/dicer_instance_create" >}}) | Define an instance without starting it. |
-| [`dicer instance delete`]({{< relref "/docs/reference/cli/dicer_instance_delete" >}}) | Delete one or more instances. |
+| [`dicer instance delete`]({{< relref "/docs/reference/cli/dicer_instance_delete" >}}) | Delete one or more instances, or all of them. |
 | [`dicer instance exec`]({{< relref "/docs/reference/cli/dicer_instance_exec" >}}) | Run a command inside a running instance. |
 | [`dicer instance list`]({{< relref "/docs/reference/cli/dicer_instance_list" >}}) | List instances. |
 | [`dicer instance logs`]({{< relref "/docs/reference/cli/dicer_instance_logs" >}}) | Show an instance's console output. |
@@ -24,7 +24,7 @@ Manage instances.
 | [`dicer instance show`]({{< relref "/docs/reference/cli/dicer_instance_show" >}}) | Show everything about one or more instances. |
 | [`dicer instance snapshot`]({{< relref "/docs/reference/cli/dicer_instance_snapshot" >}}) | Freeze instances to disk and put them back. |
 | [`dicer instance snapshot create`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_create" >}}) | Snapshot a running or paused instance. |
-| [`dicer instance snapshot delete`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_delete" >}}) | Delete a snapshot. |
+| [`dicer instance snapshot delete`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_delete" >}}) | Delete a snapshot, or all of an instance's, or all there are. |
 | [`dicer instance snapshot list`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_list" >}}) | List an instance's snapshots. |
 | [`dicer instance snapshot restore`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_restore" >}}) | Restore a stopped instance from a snapshot and resume it. |
 | [`dicer instance snapshot show`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_show" >}}) | Show a snapshot. |

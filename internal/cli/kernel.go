@@ -141,14 +141,16 @@ func newKernelShowCommand() *cobra.Command {
 }
 
 func newKernelDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:               "delete NAME...",
-		Short:             "Delete one or more kernels no instance uses",
-		Args:              oneOrMore("kernel name"),
+	cmd := &cobra.Command{
+		Use:   "delete (NAME... | --all)",
+		Short: "Delete one or more kernels no instance uses, or all of them",
+		Long: "Deletes the kernels named, or with --all every kernel, asking first on a\n" +
+			"terminal. A kernel an instance is defined to boot is refused.",
+		Args:              namesOrAll("kernel name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listKernels),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return eachName(cmd, args, listKernels, func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, listKernels, "kernels", func(client *dicer.Client, name string) error {
 				if _, err := client.DeleteKernel(cmd.Context(), &dicerdv1.DeleteKernelRequest{Name: name}); err != nil {
 					return err
 				}
@@ -158,4 +160,7 @@ func newKernelDeleteCommand() *cobra.Command {
 			})
 		},
 	}
+	addDeleteAllFlags(cmd, "kernels")
+
+	return cmd
 }

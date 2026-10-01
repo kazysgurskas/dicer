@@ -13,6 +13,6 @@ The built-in remote "local" is the daemon on this machine, on its socket. A daem
 | Command | Description |
 |---|---|
 | [`dicer remote create`]({{< relref "/docs/reference/cli/dicer_remote_create" >}}) | Add a daemon to talk to. |
-| [`dicer remote delete`]({{< relref "/docs/reference/cli/dicer_remote_delete" >}}) | Forget a remote. |
+| [`dicer remote delete`]({{< relref "/docs/reference/cli/dicer_remote_delete" >}}) | Forget a remote, or all of them. |
 | [`dicer remote list`]({{< relref "/docs/reference/cli/dicer_remote_list" >}}) | List remotes. |
 | [`dicer remote use`]({{< relref "/docs/reference/cli/dicer_remote_use" >}}) | Make a remote the current one. |

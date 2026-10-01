@@ -6,6 +6,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -228,22 +229,42 @@ func newRemoteListCommand() *cobra.Command {
 }
 
 func newRemoteDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:               "delete NAME",
-		Short:             "Forget a remote",
-		Args:              one("a remote name"),
+	cmd := &cobra.Command{
+		Use:   "delete (NAME | --all)",
+		Short: "Forget a remote, or all of them",
+		Long: "Forgets a remote, or with --all every remote added, asking first on a\n" +
+			"terminal. The built-in " + remote.Local + " remote cannot be forgotten.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if all, _ := cmd.Flags().GetBool("all"); all {
+				return noArgs(cmd, args)
+			}
+			return one("a remote name")(cmd, args)
+		},
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: completeRemotes,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return updateRemotes(func(cfg *remote.Config) error {
-				if err := cfg.Delete(args[0]); err != nil {
-					return err
+				names := args
+				if all, _ := cmd.Flags().GetBool("all"); all {
+					names = slices.DeleteFunc(cfg.Names(), func(n string) bool { return n == remote.Local })
+					if ok, err := confirmDeleteAll(cmd, "remotes", names); err != nil || !ok {
+						return err
+					}
 				}
-				succeeded(cmd, "Remote %s deleted", args[0])
+
+				for _, name := range names {
+					if err := cfg.Delete(name); err != nil {
+						return err
+					}
+					succeeded(cmd, "Remote %s deleted", name)
+				}
 				return nil
 			})
 		},
 	}
+	addDeleteAllFlags(cmd, "remotes")
+
+	return cmd
 }
 
 func newRemoteUseCommand() *cobra.Command {

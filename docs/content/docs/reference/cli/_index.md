@@ -32,8 +32,8 @@ The common commands are shortcuts for the management commands most used: `dicer 
 | [`dicer rename`]({{< relref "/docs/reference/cli/dicer_rename" >}}) | Rename a stopped instance. |
 | [`dicer restart`]({{< relref "/docs/reference/cli/dicer_restart" >}}) | Stop one or more instances if they are running, then start them. |
 | [`dicer resume`]({{< relref "/docs/reference/cli/dicer_resume" >}}) | Resume one or more paused instances. |
-| [`dicer rm`]({{< relref "/docs/reference/cli/dicer_rm" >}}) | Delete one or more instances. |
-| [`dicer rmi`]({{< relref "/docs/reference/cli/dicer_rmi" >}}) | Delete one or more unused images. |
+| [`dicer rm`]({{< relref "/docs/reference/cli/dicer_rm" >}}) | Delete one or more instances, or all of them. |
+| [`dicer rmi`]({{< relref "/docs/reference/cli/dicer_rmi" >}}) | Delete one or more unused images, or all of them. |
 | [`dicer run`]({{< relref "/docs/reference/cli/dicer_run" >}}) | Create an instance from an image and start it. |
 | [`dicer start`]({{< relref "/docs/reference/cli/dicer_start" >}}) | Start one or more defined instances. |
 | [`dicer stop`]({{< relref "/docs/reference/cli/dicer_stop" >}}) | Stop one or more running instances, keeping their definitions and disks. |

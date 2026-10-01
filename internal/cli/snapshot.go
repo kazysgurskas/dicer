@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/konradasb/dicer"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -168,10 +169,20 @@ func newSnapshotRestoreCommand() *cobra.Command {
 }
 
 func newSnapshotDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:               "delete INSTANCE NAME",
-		Short:             "Delete a snapshot",
-		Args:              needs([]string{"an instance name", "a snapshot name"}),
+	cmd := &cobra.Command{
+		Use:   "delete (INSTANCE NAME | [INSTANCE] --all)",
+		Short: "Delete a snapshot, or all of an instance's, or all there are",
+		Long: "Deletes a snapshot of an instance. With --all, deletes every snapshot of the\n" +
+			"instance named, or of every instance if none is, asking first on a terminal.",
+		Example: "  dicer instance snapshot delete web before-upgrade\n" +
+			"  dicer instance snapshot delete web --all\n" +
+			"  dicer instance snapshot delete --all",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if all, _ := cmd.Flags().GetBool("all"); all {
+				return needs(nil, "an instance name")(cmd, args)
+			}
+			return needs([]string{"an instance name", "a snapshot name"})(cmd, args)
+		},
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: completeSnapshotArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -181,6 +192,10 @@ func newSnapshotDeleteCommand() *cobra.Command {
 			}
 			defer cleanup()
 
+			if all, _ := cmd.Flags().GetBool("all"); all {
+				return deleteAllSnapshots(cmd, client, args)
+			}
+
 			if _, err := client.DeleteSnapshot(cmd.Context(), &dicerdv1.DeleteSnapshotRequest{Instance: args[0], Name: args[1]}); err != nil {
 				return err
 			}
@@ -189,4 +204,57 @@ func newSnapshotDeleteCommand() *cobra.Command {
 			return nil
 		},
 	}
+	addDeleteAllFlags(cmd, "snapshots")
+
+	return cmd
+}
+
+// deleteAllSnapshots deletes every snapshot of the instance args names, or
+// of every instance, carrying on past one that cannot be.
+func deleteAllSnapshots(cmd *cobra.Command, client *dicer.Client, args []string) error {
+	instances := args
+	if len(instances) == 0 {
+		resp, err := client.ListInstances(cmd.Context(), &dicerdv1.ListInstancesRequest{})
+		if err != nil {
+			return err
+		}
+		for _, inst := range resp.GetInstances() {
+			instances = append(instances, inst.GetName())
+		}
+	}
+
+	type snapshot struct{ instance, name string }
+	var snapshots []snapshot
+	for _, inst := range instances {
+		resp, err := client.ListSnapshots(cmd.Context(), &dicerdv1.ListSnapshotsRequest{Instance: inst})
+		if err != nil {
+			return suggest(cmd.Context(), client, instancesIn(), inst, err)
+		}
+		for _, s := range resp.GetSnapshots() {
+			snapshots = append(snapshots, snapshot{instance: inst, name: s.GetName()})
+		}
+	}
+
+	names := make([]string, 0, len(snapshots))
+	for _, s := range snapshots {
+		names = append(names, s.instance+"/"+s.name)
+	}
+	if ok, err := confirmDeleteAll(cmd, "snapshots", names); err != nil || !ok {
+		return err
+	}
+
+	failed := false
+	for _, s := range snapshots {
+		_, err := client.DeleteSnapshot(cmd.Context(), &dicerdv1.DeleteSnapshotRequest{Instance: s.instance, Name: s.name})
+		if err != nil {
+			failed = true
+			cmd.PrintErrf("Error: %s\n", errorMessage(err))
+			continue
+		}
+		succeeded(cmd, "Snapshot %s of instance %s deleted", s.name, s.instance)
+	}
+	if failed {
+		return &exitError{code: 1}
+	}
+	return nil
 }

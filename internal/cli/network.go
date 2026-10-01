@@ -159,14 +159,16 @@ func newNetworkShowCommand() *cobra.Command {
 }
 
 func newNetworkDeleteCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:               "delete NAME...",
-		Short:             "Delete one or more networks no instance uses",
-		Args:              oneOrMore("network name"),
+	cmd := &cobra.Command{
+		Use:   "delete (NAME... | --all)",
+		Short: "Delete one or more networks no instance uses, or all of them",
+		Long: "Deletes the networks named, or with --all every network, asking first on a\n" +
+			"terminal. A network an instance is defined on is refused.",
+		Args:              namesOrAll("network name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listNetworks),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return eachName(cmd, args, listNetworks, func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, listNetworks, "networks", func(client *dicer.Client, name string) error {
 				if _, err := client.DeleteNetwork(cmd.Context(), &dicerdv1.DeleteNetworkRequest{Name: name}); err != nil {
 					return err
 				}
@@ -176,6 +178,9 @@ func newNetworkDeleteCommand() *cobra.Command {
 			})
 		},
 	}
+	addDeleteAllFlags(cmd, "networks")
+
+	return cmd
 }
 
 type printableNetworkAllocation struct {

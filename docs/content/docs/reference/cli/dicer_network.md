@@ -13,6 +13,6 @@ Manage networks.
 | [`dicer network allocation`]({{< relref "/docs/reference/cli/dicer_network_allocation" >}}) | Inspect the addresses assigned on a network. |
 | [`dicer network allocation list`]({{< relref "/docs/reference/cli/dicer_network_allocation_list" >}}) | List the addresses assigned on a network. |
 | [`dicer network create`]({{< relref "/docs/reference/cli/dicer_network_create" >}}) | Create a network. |
-| [`dicer network delete`]({{< relref "/docs/reference/cli/dicer_network_delete" >}}) | Delete one or more networks no instance uses. |
+| [`dicer network delete`]({{< relref "/docs/reference/cli/dicer_network_delete" >}}) | Delete one or more networks no instance uses, or all of them. |
 | [`dicer network list`]({{< relref "/docs/reference/cli/dicer_network_list" >}}) | List networks. |
 | [`dicer network show`]({{< relref "/docs/reference/cli/dicer_network_show" >}}) | Show a network. |

@@ -12,7 +12,7 @@ overlay disk, so restoring resumes it exactly where it was.
 | Command | Description |
 |---|---|
 | [`dicer instance snapshot create`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_create" >}}) | Snapshot a running or paused instance. |
-| [`dicer instance snapshot delete`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_delete" >}}) | Delete a snapshot. |
+| [`dicer instance snapshot delete`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_delete" >}}) | Delete a snapshot, or all of an instance's, or all there are. |
 | [`dicer instance snapshot list`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_list" >}}) | List an instance's snapshots. |
 | [`dicer instance snapshot restore`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_restore" >}}) | Restore a stopped instance from a snapshot and resume it. |
 | [`dicer instance snapshot show`]({{< relref "/docs/reference/cli/dicer_instance_snapshot_show" >}}) | Show a snapshot. |
