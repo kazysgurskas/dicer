@@ -108,7 +108,8 @@ func newNetworkCreateCommand() *cobra.Command {
 
 	cmd.Flags().String("subnet", "", "Subnet in CIDR notation, e.g. 172.20.0.0/16")
 	cmd.Flags().String("gateway", "", "Gateway address (default: the first address in the subnet)")
-	cmd.Flags().StringSlice("nameservers", nil, "DNS servers for guests, comma-separated (default: the daemon's)")
+	cmd.Flags().StringSlice("nameservers", nil,
+		"Upstream DNS servers, asked about names other than the network's instances', comma-separated (default: the daemon's)")
 	cmd.Flags().Int32("mtu", 0, "MTU (default: the daemon's)")
 	cmd.Flags().Bool("isolated", false, "Stop instances on the network reaching each other")
 	requireFlag(cmd, "subnet", "172.20.0.0/16")

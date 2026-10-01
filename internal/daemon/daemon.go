@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,6 +19,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/konradasb/dicer/internal/dns"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hostinfo"
@@ -44,10 +46,13 @@ type daemon struct {
 	addresses   *network.Manager
 	instances   *vm.Manager
 	hostnet     *hostnet.Host
-	images      *image.Manager
-	kernels     *kernel.Manager
-	volumes     *volume.Manager
-	initrds     *initrd.Manager
+	// dnsServers serves each network's guests their nameserver. Nil if
+	// the configuration turns it off.
+	dnsServers *dns.Servers
+	images     *image.Manager
+	kernels    *kernel.Manager
+	volumes    *volume.Manager
+	initrds    *initrd.Manager
 
 	// hypervisors are the starters for every VMM this daemon carries.
 	hypervisors map[types.HypervisorType][]hypervisor.Starter
@@ -90,6 +95,13 @@ func (d *daemon) Run(ctx context.Context) error {
 	// Deferred first so it runs last: the instance manager records events
 	// until it is closed.
 	defer func() { _ = d.events.Close() }()
+	defer d.hostnet.Close()
+
+	// Deferred before the instance manager's close, so it runs after: the
+	// instance manager stops networks' DNS servers until it is closed.
+	if d.dnsServers != nil {
+		defer d.dnsServers.Close()
+	}
 
 	// Reconcile recorded state with what is running before serving.
 	if err := d.instances.Recover(ctx); err != nil {
@@ -125,6 +137,8 @@ func (d *daemon) Run(ctx context.Context) error {
 			metricsErr <- err
 		}
 	})
+
+	background.Go(func() { d.hostnet.WatchFirewalld(ctx) })
 
 	// Started after the API is up so slow boots do not delay it.
 	background.Go(func() { d.instances.StartOnBoot(ctx) })
@@ -280,7 +294,7 @@ func (d *daemon) initServices() error {
 		return err
 	}
 
-	d.instances = vm.NewManager(vm.Config{
+	vmCfg := vm.Config{
 		Definitions: d.definitions,
 		Addresses:   d.addresses,
 		RunDir:      d.cfg.RunDir,
@@ -294,9 +308,34 @@ func (d *daemon) initServices() error {
 		Metrics:     d.metrics,
 		Events:      d.events,
 		Logger:      d.logger,
-	})
+	}
+	if d.cfg.Network.DNS {
+		// The servers ask the instance manager about the networks'
+		// instances, and it starts and stops the servers.
+		d.dnsServers = dns.NewServers(dns.Config{
+			Resolver:           instanceNames{d},
+			DefaultNameservers: []string{network.DefaultNameserver},
+			Logger:             d.logger,
+		})
+		vmCfg.DNSServers = d.dnsServers
+	}
+	d.instances = vm.NewManager(vmCfg)
 
 	return nil
+}
+
+// instanceNames answers the DNS servers' questions about the networks'
+// instances, from the instance manager, which is made after them.
+type instanceNames struct{ d *daemon }
+
+// LookupHost asks the instance manager.
+func (n instanceNames) LookupHost(network, name string) []netip.Addr {
+	return n.d.instances.LookupHost(network, name)
+}
+
+// LookupAddr asks the instance manager.
+func (n instanceNames) LookupAddr(network string, addr netip.Addr) []string {
+	return n.d.instances.LookupAddr(network, addr)
 }
 
 // hostCapacity reads the host's CPUs and memory once and works out what

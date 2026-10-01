@@ -10,6 +10,7 @@ package grpcapi
 
 import (
 	"log/slog"
+	"net/netip"
 
 	"google.golang.org/grpc"
 
@@ -40,6 +41,10 @@ type Config struct {
 
 	// APIAddress is the daemon's TCP address, or empty.
 	APIAddress string
+
+	// HostSubnets returns the subnets of the host's interfaces, which a new
+	// network may not overlap. Nil skips the check.
+	HostSubnets func() ([]netip.Prefix, error)
 
 	// DataDir is the data directory, whose disk GetResources reports on.
 	DataDir string
@@ -81,9 +86,13 @@ func NewServer(cfg Config) *Server {
 			logger:      cfg.Logger,
 		},
 		snapshotHandler: snapshotHandler{definitions: cfg.Definitions, instances: cfg.Instances, logger: cfg.Logger},
-		networkHandler:  networkHandler{definitions: cfg.Definitions, addresses: cfg.Addresses},
-		volumeHandler:   volumeHandler{definitions: cfg.Definitions, volumes: cfg.Volumes},
-		kernelHandler:   kernelHandler{definitions: cfg.Definitions, kernels: cfg.Kernels},
+		networkHandler: networkHandler{
+			definitions: cfg.Definitions,
+			addresses:   cfg.Addresses,
+			hostSubnets: cfg.HostSubnets,
+		},
+		volumeHandler: volumeHandler{definitions: cfg.Definitions, volumes: cfg.Volumes},
+		kernelHandler: kernelHandler{definitions: cfg.Definitions, kernels: cfg.Kernels},
 		imageHandler: imageHandler{
 			definitions: cfg.Definitions,
 			instances:   cfg.Instances,

@@ -1,0 +1,160 @@
+// Copyright 2026 Dicer Authors
+// SPDX-License-Identifier: MIT
+
+package dns
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/netip"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/konradasb/dicer/internal/types"
+)
+
+// Port is the port guests ask on.
+const Port = 53
+
+// Config configures [Servers].
+type Config struct {
+	// Resolver knows the networks' instances.
+	Resolver Resolver
+	// DefaultNameservers are the nameservers a network that names none
+	// forwards to.
+	DefaultNameservers []string
+	// Port overrides the port listened on, for tests. Zero means [Port].
+	Port int
+	// Logger is where the servers log. Nil is slog.Default().
+	Logger *slog.Logger
+}
+
+// Servers runs a server for each network that has one. It is safe for
+// concurrent use, but calls for one network must not overlap: the instance
+// manager makes them under the network's lock.
+type Servers struct {
+	cfg    Config
+	logger *slog.Logger
+
+	mu      sync.Mutex
+	servers map[string]*runningServer
+}
+
+// runningServer is a network's server, and what it was started with.
+type runningServer struct {
+	server  *server
+	listen  string
+	network network
+}
+
+// NewServers returns servers for networks, none of them started.
+func NewServers(cfg Config) *Servers {
+	if cfg.Port == 0 {
+		cfg.Port = Port
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+
+	return &Servers{
+		cfg:     cfg,
+		logger:  cfg.Logger.With("component", "dns"),
+		servers: make(map[string]*runningServer),
+	}
+}
+
+// Serve starts a server for nw on its gateway address, unless one is
+// already serving it as it is: it is restarted if the network's gateway or
+// upstreams have changed. The gateway address must already be on the host,
+// on the network's bridge.
+func (s *Servers) Serve(ctx context.Context, nw types.Network) error {
+	want, listenAddr, err := s.target(nw)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	r, ok := s.servers[nw.Name]
+	if ok && r.listen == listenAddr && slices.Equal(r.network.upstreams, want.upstreams) &&
+		r.network.gateway == want.gateway &&
+		r.network.subnet == want.subnet && r.network.answersInstances == want.answersInstances {
+		s.mu.Unlock()
+		return nil
+	}
+	delete(s.servers, nw.Name)
+	s.mu.Unlock()
+
+	// Closing waits for the queries in flight, so not under the lock.
+	if ok {
+		r.server.close()
+	}
+	srv, err := listen(ctx, listenAddr, want, s.cfg.Resolver, s.logger)
+	if err != nil {
+		return fmt.Errorf("serve DNS for network %q on %s: %w", nw.Name, listenAddr, err)
+	}
+	s.mu.Lock()
+	s.servers[nw.Name] = &runningServer{server: srv, listen: listenAddr, network: want}
+	s.mu.Unlock()
+
+	s.logger.InfoContext(ctx, "serving DNS", "network", nw.Name, "address", srv.addr(), "upstreams", want.upstreams)
+	return nil
+}
+
+// target is what a network's server serves, and the address it listens on.
+func (s *Servers) target(nw types.Network) (network, string, error) {
+	subnet, err := netip.ParsePrefix(nw.Subnet)
+	if err != nil {
+		return network{}, "", fmt.Errorf("network %q: subnet: %w", nw.Name, err)
+	}
+	gateway, err := netip.ParseAddr(nw.Gateway)
+	if err != nil {
+		return network{}, "", fmt.Errorf("network %q: gateway: %w", nw.Name, err)
+	}
+
+	nameservers := nw.Nameservers
+	if len(nameservers) == 0 {
+		nameservers = s.cfg.DefaultNameservers
+	}
+	upstreams := make([]string, 0, len(nameservers))
+	for _, ns := range nameservers {
+		upstreams = append(upstreams, net.JoinHostPort(ns, strconv.Itoa(Port)))
+	}
+
+	return network{
+		name:             nw.Name,
+		domain:           strings.ToLower(nw.Name),
+		subnet:           subnet.Masked(),
+		gateway:          gateway,
+		upstreams:        upstreams,
+		answersInstances: !nw.Isolated,
+	}, net.JoinHostPort(gateway.String(), strconv.Itoa(s.cfg.Port)), nil
+}
+
+// Stop stops a network's server, if it has one.
+func (s *Servers) Stop(networkName string) {
+	s.mu.Lock()
+	r, ok := s.servers[networkName]
+	delete(s.servers, networkName)
+	s.mu.Unlock()
+
+	if ok {
+		r.server.close()
+		s.logger.Info("stopped serving DNS", "network", networkName)
+	}
+}
+
+// Close stops every server.
+func (s *Servers) Close() {
+	s.mu.Lock()
+	servers := s.servers
+	s.servers = make(map[string]*runningServer)
+	s.mu.Unlock()
+
+	for _, r := range servers {
+		r.server.close()
+	}
+}

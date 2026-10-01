@@ -44,6 +44,12 @@ func (m *Manager) ListInstances() ([]types.InstanceSpec, error) {
 	return m.instances.list(), nil
 }
 
+// MatchingInstances returns the instances match reports true for, in no
+// particular order. match must not call back into the Manager.
+func (m *Manager) MatchingInstances(match func(types.InstanceSpec) bool) []types.InstanceSpec {
+	return m.instances.matching(match)
+}
+
 // InstanceDir returns an instance's persistent directory, removed when the
 // instance is deleted.
 func (m *Manager) InstanceDir(name string) string {

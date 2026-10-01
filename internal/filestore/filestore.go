@@ -250,6 +250,21 @@ func (c *collection[T]) get(nameOrID string) (T, error) {
 	return c.items[name], nil
 }
 
+// matching returns the resources match reports true for, in no particular
+// order: filtering where they are kept copies only those, and sorts none.
+func (c *collection[T]) matching(match func(T) bool) []T {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var out []T
+	for _, v := range c.items {
+		if match(v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // list returns all resources, sorted by name for stable output.
 func (c *collection[T]) list() []T {
 	c.mu.RLock()

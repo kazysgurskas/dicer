@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 type networkHandler struct {
 	definitions *filestore.Manager
 	addresses   *network.Manager
+	hostSubnets func() ([]netip.Prefix, error)
 }
 
 func (h *networkHandler) CreateNetwork(
@@ -129,7 +131,8 @@ func networkNameservers(want []string) ([]string, error) {
 	return want, nil
 }
 
-// checkSubnetOverlap rejects a subnet that overlaps an existing network.
+// checkSubnetOverlap rejects a subnet that overlaps an existing network, or
+// one the host is on, whose addresses the network's would hide.
 func (h *networkHandler) checkSubnetOverlap(want *net.IPNet) error {
 	networks, err := h.definitions.ListNetworks()
 	if err != nil {
@@ -142,8 +145,23 @@ func (h *networkHandler) checkSubnetOverlap(want *net.IPNet) error {
 			continue
 		}
 		if have.Contains(want.IP) || want.Contains(have.IP) {
-			return errdefs.InvalidArgument(
+			return errdefs.Exists(
 				"subnet %s overlaps network %q (%s)", want, existing.Name, existing.Subnet)
+		}
+	}
+
+	if h.hostSubnets == nil {
+		return nil
+	}
+	hostSubnets, err := h.hostSubnets()
+	if err != nil {
+		return fmt.Errorf("list the host's subnets: %w", err)
+	}
+	ones, _ := want.Mask.Size()
+	wantPrefix := netip.PrefixFrom(netip.AddrFrom4([4]byte(want.IP.To4())), ones)
+	for _, p := range hostSubnets {
+		if p.Overlaps(wantPrefix) {
+			return errdefs.Exists("subnet %s overlaps %s, which the host is on: choose another", want, p)
 		}
 	}
 

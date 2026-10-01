@@ -10,9 +10,12 @@ package hostnet
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"sync"
 
 	"github.com/vishvananda/netlink"
+
+	"github.com/konradasb/dicer/internal/types"
 )
 
 // DefaultBurstMultiplier is the upload and download burst multiplier used
@@ -46,18 +49,64 @@ type Host struct {
 	config Config
 	logger *slog.Logger
 
+	// firewalld is nil where there is no system bus to reach it on.
+	firewalld *firewalld
+
 	// rulesMu serialises check-then-edit changes to iptables rules.
 	rulesMu sync.Mutex
+
+	// mu guards networks, those whose bridges are set up, by bridge.
+	mu       sync.Mutex
+	networks map[string]types.Network
 }
 
-// NewHost creates a host network configurator.
+// NewHost creates a host network configurator. Close releases it.
 func NewHost(cfg Config) *Host {
 	cfg.applyDefaults()
 
-	return &Host{
-		config: cfg,
-		logger: cfg.Logger.With("component", "hostnet"),
+	h := &Host{
+		config:   cfg,
+		logger:   cfg.Logger.With("component", "hostnet"),
+		networks: make(map[string]types.Network),
 	}
+	firewalld, err := connectFirewalld()
+	if err != nil {
+		h.logger.Debug("not managing firewalld", "error", err)
+	} else {
+		h.firewalld = firewalld
+	}
+	return h
+}
+
+// Close releases the host's connection to firewalld.
+func (h *Host) Close() {
+	if h.firewalld != nil {
+		h.firewalld.close()
+	}
+}
+
+// Subnets returns the IPv4 subnets the host's interfaces are on, as their
+// routes in the main table say: its LANs, and Dicer's own bridges that are
+// up.
+func Subnets() ([]netip.Prefix, error) {
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
+	if err != nil {
+		return nil, fmt.Errorf("list routes: %w", err)
+	}
+
+	var subnets []netip.Prefix
+	for _, route := range routes {
+		if route.Scope != netlink.SCOPE_LINK || route.Dst == nil {
+			continue
+		}
+		addr, ok := netip.AddrFromSlice(route.Dst.IP.To4())
+		if !ok {
+			continue
+		}
+		ones, _ := route.Dst.Mask.Size()
+		subnets = append(subnets, netip.PrefixFrom(addr, ones).Masked())
+	}
+	return subnets, nil
 }
 
 // resolveUplink returns the configured uplink interface name, or detects it

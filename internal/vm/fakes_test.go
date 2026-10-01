@@ -85,6 +85,19 @@ func (f *fakeDefinitions) ListInstances() ([]types.InstanceSpec, error) {
 	return out, nil
 }
 
+func (f *fakeDefinitions) MatchingInstances(match func(types.InstanceSpec) bool) []types.InstanceSpec {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	var out []types.InstanceSpec
+	for _, inst := range f.instances {
+		if match(inst) {
+			out = append(out, inst)
+		}
+	}
+	return out
+}
+
 func (f *fakeDefinitions) CreateInstance(inst types.InstanceSpec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -223,6 +236,15 @@ func (f *fakeAddresses) Get(networkName, instanceID string) (types.NetworkAlloca
 		}
 	}
 	return types.NetworkAllocation{}, fmt.Errorf("%q: %w", instanceID, errdefs.ErrNotFound)
+}
+
+func (f *fakeAddresses) InstanceAt(networkName, ip string) (string, bool) {
+	for _, alloc := range f.byNetwork[networkName] {
+		if alloc.IP == ip {
+			return alloc.InstanceID, true
+		}
+	}
+	return "", false
 }
 
 func (f *fakeAddresses) Release(networkName, instanceID string) error {
