@@ -441,32 +441,6 @@ networks:
 	}
 }
 
-func TestFreeSubnet(t *testing.T) {
-	tests := []struct {
-		taken []string
-		want  string
-	}{
-		{nil, "10.213.0.0/24"},
-		{[]string{"172.20.0.0/16", "10.213.0.0/24"}, "10.213.1.0/24"},
-		{[]string{"10.213.0.0/23"}, "10.213.2.0/24"},   // a larger network takes several
-		{[]string{"10.213.0.128/25"}, "10.213.1.0/24"}, // a smaller one takes the one it is in
-		{[]string{"10.0.0.0/8"}, ""},                   // the whole pool
-		{[]string{"not a subnet", "10.213.0.0/24"}, "10.213.1.0/24"},
-	}
-	for _, tt := range tests {
-		got, err := FreeSubnet(tt.taken)
-		if tt.want == "" {
-			if err == nil {
-				t.Errorf("FreeSubnet(%q) = %s, want an error", tt.taken, got)
-			}
-			continue
-		}
-		if err != nil || got != tt.want {
-			t.Errorf("FreeSubnet(%q) = %s, %v; want %s", tt.taken, got, err, tt.want)
-		}
-	}
-}
-
 func TestLoadHealthchecks(t *testing.T) {
 	tests := []struct {
 		check string

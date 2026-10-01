@@ -46,13 +46,13 @@ type daemon struct {
 	addresses   *network.Manager
 	instances   *vm.Manager
 	hostnet     *hostnet.Host
-	// dns serves each network's guests their nameserver. Nil if the
-	// configuration turns it off.
-	dns     *dns.Servers
-	images  *image.Manager
-	kernels *kernel.Manager
-	volumes *volume.Manager
-	initrds *initrd.Manager
+	// dnsServers serves each network's guests their nameserver. Nil if
+	// the configuration turns it off.
+	dnsServers *dns.Servers
+	images     *image.Manager
+	kernels    *kernel.Manager
+	volumes    *volume.Manager
+	initrds    *initrd.Manager
 
 	// hypervisors are the starters for every VMM this daemon carries.
 	hypervisors map[types.HypervisorType][]hypervisor.Starter
@@ -99,8 +99,8 @@ func (d *daemon) Run(ctx context.Context) error {
 
 	// Deferred before the instance manager's close, so it runs after: the
 	// instance manager stops networks' DNS servers until it is closed.
-	if d.dns != nil {
-		defer d.dns.Close()
+	if d.dnsServers != nil {
+		defer d.dnsServers.Close()
 	}
 
 	// Reconcile recorded state with what is running before serving.
@@ -312,12 +312,12 @@ func (d *daemon) initServices() error {
 	if d.cfg.Network.DNS {
 		// The servers ask the instance manager about the networks'
 		// instances, and it starts and stops the servers.
-		d.dns = dns.NewServers(dns.Config{
-			Resolver:         instanceNames{d},
-			DefaultUpstreams: []string{network.DefaultNameserver},
-			Logger:           d.logger,
+		d.dnsServers = dns.NewServers(dns.Config{
+			Resolver:           instanceNames{d},
+			DefaultNameservers: []string{network.DefaultNameserver},
+			Logger:             d.logger,
 		})
-		vmCfg.NameService = d.dns
+		vmCfg.DNSServers = d.dnsServers
 	}
 	d.instances = vm.NewManager(vmCfg)
 
@@ -328,10 +328,12 @@ func (d *daemon) initServices() error {
 // instances, from the instance manager, which is made after them.
 type instanceNames struct{ d *daemon }
 
+// LookupHost asks the instance manager.
 func (n instanceNames) LookupHost(network, name string) []netip.Addr {
 	return n.d.instances.LookupHost(network, name)
 }
 
+// LookupAddr asks the instance manager.
 func (n instanceNames) LookupAddr(network string, addr netip.Addr) []string {
 	return n.d.instances.LookupAddr(network, addr)
 }

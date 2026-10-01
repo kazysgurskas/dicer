@@ -19,7 +19,8 @@ var (
 	// ErrNotFound is a resource that does not exist.
 	ErrNotFound = errors.New("not found")
 
-	// ErrExists is a resource created with a name another already has.
+	// ErrExists is a resource created with a name, or a subnet, another
+	// already has.
 	ErrExists = errors.New("already exists")
 
 	// ErrInvalidState is a resource in the wrong state for what was asked,

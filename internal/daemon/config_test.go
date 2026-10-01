@@ -100,7 +100,7 @@ func TestLoadConfigPartialKeepsDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDNS(t *testing.T) {
+func TestLoadConfigDNSIsOnUnlessTurnedOff(t *testing.T) {
 	if !defaultConfig().Network.DNS {
 		t.Error("DNS is off by default, want it on")
 	}

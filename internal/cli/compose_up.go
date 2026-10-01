@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"slices"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -208,20 +207,26 @@ const maxSubnetTries = 16
 
 // createNetwork creates a network. One the file gives no subnet is given a
 // free one: the first that overlaps none of the daemon's networks, and the
-// next if another is created on it meanwhile.
+// next if the daemon turns it away, as another network has taken it
+// meanwhile or the host is on it.
 func (u *upper) createNetwork(req *dicerdv1.CreateNetworkRequest) (*dicerdv1.Network, error) {
 	if req.GetSubnet() != "" {
 		return u.client.CreateNetwork(u.ctx(), req)
 	}
 
+	var refused []string
 	var err error
 	for range maxSubnetTries {
 		var resp *dicerdv1.ListNetworksResponse
 		if resp, err = u.client.ListNetworks(u.ctx(), &dicerdv1.ListNetworksRequest{}); err != nil {
 			return nil, err
 		}
-		taken := make([]string, 0, len(resp.GetNetworks()))
+		taken := slices.Clone(refused)
 		for _, n := range resp.GetNetworks() {
+			if n.GetName() == req.GetName() {
+				// AlreadyExists was the name's, not the subnet's.
+				return nil, fmt.Errorf("network %s was created meanwhile, by something else: run up again", req.GetName())
+			}
 			taken = append(taken, n.GetSubnet())
 		}
 		subnet, freeErr := compose.FreeSubnet(taken)
@@ -237,12 +242,10 @@ func (u *upper) createNetwork(req *dicerdv1.CreateNetworkRequest) (*dicerdv1.Net
 
 		var created *dicerdv1.Network
 		created, err = u.client.CreateNetwork(u.ctx(), withSubnet)
-		if err == nil {
-			return created, nil
+		if status.Code(err) != codes.AlreadyExists {
+			return created, err
 		}
-		if status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "overlaps") {
-			return nil, err
-		}
+		refused = append(refused, subnet)
 	}
 	return nil, err
 }

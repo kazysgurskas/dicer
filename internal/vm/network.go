@@ -131,10 +131,10 @@ func (m *Manager) attachTAP(ctx context.Context, nw *types.Network, alloc *types
 // neighbours' names, not their DNS: they are given the upstream
 // nameservers instead.
 func (m *Manager) serveDNS(ctx context.Context, nw types.Network) bool {
-	if m.nameService == nil {
+	if m.dnsServers == nil {
 		return false
 	}
-	if err := m.nameService.Serve(ctx, nw); err != nil {
+	if err := m.dnsServers.Serve(ctx, nw); err != nil {
 		m.logger.WarnContext(ctx, "cannot serve DNS on the network; its instances get its upstream nameservers",
 			"network", nw.Name, "error", err)
 		return false
@@ -166,8 +166,8 @@ func (m *Manager) teardownNetwork(ctx context.Context, inst types.InstanceSpec) 
 
 	m.logger.InfoContext(ctx, "tearing down bridge, no instances left on network",
 		"network", nw.Name, "bridge", nw.Bridge)
-	if m.nameService != nil {
-		m.nameService.Stop(nw.Name)
+	if m.dnsServers != nil {
+		m.dnsServers.Stop(nw.Name)
 	}
 	m.hostNetwork.TeardownBridge(ctx, &nw)
 }

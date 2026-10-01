@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/konradasb/dicer/internal/types"
@@ -23,26 +24,28 @@ const Port = 53
 type Config struct {
 	// Resolver knows the networks' instances.
 	Resolver Resolver
-	// DefaultUpstreams are the nameservers a network that names none
+	// DefaultNameservers are the nameservers a network that names none
 	// forwards to.
-	DefaultUpstreams []string
+	DefaultNameservers []string
 	// Port overrides the port listened on, for tests. Zero means [Port].
 	Port int
-	// Logger is optional.
+	// Logger is where the servers log. Nil is slog.Default().
 	Logger *slog.Logger
 }
 
-// Servers runs a server for each network that has one.
+// Servers runs a server for each network that has one. It is safe for
+// concurrent use, but calls for one network must not overlap: the instance
+// manager makes them under the network's lock.
 type Servers struct {
 	cfg    Config
 	logger *slog.Logger
 
 	mu      sync.Mutex
-	servers map[string]*running
+	servers map[string]*runningServer
 }
 
-// running is a network's server, and what it was started with.
-type running struct {
+// runningServer is a network's server, and what it was started with.
+type runningServer struct {
 	server  *server
 	listen  string
 	network network
@@ -60,7 +63,7 @@ func NewServers(cfg Config) *Servers {
 	return &Servers{
 		cfg:     cfg,
 		logger:  cfg.Logger.With("component", "dns"),
-		servers: make(map[string]*running),
+		servers: make(map[string]*runningServer),
 	}
 }
 
@@ -69,36 +72,40 @@ func NewServers(cfg Config) *Servers {
 // upstreams have changed. The gateway address must already be on the host,
 // on the network's bridge.
 func (s *Servers) Serve(ctx context.Context, nw types.Network) error {
-	want, listenAddr, err := s.describe(nw)
+	want, listenAddr, err := s.target(nw)
 	if err != nil {
 		return err
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if r, ok := s.servers[nw.Name]; ok {
-		if r.listen == listenAddr && slices.Equal(r.network.upstreams, want.upstreams) &&
-			r.network.gateway == want.gateway &&
-			r.network.subnet == want.subnet && r.network.local == want.local {
-			return nil
-		}
-		r.server.close()
-		delete(s.servers, nw.Name)
+	r, ok := s.servers[nw.Name]
+	if ok && r.listen == listenAddr && slices.Equal(r.network.upstreams, want.upstreams) &&
+		r.network.gateway == want.gateway &&
+		r.network.subnet == want.subnet && r.network.answersInstances == want.answersInstances {
+		s.mu.Unlock()
+		return nil
 	}
+	delete(s.servers, nw.Name)
+	s.mu.Unlock()
 
+	// Closing waits for the queries in flight, so not under the lock.
+	if ok {
+		r.server.close()
+	}
 	srv, err := listen(ctx, listenAddr, want, s.cfg.Resolver, s.logger)
 	if err != nil {
 		return fmt.Errorf("serve DNS for network %q on %s: %w", nw.Name, listenAddr, err)
 	}
-	s.servers[nw.Name] = &running{server: srv, listen: listenAddr, network: want}
+	s.mu.Lock()
+	s.servers[nw.Name] = &runningServer{server: srv, listen: listenAddr, network: want}
+	s.mu.Unlock()
 
 	s.logger.InfoContext(ctx, "serving DNS", "network", nw.Name, "address", srv.addr(), "upstreams", want.upstreams)
 	return nil
 }
 
-// describe works out what a network's server is: what it serves and where.
-func (s *Servers) describe(nw types.Network) (network, string, error) {
+// target is what a network's server serves, and the address it listens on.
+func (s *Servers) target(nw types.Network) (network, string, error) {
 	subnet, err := netip.ParsePrefix(nw.Subnet)
 	if err != nil {
 		return network{}, "", fmt.Errorf("network %q: subnet: %w", nw.Name, err)
@@ -110,7 +117,7 @@ func (s *Servers) describe(nw types.Network) (network, string, error) {
 
 	nameservers := nw.Nameservers
 	if len(nameservers) == 0 {
-		nameservers = s.cfg.DefaultUpstreams
+		nameservers = s.cfg.DefaultNameservers
 	}
 	upstreams := make([]string, 0, len(nameservers))
 	for _, ns := range nameservers {
@@ -118,11 +125,12 @@ func (s *Servers) describe(nw types.Network) (network, string, error) {
 	}
 
 	return network{
-		name:      nw.Name,
-		subnet:    subnet.Masked(),
-		gateway:   gateway,
-		upstreams: upstreams,
-		local:     !nw.Isolated,
+		name:             nw.Name,
+		domain:           strings.ToLower(nw.Name),
+		subnet:           subnet.Masked(),
+		gateway:          gateway,
+		upstreams:        upstreams,
+		answersInstances: !nw.Isolated,
 	}, net.JoinHostPort(gateway.String(), strconv.Itoa(s.cfg.Port)), nil
 }
 
@@ -143,7 +151,7 @@ func (s *Servers) Stop(networkName string) {
 func (s *Servers) Close() {
 	s.mu.Lock()
 	servers := s.servers
-	s.servers = make(map[string]*running)
+	s.servers = make(map[string]*runningServer)
 	s.mu.Unlock()
 
 	for _, r := range servers {

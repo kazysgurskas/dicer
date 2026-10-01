@@ -5,9 +5,12 @@ package dns
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -120,11 +123,12 @@ func startServer(t *testing.T, instances fakeResolver, upstreams []string, isola
 	t.Helper()
 
 	srv, err := listen(t.Context(), "127.0.0.1:0", network{
-		name:      "shop",
-		subnet:    netip.MustParsePrefix("10.8.0.0/24"),
-		gateway:   netip.MustParseAddr("10.8.0.1"),
-		upstreams: upstreams,
-		local:     !isolated,
+		name:             "shop",
+		domain:           "shop",
+		subnet:           netip.MustParsePrefix("10.8.0.0/24"),
+		gateway:          netip.MustParseAddr("10.8.0.1"),
+		upstreams:        upstreams,
+		answersInstances: !isolated,
 	}, instances, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -229,6 +233,45 @@ func TestServerAnswersForTheNetworksInstances(t *testing.T) {
 	}
 }
 
+// A network's name is its domain whatever its case, as an instance's is.
+func TestServerAnswersUnderANetworkNamedInCapitals(t *testing.T) {
+	resolver := fakeResolver{"db": "10.8.0.5"}
+	servers := NewServers(Config{Resolver: resolver, Logger: slog.New(slog.DiscardHandler)})
+	nw, _, err := servers.target(types.Network{Name: "Shop", Subnet: "10.8.0.0/24", Gateway: "10.8.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := listen(t.Context(), "127.0.0.1:0", nw, resolver, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.close)
+
+	for _, name := range []string{"db.shop.", "db.Shop."} {
+		if m := ask(t, "udp", srv.addr(), name, dnsmessage.TypeA); !slices.Equal(addrsIn(m), []string{"10.8.0.5"}) {
+			t.Errorf("%s = %s %q, want 10.8.0.5", name, m.RCode, addrsIn(m))
+		}
+	}
+}
+
+// A TCP connection's goroutines end with it, not with the server.
+func TestServerLetsGoOfClosedConnections(t *testing.T) {
+	srv := startServer(t, fakeResolver{"db": "10.8.0.5"}, nil, false)
+	ask(t, "tcp", srv.addr(), "db.", dnsmessage.TypeA) // and warm up
+
+	before := runtime.NumGoroutine()
+	for range 20 {
+		ask(t, "tcp", srv.addr(), "db.", dnsmessage.TypeA)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := runtime.NumGoroutine(); n > before {
+		t.Errorf("%d goroutines after 20 closed connections, want %d", n, before)
+	}
+}
+
 func TestServerAnswersForTheHost(t *testing.T) {
 	up := newUpstream(t)
 
@@ -317,6 +360,69 @@ func TestServerFailsWhenUpstreamDoesNot(t *testing.T) {
 	}
 }
 
+// Once an upstream fails, the one that answered instead is asked first, so
+// that every query does not wait on the one that is down.
+func TestServerAsksTheUpstreamThatAnsweredLastFirst(t *testing.T) {
+	// An upstream that hangs up on every query, counting them.
+	failing, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = failing.Close() })
+	var failed atomic.Int32
+	go func() {
+		for {
+			conn, err := failing.Accept()
+			if err != nil {
+				return
+			}
+			failed.Add(1)
+			_ = conn.Close()
+		}
+	}()
+	up := newUpstream(t)
+	srv := startServer(t, fakeResolver{}, []string{failing.Addr().String(), up.addr}, false)
+
+	for range 3 {
+		if m := ask(t, "tcp", srv.addr(), "example.com.", dnsmessage.TypeA); m.RCode != dnsmessage.RCodeSuccess {
+			t.Fatalf("example.com = %s, want the working upstream's answer", m.RCode)
+		}
+	}
+	if n := failed.Load(); n != 1 {
+		t.Errorf("the failing upstream was asked %d times, want once", n)
+	}
+}
+
+// Idle TCP connections cannot take the places of UDP queries.
+func TestServerAnswersOverUDPWhileTCPIsFull(t *testing.T) {
+	srv := startServer(t, fakeResolver{"db": "10.8.0.5"}, nil, false)
+
+	dialer := &net.Dialer{Timeout: time.Second}
+	for range maxConnections {
+		conn, err := dialer.DialContext(t.Context(), "tcp", srv.addr())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conn.Close() })
+	}
+
+	if m := ask(t, "udp", srv.addr(), "db.", dnsmessage.TypeA); !slices.Equal(addrsIn(m), []string{"10.8.0.5"}) {
+		t.Errorf("db over UDP = %q, want its address", addrsIn(m))
+	}
+
+	// One connection more than the server takes is closed.
+	extra, err := dialer.DialContext(t.Context(), "tcp", srv.addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = extra.Close() }()
+	_ = extra.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// Served, it would wait for a query and time out instead.
+	if _, err := extra.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+		t.Errorf("read on a connection beyond maxConnections = %v, want it closed", err)
+	}
+}
+
 func TestServerReverseLookups(t *testing.T) {
 	up := newUpstream(t)
 	srv := startServer(t, fakeResolver{"db": "10.8.0.5"}, []string{up.addr}, false)
@@ -372,17 +478,17 @@ func TestServerRefusesWhatIsNotAQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	var m dnsmessage.Message
-	if err := m.Unpack(srv.answer(query, nil)); err != nil || m.RCode != dnsmessage.RCodeFormatError {
+	if err := m.Unpack(srv.answer(t.Context(), query, nil)); err != nil || m.RCode != dnsmessage.RCodeFormatError {
 		t.Errorf("two questions = %s, %v; want FORMERR", m.RCode, err)
 	}
 
 	// Garbage, or a response: nothing at all.
-	if got := srv.answer([]byte{1, 2, 3}, nil); got != nil {
+	if got := srv.answer(t.Context(), []byte{1, 2, 3}, nil); got != nil {
 		t.Errorf("garbage was answered: %x", got)
 	}
 	q.Response = true
 	q.Questions = q.Questions[:1]
-	if resp, _ := q.Pack(); srv.answer(resp, nil) != nil {
+	if resp, _ := q.Pack(); srv.answer(t.Context(), resp, nil) != nil {
 		t.Error("a response was answered")
 	}
 }
@@ -401,10 +507,10 @@ func TestServersServeAndStop(t *testing.T) {
 	_ = probe.Close()
 
 	servers := NewServers(Config{
-		Resolver:         fakeResolver{"db": "127.0.0.5"},
-		DefaultUpstreams: []string{"192.0.2.1"},
-		Port:             port,
-		Logger:           slog.New(slog.DiscardHandler),
+		Resolver:           fakeResolver{"db": "127.0.0.5"},
+		DefaultNameservers: []string{"192.0.2.1"},
+		Port:               port,
+		Logger:             slog.New(slog.DiscardHandler),
 	})
 	t.Cleanup(servers.Close)
 

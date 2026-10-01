@@ -4,6 +4,7 @@
 package grpcapi
 
 import (
+	"net/netip"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
@@ -44,6 +45,25 @@ func TestCreateNetworkRefusesWhatCannotWork(t *testing.T) {
 
 			_, err := s.CreateNetwork(t.Context(), tt.req)
 			wantClass(t, err, errdefs.ErrInvalidArgument)
+		})
+	}
+}
+
+// A subnet another network or the host is on is refused as taken, which
+// dicer compose up tells apart from a request it got wrong.
+func TestCreateNetworkRefusesATakenSubnet(t *testing.T) {
+	s, _ := newResourceServer(t)
+	s.hostSubnets = func() ([]netip.Prefix, error) {
+		return []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, nil
+	}
+	if _, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "lan", Subnet: "10.9.0.0/24"}); err != nil {
+		t.Fatalf("CreateNetwork: %v", err)
+	}
+
+	for name, subnet := range map[string]string{"another network's": "10.9.0.0/16", "the host's": "192.168.0.0/16"} {
+		t.Run(name, func(t *testing.T) {
+			_, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "other", Subnet: subnet})
+			wantClass(t, err, errdefs.ErrExists)
 		})
 	}
 }

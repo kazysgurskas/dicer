@@ -185,6 +185,14 @@ not mix them up: each `db` is on its own project's network.
 A service reaches the host itself as `host.dicer.internal`: see
 [Networking](../../concepts/networking#the-host).
 
+A project brought up by a Dicer from before services had names changes at
+its next `up`: its services that name no network move to the project's
+own, and those that set no `hostname` are given their service's name.
+Both are changes to their definitions, so `up` recreates them, from fresh
+disks and with new addresses, and creates the network first. Keep what must
+survive on a volume, or pin a service where it was with `networks` and
+`hostname`, before that `up`.
+
 To share a network with instances outside the project, name it as an
 external one:
 
@@ -209,7 +217,8 @@ a service can say:
   With a remote daemon, the path is the daemon's host's.
 - **Each service joins one network.** A service that names none joins the
   project's network called `default`. A network the file gives no `subnet`
-  gets a free one from `10.213.0.0/16`.
+  gets a free one from `10.213.0.0/16`, one that no other network and none
+  of the host's interfaces is on.
 - **Volumes have a size**, 10 GiB unless given.
 - **Sizes are the machine's.** `vcpus` (or `cpus`, a whole number),
   `memory` (or `mem_limit`) and `disk` size the virtual machine: 1 vCPU,

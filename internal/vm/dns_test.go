@@ -15,9 +15,9 @@ import (
 	"github.com/konradasb/dicer/internal/types"
 )
 
-// fakeNameService records which networks it was asked to serve and stop
+// fakeDNSServers records which networks it was asked to serve and stop
 // serving, and fails to serve them if serveErr is set.
-type fakeNameService struct {
+type fakeDNSServers struct {
 	mu       sync.Mutex
 	serving  map[string]bool
 	served   []string
@@ -25,7 +25,7 @@ type fakeNameService struct {
 	serveErr error
 }
 
-func (f *fakeNameService) Serve(_ context.Context, nw types.Network) error {
+func (f *fakeDNSServers) Serve(_ context.Context, nw types.Network) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (f *fakeNameService) Serve(_ context.Context, nw types.Network) error {
 	return nil
 }
 
-func (f *fakeNameService) Stop(network string) {
+func (f *fakeDNSServers) Stop(network string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -48,13 +48,13 @@ func (f *fakeNameService) Stop(network string) {
 	delete(f.serving, network)
 }
 
-// withNameService gives a harness a name service, and records the
+// withDNSServers gives a harness a name service, and records the
 // nameservers each guest is given.
-func withNameService(t *testing.T, h *harness) (*fakeNameService, func() []string) {
+func withDNSServers(t *testing.T, h *harness) (*fakeDNSServers, func() []string) {
 	t.Helper()
 
-	ns := &fakeNameService{}
-	h.mgr.nameService = ns
+	ns := &fakeDNSServers{}
+	h.mgr.dnsServers = ns
 
 	var (
 		mu          sync.Mutex
@@ -77,7 +77,7 @@ func withNameService(t *testing.T, h *harness) (*fakeNameService, func() []strin
 
 func TestStartGivesTheGuestTheNetworksDNSServer(t *testing.T) {
 	h := newHarness(t)
-	ns, nameservers := withNameService(t, h)
+	ns, nameservers := withDNSServers(t, h)
 
 	h.start(t)
 
@@ -99,7 +99,7 @@ func TestStartGivesTheGuestTheNetworksDNSServer(t *testing.T) {
 
 func TestStartWithoutDNSGivesTheUpstreamNameservers(t *testing.T) {
 	h := newHarness(t)
-	ns, nameservers := withNameService(t, h)
+	ns, nameservers := withDNSServers(t, h)
 	ns.serveErr = errors.New("address already in use")
 
 	nw := h.definitions.networks["default"]
@@ -115,8 +115,8 @@ func TestStartWithoutDNSGivesTheUpstreamNameservers(t *testing.T) {
 
 	// With no name service at all, the same.
 	h2 := newHarness(t)
-	_, nameservers2 := withNameService(t, h2)
-	h2.mgr.nameService = nil
+	_, nameservers2 := withDNSServers(t, h2)
+	h2.mgr.dnsServers = nil
 	h2.start(t)
 	if got := nameservers2(); !slices.Equal(got, []string{"8.8.8.8"}) {
 		t.Errorf("guest nameservers without a name service = %q, want the default upstream", got)
@@ -180,8 +180,8 @@ func TestLookupFindsRunningInstancesByNameOrHostname(t *testing.T) {
 
 func TestRecoverServesTheNetworksOfAdoptedInstances(t *testing.T) {
 	mgr, definitions, _ := newTestManager(t)
-	ns := &fakeNameService{}
-	mgr.nameService = ns
+	ns := &fakeDNSServers{}
+	mgr.dnsServers = ns
 
 	inst := seedInstance(t, definitions, "web")
 	vmm := startAdoptable(t, mgr)

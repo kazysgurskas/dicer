@@ -10,6 +10,7 @@ package hostnet
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"sync"
 
 	"github.com/vishvananda/netlink"
@@ -82,6 +83,30 @@ func (h *Host) Close() {
 	if h.firewalld != nil {
 		h.firewalld.close()
 	}
+}
+
+// Subnets returns the IPv4 subnets the host's interfaces are on, as their
+// routes in the main table say: its LANs, and Dicer's own bridges that are
+// up.
+func Subnets() ([]netip.Prefix, error) {
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
+	if err != nil {
+		return nil, fmt.Errorf("list routes: %w", err)
+	}
+
+	var subnets []netip.Prefix
+	for _, route := range routes {
+		if route.Scope != netlink.SCOPE_LINK || route.Dst == nil {
+			continue
+		}
+		addr, ok := netip.AddrFromSlice(route.Dst.IP.To4())
+		if !ok {
+			continue
+		}
+		ones, _ := route.Dst.Mask.Size()
+		subnets = append(subnets, netip.PrefixFrom(addr, ones).Masked())
+	}
+	return subnets, nil
 }
 
 // resolveUplink returns the configured uplink interface name, or detects it

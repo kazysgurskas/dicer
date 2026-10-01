@@ -43,6 +43,9 @@ type composeDaemon struct {
 	// beforeCreateNetwork, if set, runs as a network is created, under the
 	// lock: what happens on the host meanwhile.
 	beforeCreateNetwork func()
+	// hostSubnets are the subnets the host is on, which no network may
+	// overlap.
+	hostSubnets []string
 }
 
 func newComposeDaemon(instances ...*dicerdv1.Instance) *composeDaemon {
@@ -160,7 +163,12 @@ func (d *composeDaemon) CreateNetwork(_ context.Context, req *dicerdv1.CreateNet
 	}
 	for name, subnet := range d.networkNames {
 		if have, err := netip.ParsePrefix(subnet); err == nil && have.Overlaps(want) {
-			return nil, errdefs.InvalidArgument("subnet %s overlaps network %q (%s)", want, name, subnet)
+			return nil, errdefs.Exists("subnet %s overlaps network %q (%s)", want, name, subnet)
+		}
+	}
+	for _, subnet := range d.hostSubnets {
+		if netip.MustParsePrefix(subnet).Overlaps(want) {
+			return nil, errdefs.Exists("subnet %s overlaps %s, which the host is on", want, subnet)
 		}
 	}
 
@@ -582,6 +590,21 @@ func TestComposeUpPicksAnotherSubnetWhenOneIsTaken(t *testing.T) {
 	}
 	if !strings.Contains(out, "Network shop-default created (10.213.1.0/24)") {
 		t.Errorf("output = %q, want the next free subnet", out)
+	}
+}
+
+func TestComposeUpSkipsSubnetsTheHostIsOn(t *testing.T) {
+	d := newComposeDaemon()
+	d.hostSubnets = []string{"10.213.0.0/23"}
+	serveComposeDaemon(t, d)
+	file := composeProject(t, "services: {web: {image: nginx:1.27}}")
+
+	out, err := runCompose(t, file, "up", "-d")
+	if err != nil {
+		t.Fatalf("up: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Network shop-default created (10.213.2.0/24)") {
+		t.Errorf("output = %q, want the first subnet the host is not on", out)
 	}
 }
 

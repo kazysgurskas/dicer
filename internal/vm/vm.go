@@ -29,6 +29,7 @@ type Definitions interface {
 	CreateInstance(inst types.InstanceSpec) error
 	GetInstance(nameOrID string) (types.InstanceSpec, error)
 	ListInstances() ([]types.InstanceSpec, error)
+	MatchingInstances(match func(types.InstanceSpec) bool) []types.InstanceSpec
 	UpdateInstance(inst types.InstanceSpec) error
 	RenameInstance(nameOrID string, renamed types.InstanceSpec) error
 	DeleteInstance(nameOrID string) error
@@ -46,6 +47,7 @@ type Definitions interface {
 type Addresses interface {
 	Allocate(n types.Network, instanceID, staticIP string) (types.NetworkAllocation, error)
 	Get(networkName, instanceID string) (types.NetworkAllocation, error)
+	InstanceAt(networkName, ip string) (instanceID string, ok bool)
 	Release(networkName, instanceID string) error
 	Reconcile(networks []string, live map[string]struct{}) (int, error)
 }
@@ -85,10 +87,10 @@ type HostNetwork interface {
 	UnpublishPorts(ctx context.Context, instanceID string)
 }
 
-// NameService answers the DNS queries of a network's guests, on the
+// DNSServers answer the DNS queries of each network's guests, on the
 // network's gateway address, which is the nameserver they are given while
-// it serves them.
-type NameService interface {
+// it is served.
+type DNSServers interface {
 	// Serve starts serving a network, unless it already is. The network's
 	// bridge must be up.
 	Serve(ctx context.Context, nw types.Network) error
@@ -111,9 +113,9 @@ type Config struct {
 	HostNetwork HostNetwork
 	Starters    map[types.HypervisorType][]hypervisor.Starter
 
-	// NameService, if set, lets guests find each other by name. Without it,
+	// DNSServers, if set, lets guests find each other by name. Without it,
 	// they are given the network's upstream nameservers.
-	NameService NameService
+	DNSServers DNSServers
 
 	// Capacity limits the CPU and memory instances may be given. The zero
 	// value is unlimited.
@@ -137,7 +139,7 @@ type Manager struct {
 	initrds     Initrds
 	hostNetwork HostNetwork
 	starters    map[types.HypervisorType][]hypervisor.Starter
-	nameService NameService
+	dnsServers  DNSServers
 	capacity    types.Capacity
 	metrics     Metrics
 	events      Events
@@ -215,7 +217,7 @@ func NewManager(cfg Config) *Manager {
 		initrds:     cfg.Initrds,
 		hostNetwork: cfg.HostNetwork,
 		starters:    cfg.Starters,
-		nameService: cfg.NameService,
+		dnsServers:  cfg.DNSServers,
 		capacity:    cfg.Capacity,
 		metrics:     cfg.Metrics,
 		events:      cfg.Events,

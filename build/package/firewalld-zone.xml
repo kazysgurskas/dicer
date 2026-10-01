@@ -8,10 +8,10 @@ SPDX-License-Identifier: MIT
 The firewalld zone dicerd binds each network's bridge to, while the network
 is in use. As libvirt's zone does, it lets guests' traffic be forwarded -
 dicerd's own rules decide where to - and lets guests reach the host itself
-only for ICMP. The lowest-priority rule turns every other connection to the
-host away.
+only for DNS, which dicerd answers on each network's gateway, and ICMP. The
+lowest-priority rule turns every other connection to the host away.
 
-To let guests reach a service on the host, at their network's gateway,
+To let guests reach another service on the host, as host.dicer.internal,
 add it to this zone, which no other interface is in, with firewall-cmd's
 add-service or add-port options, as the networking documentation shows.
 (An XML comment cannot hold the options themselves: their double hyphen
@@ -19,7 +19,8 @@ ends it.)
 -->
 <zone target="ACCEPT">
   <short>dicer</short>
-  <description>The bridges of Dicer's networks. Guests may reach the host for ICMP only; their other traffic is forwarded as dicerd's rules allow.</description>
+  <description>The bridges of Dicer's networks. Guests may reach the host for DNS and ICMP only; their other traffic is forwarded as dicerd's rules allow.</description>
+  <service name="dns"/>
   <protocol value="icmp"/>
   <rule priority="32767">
     <reject/>

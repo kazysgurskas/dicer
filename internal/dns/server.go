@@ -17,6 +17,7 @@
 package dns
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -29,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -39,8 +41,8 @@ import (
 // no public name is under it.
 const InternalDomain = "dicer.internal"
 
-// The names under InternalDomain that are the host, as guests reach it: the
-// network's gateway.
+// hostNames are the names under InternalDomain that are the host, as guests
+// reach it: the network's gateway.
 var hostNames = []string{"host." + InternalDomain, "gateway." + InternalDomain}
 
 // Resolver knows a network's instances.
@@ -49,7 +51,7 @@ type Resolver interface {
 	// whose name or hostname is name, compared without regard to case.
 	LookupHost(network, name string) []netip.Addr
 	// LookupAddr returns the names of the running instance on network that
-	// holds addr.
+	// holds addr, or none if no running instance does.
 	LookupAddr(network string, addr netip.Addr) []string
 }
 
@@ -68,21 +70,29 @@ const (
 	// and the guest's resolver asks again.
 	maxInFlight = 256
 
+	// maxConnections bounds the TCP connections served at once, apart from
+	// UDP queries, since an idle one holds its place for tcpIdleTimeout.
+	// More are closed, and the guest's resolver asks again.
+	maxConnections = 32
+
 	// maxMessage is the largest DNS message, over TCP.
 	maxMessage = 65535
 )
 
 // network is what a server needs to know of the network it serves.
 type network struct {
-	name   string
+	name string
+	// domain is the network's name as queries, lowercased, end in it.
+	domain string
 	subnet netip.Prefix
 	// gateway is the host's address on the network.
 	gateway netip.Addr
 	// upstreams are the nameservers forwarded to, as host:port.
 	upstreams []string
-	// local is whether the network's own names are answered: not on an
-	// isolated network, whose instances cannot reach each other anyway.
-	local bool
+	// answersInstances is whether the network's instances' names are
+	// answered: not on an isolated network, whose instances cannot reach
+	// each other anyway.
+	answersInstances bool
 }
 
 // server serves one network.
@@ -94,9 +104,16 @@ type server struct {
 	udp net.PacketConn
 	tcp net.Listener
 
-	inFlight chan struct{}
-	done     chan struct{}
-	wg       sync.WaitGroup
+	inFlight    chan struct{}
+	connections chan struct{}
+	// firstUpstream is the index in network.upstreams of the one asked
+	// first: the one that answered last, so that one that is down is not
+	// waited on by every query.
+	firstUpstream atomic.Int32
+	// cancel ends the context the server runs in, and with it the queries
+	// in flight, upstream ones too.
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // listen starts a server on addr.
@@ -113,17 +130,21 @@ func listen(ctx context.Context, addr string, nw network, resolver Resolver, log
 		return nil, err
 	}
 
+	// Not ctx itself: that is the request that started the server, not its
+	// life.
+	serverCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s := &server{
-		network:  nw,
-		resolver: resolver,
-		logger:   logger,
-		udp:      udp,
-		tcp:      tcp,
-		inFlight: make(chan struct{}, maxInFlight),
-		done:     make(chan struct{}),
+		network:     nw,
+		resolver:    resolver,
+		logger:      logger,
+		udp:         udp,
+		tcp:         tcp,
+		inFlight:    make(chan struct{}, maxInFlight),
+		connections: make(chan struct{}, maxConnections),
+		cancel:      cancel,
 	}
-	s.wg.Go(s.serveUDP)
-	s.wg.Go(s.serveTCP)
+	s.wg.Go(func() { s.serveUDP(serverCtx) })
+	s.wg.Go(func() { s.serveTCP(serverCtx) })
 	return s, nil
 }
 
@@ -132,18 +153,18 @@ func (s *server) addr() string { return s.udp.LocalAddr().String() }
 
 // close stops the server and waits for the queries in flight.
 func (s *server) close() {
-	close(s.done)
+	s.cancel()
 	_ = s.udp.Close()
 	_ = s.tcp.Close()
 	s.wg.Wait()
 }
 
-func (s *server) serveUDP() {
+func (s *server) serveUDP(ctx context.Context) {
 	buf := make([]byte, maxMessage)
 	for {
 		n, from, err := s.udp.ReadFrom(buf)
 		if err != nil {
-			if s.closed() {
+			if ctx.Err() != nil {
 				return
 			}
 			s.logger.Warn("read DNS query", "error", err)
@@ -159,35 +180,43 @@ func (s *server) serveUDP() {
 		query := append([]byte(nil), buf[:n]...)
 		s.wg.Go(func() {
 			defer func() { <-s.inFlight }()
-			if reply := s.answer(query, s.forwardUDP); reply != nil {
+			if reply := s.answer(ctx, query, s.forwardUDP); reply != nil {
 				_, _ = s.udp.WriteTo(reply, from)
 			}
 		})
 	}
 }
 
-func (s *server) serveTCP() {
+func (s *server) serveTCP(ctx context.Context) {
 	for {
 		conn, err := s.tcp.Accept()
 		if err != nil {
-			if s.closed() {
+			if ctx.Err() != nil {
 				return
 			}
 			s.logger.Warn("accept DNS connection", "error", err)
 			continue
 		}
-		s.wg.Go(func() { s.serveConn(conn) })
+
+		select {
+		case s.connections <- struct{}{}:
+		default:
+			_ = conn.Close() // too busy: the guest asks again
+			continue
+		}
+		s.wg.Go(func() {
+			defer func() { <-s.connections }()
+			s.serveConn(ctx, conn)
+		})
 	}
 }
 
 // serveConn answers the queries on one TCP connection, each prefixed with
 // its length, until the client is done or the server closes.
-func (s *server) serveConn(conn net.Conn) {
+func (s *server) serveConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
-	go func() {
-		<-s.done
-		_ = conn.Close()
-	}()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 
 	for {
 		_ = conn.SetDeadline(time.Now().Add(tcpIdleTimeout))
@@ -195,7 +224,7 @@ func (s *server) serveConn(conn net.Conn) {
 		if err != nil {
 			return
 		}
-		reply := s.answer(query, s.forwardTCP)
+		reply := s.answer(ctx, query, s.forwardTCP)
 		if reply == nil {
 			return
 		}
@@ -205,19 +234,12 @@ func (s *server) serveConn(conn net.Conn) {
 	}
 }
 
-func (s *server) closed() bool {
-	select {
-	case <-s.done:
-		return true
-	default:
-		return false
-	}
-}
-
 // answer replies to one query: from the network's own names if it asks for
 // one, or else with what forward gets from upstream. Nil means no reply: a
 // message too broken to answer.
-func (s *server) answer(query []byte, forward func([]byte) ([]byte, error)) []byte {
+func (s *server) answer(
+	ctx context.Context, query []byte, forward func(context.Context, []byte) ([]byte, error),
+) []byte {
 	var p dnsmessage.Parser
 	header, err := p.Start(query)
 	if err != nil || header.Response {
@@ -230,12 +252,12 @@ func (s *server) answer(query []byte, forward func([]byte) ([]byte, error)) []by
 	q := questions[0]
 
 	if q.Class == dnsmessage.ClassINET {
-		if records, rcode, ok := s.local(q); ok {
+		if records, rcode, ok := s.ownRecords(q); ok {
 			return reply(header, questions, rcode, records)
 		}
 	}
 
-	upstream, err := forward(query)
+	upstream, err := forward(ctx, query)
 	if err != nil {
 		s.logger.Debug("forward DNS query", "network", s.network.name, "name", q.Name.String(), "error", err)
 		return reply(header, questions, dnsmessage.RCodeServerFailure, nil)
@@ -243,9 +265,9 @@ func (s *server) answer(query []byte, forward func([]byte) ([]byte, error)) []by
 	return upstream
 }
 
-// local answers a question about the network's own names or addresses, if
-// it is one.
-func (s *server) local(q dnsmessage.Question) ([]dnsmessage.Resource, dnsmessage.RCode, bool) {
+// ownRecords answers a question about the network's own names or
+// addresses, if it is one.
+func (s *server) ownRecords(q dnsmessage.Question) ([]dnsmessage.Resource, dnsmessage.RCode, bool) {
 	name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
 
 	if q.Type == dnsmessage.TypePTR {
@@ -258,7 +280,7 @@ func (s *server) local(q dnsmessage.Question) ([]dnsmessage.Resource, dnsmessage
 		var records []dnsmessage.Resource
 		if addr == s.network.gateway {
 			records = append(records, ptrRecord(q.Name, hostNames[0]+"."))
-		} else if s.network.local {
+		} else if s.network.answersInstances {
 			for _, n := range s.resolver.LookupAddr(s.network.name, addr) {
 				records = append(records, ptrRecord(q.Name, n+"."+s.network.name+"."))
 			}
@@ -277,12 +299,12 @@ func (s *server) local(q dnsmessage.Question) ([]dnsmessage.Resource, dnsmessage
 		return addressRecords(q, []netip.Addr{s.network.gateway}), dnsmessage.RCodeSuccess, true
 	}
 
-	if !s.network.local {
+	if !s.network.answersInstances {
 		return nil, 0, false
 	}
 
 	// "db", or "db.<network>".
-	host, qualified := strings.CutSuffix(name, "."+s.network.name)
+	host, qualified := strings.CutSuffix(name, "."+s.network.domain)
 	if host == "" || strings.Contains(host, ".") {
 		return nil, 0, false
 	}
@@ -373,10 +395,17 @@ func reply(
 	return out
 }
 
+// answerBuffers hold upstream answers as they are read over UDP: large
+// enough for any, and too large to allocate for each.
+var answerBuffers = sync.Pool{New: func() any {
+	buf := make([]byte, maxMessage)
+	return &buf
+}}
+
 // forwardUDP asks each upstream nameserver in turn over UDP, and returns
 // the first answer.
-func (s *server) forwardUDP(query []byte) ([]byte, error) {
-	return s.forwardEach(func(ctx context.Context, upstream string) ([]byte, error) {
+func (s *server) forwardUDP(ctx context.Context, query []byte) ([]byte, error) {
+	return s.forwardEach(ctx, func(ctx context.Context, upstream string) ([]byte, error) {
 		var d net.Dialer
 		conn, err := d.DialContext(ctx, "udp", upstream)
 		if err != nil {
@@ -390,7 +419,9 @@ func (s *server) forwardUDP(query []byte) ([]byte, error) {
 		if _, err := conn.Write(query); err != nil {
 			return nil, err
 		}
-		buf := make([]byte, maxMessage)
+		bufp, _ := answerBuffers.Get().(*[]byte)
+		defer answerBuffers.Put(bufp)
+		buf := *bufp
 		for {
 			n, err := conn.Read(buf)
 			if err != nil {
@@ -398,7 +429,7 @@ func (s *server) forwardUDP(query []byte) ([]byte, error) {
 			}
 			// Ignore anything that does not answer this query.
 			if n >= 2 && len(query) >= 2 && buf[0] == query[0] && buf[1] == query[1] {
-				return buf[:n], nil
+				return bytes.Clone(buf[:n]), nil
 			}
 		}
 	})
@@ -406,8 +437,8 @@ func (s *server) forwardUDP(query []byte) ([]byte, error) {
 
 // forwardTCP asks each upstream nameserver in turn over TCP, for a client
 // that asked over TCP, as it does for an answer too large for UDP.
-func (s *server) forwardTCP(query []byte) ([]byte, error) {
-	return s.forwardEach(func(ctx context.Context, upstream string) ([]byte, error) {
+func (s *server) forwardTCP(ctx context.Context, query []byte) ([]byte, error) {
+	return s.forwardEach(ctx, func(ctx context.Context, upstream string) ([]byte, error) {
 		var d net.Dialer
 		conn, err := d.DialContext(ctx, "tcp", upstream)
 		if err != nil {
@@ -425,21 +456,28 @@ func (s *server) forwardTCP(query []byte) ([]byte, error) {
 	})
 }
 
-// forwardEach tries ask on each upstream until one answers.
-func (s *server) forwardEach(ask func(ctx context.Context, upstream string) ([]byte, error)) ([]byte, error) {
-	if len(s.network.upstreams) == 0 {
+// forwardEach tries ask on each upstream until one answers, starting with
+// the one that answered last.
+func (s *server) forwardEach(
+	ctx context.Context, ask func(ctx context.Context, upstream string) ([]byte, error),
+) ([]byte, error) {
+	upstreams := s.network.upstreams
+	if len(upstreams) == 0 {
 		return nil, errors.New("no upstream nameservers")
 	}
 
+	first := int(s.firstUpstream.Load())
 	var errs []error
-	for _, upstream := range s.network.upstreams {
-		ctx, cancel := context.WithTimeout(context.Background(), forwardTimeout)
-		answer, err := ask(ctx, upstream)
+	for i := range upstreams {
+		n := (first + i) % len(upstreams)
+		askCtx, cancel := context.WithTimeout(ctx, forwardTimeout)
+		answer, err := ask(askCtx, upstreams[n])
 		cancel()
 		if err == nil {
+			s.firstUpstream.Store(int32(n))
 			return answer, nil
 		}
-		errs = append(errs, fmt.Errorf("%s: %w", upstream, err))
+		errs = append(errs, fmt.Errorf("%s: %w", upstreams[n], err))
 	}
 	return nil, errors.Join(errs...)
 }

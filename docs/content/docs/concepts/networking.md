@@ -32,9 +32,12 @@ $ dicer network create default --subnet 172.20.0.0/16
 ```
 
 Unless given, its gateway is the subnet's first address, its upstream
-nameserver `8.8.8.8` (see [Names](#names)), and its MTU 1500. The bridge is created when the first instance on
-the network starts. Networks are host-local; connecting guests on different
-hosts means connecting the hosts.
+nameserver `8.8.8.8` (see [Names](#names)), and its MTU 1500. The bridge is
+created when the first instance on the network starts. Networks are
+host-local; connecting guests on different hosts means connecting the hosts.
+
+A subnet may not overlap another network's, nor one the host is already on,
+such as its LAN's: the network's routes would hide the host's.
 
 An instance that names no network gets the daemon's default: the one its
 configuration names, or, if there is exactly one network, that one.
@@ -66,8 +69,8 @@ created with `--nameservers`, so the guests' view of the outside world is
 the host's. Addresses on the network resolve back to their instances' names;
 nobody outside is asked about them.
 
-On a host that runs firewalld, the firewall must let DNS in from the
-guests: see [Troubleshooting](../../guides/troubleshooting#the-network-does-not-work).
+On a host that runs firewalld, its `dicer` zone lets guests ask: see
+[firewalld](#firewalld).
 
 A stopped instance's name does not resolve. On a network created with
 `--isolated`, whose guests cannot reach each other, no instance's does: the
@@ -93,7 +96,9 @@ $ dicer exec app wget -qO- http://host.dicer.internal:8000/
 
 The service on the host must listen on the gateway's address, or on all of
 the host's, not only on `127.0.0.1`; and the host's firewall must let its
-port in from the guests. `dicer.internal` is never asked of upstream: any
+port in from the guests: with firewalld, add it to the `dicer` zone, as
+[firewalld](#firewalld) shows.
+ `dicer.internal` is never asked of upstream: any
 other name under it does not resolve.
 
 ## The outside world
@@ -116,12 +121,14 @@ Dicer's firewall rules are in chains of their own. Rules of yours go in
 On a host that runs firewalld, the daemon puts each network's bridge in the
 `dicer` zone, which the package and the install script install. As
 libvirt's zone does, it lets guests' traffic be forwarded, as Dicer's own
-rules allow, and lets guests reach the host itself only by ICMP. firewalld
+rules allow, and lets guests reach the host itself only for DNS, which the
+daemon answers on each gateway (see [Names](#names)), and by ICMP. firewalld
 flushes Dicer's rules and forgets the bridges whenever it starts or
 reloads; the daemon sets them up again each time.
 
-To let guests reach a service on the host, at their network's gateway, add
-it to the `dicer` zone, which only Dicer's bridges are in:
+To let guests reach another service on the host, as
+[`host.dicer.internal`](#the-host), add it to the `dicer` zone, which only
+Dicer's bridges are in:
 
 ```console
 $ sudo firewall-cmd --permanent --zone=dicer --add-port=8000/tcp
