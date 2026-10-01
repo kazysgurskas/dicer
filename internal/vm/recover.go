@@ -144,9 +144,10 @@ func (m *Manager) recoverInstance(ctx context.Context, inst types.InstanceSpec) 
 }
 
 // restoreAdoptedNetworks sets up again the networks whose instances
-// survived a daemon restart: their bridges are up, as they were left, but
-// the host network has to know them, to set them up again when firewalld
-// reloads.
+// survived a daemon restart, and starts their DNS servers: their bridges
+// are up, as they were left, but the host network has to know them, to set
+// them up again when firewalld reloads, and their guests ask the gateway
+// still.
 func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []types.InstanceSpec) {
 	restored := make(map[string]bool)
 	for _, inst := range instances {
@@ -176,6 +177,7 @@ func (m *Manager) restoreNetwork(ctx context.Context, nw types.Network) {
 		m.logger.WarnContext(ctx, "cannot set up an adopted network's bridge again",
 			"network", nw.Name, "error", err)
 	}
+	m.serveDNS(ctx, nw)
 }
 
 // operationOf names the operation an in-progress state belongs to.

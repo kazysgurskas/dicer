@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,46 @@ func TestNetworkGuestReachesTheInternet(t *testing.T) {
 	// dicer-init wrote a resolv.conf that works.
 	if _, err := env.tryExec(t, name, "nslookup", "example.com"); err != nil {
 		t.Errorf("the guest cannot resolve a name: %v", err)
+	}
+}
+
+// TestNetworkGuestsFindEachOtherByName checks that a guest is given its
+// gateway as its nameserver, and that the daemon's DNS server there answers
+// for the other instances on the network: by name, and by name followed by
+// the network's. Only booted guests can show that the server is reachable
+// from the network and that their resolver uses it.
+func TestNetworkGuestsFindEachOtherByName(t *testing.T) {
+	var (
+		server = instanceName(t) + "-server"
+		client = instanceName(t) + "-client"
+	)
+
+	env.createInstance(t, server)
+	serverIP := env.startInstance(t, server).IP
+	env.createInstance(t, client)
+	env.startInstance(t, client)
+
+	if out := env.exec(t, client, "cat", "/etc/resolv.conf"); !strings.Contains(out, "nameserver "+gatewayIP) {
+		t.Errorf("the guest's resolv.conf does not name its gateway %s:\n%s", gatewayIP, out)
+	}
+
+	// The host is the gateway, by name.
+	if out, err := env.tryExec(t, client, "nslookup", "host.dicer.internal"); err != nil || !strings.Contains(out, gatewayIP) {
+		t.Errorf("nslookup host.dicer.internal = %v, want the gateway %s:\n%s", err, gatewayIP, out)
+	}
+
+	for _, name := range []string{server, server + "." + networkName} {
+		out, err := env.tryExec(t, client, "nslookup", name)
+		if err != nil || !strings.Contains(out, serverIP) {
+			t.Errorf("nslookup %s = %v, want %s:\n%s", name, err, serverIP, out)
+		}
+	}
+
+	// A stopped instance's name does not resolve.
+	env.dicer(t, "instance", "stop", server)
+	env.waitForState(t, server, "Stopped")
+	if out, err := env.tryExec(t, client, "nslookup", server+"."+networkName); err == nil && strings.Contains(out, serverIP) {
+		t.Errorf("nslookup of a stopped instance found it:\n%s", out)
 	}
 }
 

@@ -189,8 +189,10 @@ it stops.
 
 - Traffic leaves through the interface of the host's default route. On a
   host with several, set `network.uplink_interface` in the configuration.
-- Names are resolved with `8.8.8.8` unless the network says otherwise. If
-  your network blocks it, create the network with `--nameservers`.
+- Names the network does not know of are looked up by the daemon, on the
+  guests' behalf, with `8.8.8.8` unless the network says otherwise. If your
+  network blocks it, create the network with `--nameservers`.
+
 - On a host that runs firewalld (Fedora, RHEL and its rebuilds, openSUSE),
   check that the network's bridge is in the `dicer` zone:
 
@@ -209,6 +211,41 @@ it stops.
   $ sudo firewall-cmd --reload
   ```
 
+**The guest cannot resolve names, not even other instances'.** Guests ask
+the daemon's DNS server on their network's gateway, as `cat
+/etc/resolv.conf` in the guest shows. If every lookup fails, with
+`Temporary failure in name resolution`, and the guest's connections to the
+gateway's port 53 fail with `No route to host`, the host's firewall is
+turning them away.
+
+On hosts that run firewalld (Fedora, RHEL and its rebuilds, openSUSE),
+Dicer's bridges are in the default zone, which on most of them does not let
+DNS in. Check that firewalld is running, and let it in:
+
+```console
+$ sudo firewall-cmd --state
+running
+$ sudo firewall-cmd --permanent --add-service=dns
+$ sudo firewall-cmd --reload
+```
+
+That lets DNS in on every interface in the default zone. If the host runs a
+DNS server of its own, listening on all its addresses, let it in from
+Dicer's networks only instead, with a rule for each network's subnet, as
+`dicer network list` shows them:
+
+```console
+$ sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="172.20.0.0/16" service name="dns" accept'
+$ sudo firewall-cmd --reload
+```
+
+Projects that `dicer compose` gives networks of their own take their
+subnets from `10.213.0.0/16`, which one rule covers. Running guests pick
+the change up at once. With `network.dns: false` in the daemon's
+[configuration](../../reference/configuration#network-dns), guests ask the
+network's nameservers directly instead, and find each other only by
+address.
+
 **A published port cannot be reached.**
 
 - From the host itself, `localhost` does not reach published ports; use the
@@ -216,6 +253,12 @@ it stops.
 - Check that the workload listens on all of the guest's addresses, not only
   its loopback: `dicer exec web ss -ltn`.
 - Check the host's firewall lets the port in.
+
+**A guest cannot reach a service on the host.** `host.dicer.internal` is the
+host's address on the guest's network. The service must listen there, or on
+all of the host's addresses: one listening only on `127.0.0.1` cannot be
+reached from a guest. The host's firewall must let the port in as well; with
+firewalld, open it in the default zone, as for DNS above.
 
 **Two instances cannot reach each other.** Instances on different networks
 cannot, by design, and neither can instances on the same network created

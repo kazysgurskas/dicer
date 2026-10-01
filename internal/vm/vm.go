@@ -85,6 +85,17 @@ type HostNetwork interface {
 	UnpublishPorts(ctx context.Context, instanceID string)
 }
 
+// NameService answers the DNS queries of a network's guests, on the
+// network's gateway address, which is the nameserver they are given while
+// it serves them.
+type NameService interface {
+	// Serve starts serving a network, unless it already is. The network's
+	// bridge must be up.
+	Serve(ctx context.Context, nw types.Network) error
+	// Stop stops serving a network.
+	Stop(network string)
+}
+
 // Config holds the dependencies for a Manager.
 type Config struct {
 	Definitions Definitions
@@ -99,6 +110,10 @@ type Config struct {
 	Initrds     Initrds
 	HostNetwork HostNetwork
 	Starters    map[types.HypervisorType][]hypervisor.Starter
+
+	// NameService, if set, lets guests find each other by name. Without it,
+	// they are given the network's upstream nameservers.
+	NameService NameService
 
 	// Capacity limits the CPU and memory instances may be given. The zero
 	// value is unlimited.
@@ -122,6 +137,7 @@ type Manager struct {
 	initrds     Initrds
 	hostNetwork HostNetwork
 	starters    map[types.HypervisorType][]hypervisor.Starter
+	nameService NameService
 	capacity    types.Capacity
 	metrics     Metrics
 	events      Events
@@ -199,6 +215,7 @@ func NewManager(cfg Config) *Manager {
 		initrds:     cfg.Initrds,
 		hostNetwork: cfg.HostNetwork,
 		starters:    cfg.Starters,
+		nameService: cfg.NameService,
 		capacity:    cfg.Capacity,
 		metrics:     cfg.Metrics,
 		events:      cfg.Events,
