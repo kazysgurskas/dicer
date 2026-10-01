@@ -89,6 +89,13 @@ func TestComposeProjectUpChangeAndDown(t *testing.T) {
 		t.Errorf("app's GREETING = %q, want the file's", got)
 	}
 
+	// app finds db by its service's name, its hostname, from the network's
+	// DNS.
+	dbIP := env.instance(t, project+"-db").IP
+	if out, err := env.tryExec(t, project+"-app", "nslookup", "db"); err != nil || !strings.Contains(out, dbIP) {
+		t.Errorf("nslookup db from app = %v, want %s:\n%s", err, dbIP, out)
+	}
+
 	// A changed service is recreated; an unchanged one is left running.
 	env.writeComposeFile(t, dir, "goodbye")
 	appBefore := env.composeInstance(t, project+"-app")

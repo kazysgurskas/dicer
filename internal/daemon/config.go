@@ -383,6 +383,12 @@ type NetworkConfig struct {
 	// DownloadBurstMultiplier is how far an instance may briefly exceed its
 	// download rate limit, as a multiple of it. Unset is 4.
 	DownloadBurstMultiplier int `yaml:"download_burst_multiplier,omitempty"`
+
+	// DNS answers guests' DNS queries on each network's gateway address, so
+	// that an instance can reach another on its network by name; other names
+	// are forwarded to the network's nameservers. Off, guests ask those
+	// nameservers directly. Unset is true.
+	DNS bool `yaml:"dns"`
 }
 
 // DefaultsConfig names the kernel and network an instance gets when it names
@@ -598,6 +604,7 @@ func defaultConfig() Config {
 		Network: NetworkConfig{
 			UploadBurstMultiplier:   hostnet.DefaultBurstMultiplier,
 			DownloadBurstMultiplier: hostnet.DefaultBurstMultiplier,
+			DNS:                     true,
 		},
 		LogLevel: "info",
 		Metrics:  MetricsConfig{Listen: defaultMetricsListen},

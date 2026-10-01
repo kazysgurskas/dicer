@@ -19,8 +19,8 @@ order.
 ## A project
 
 A project is a directory with a compose file in it: `dicer-compose.yaml`, or
-`compose.yaml`. This one runs a web front end, an API and PostgreSQL, on a
-network of their own, with the database's data on a volume:
+`compose.yaml`. This one runs a web front end, an API and PostgreSQL, with
+the database's data on a volume:
 
 ```yaml {filename="shop/dicer-compose.yaml"}
 services:
@@ -29,14 +29,12 @@ services:
     ports: ["8080:80"]
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    networks: [backend]
     depends_on: [api]
 
   api:
     image: ghcr.io/acme/api:3
     environment:
-      DATABASE_URL: postgres://shop:${DB_PASSWORD}@172.30.0.10/shop
-    networks: [backend]
+      DATABASE_URL: postgres://shop:${DB_PASSWORD}@db/shop
     healthcheck:
       http: 3000/healthz
     depends_on:
@@ -47,8 +45,7 @@ services:
     image: ghcr.io/acme/api:3
     command: ./migrate up
     environment:
-      DATABASE_URL: postgres://shop:${DB_PASSWORD}@172.30.0.10/shop
-    networks: [backend]
+      DATABASE_URL: postgres://shop:${DB_PASSWORD}@db/shop
     depends_on:
       db: {condition: service_healthy}
 
@@ -60,16 +57,10 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks:
-      backend: {ipv4_address: 172.30.0.10}
     memory: 2GiB
     healthcheck:
       test: pg_isready -U shop
       interval: 5s
-
-networks:
-  backend:
-    subnet: 172.30.0.0/24
 
 volumes:
   pgdata:
@@ -83,27 +74,30 @@ the compose file:
 DB_PASSWORD=change-me
 ```
 
-The [compose file reference](../../reference/compose-file) has every key.
+`api` and `migrate` reach the database as `db`, its service's name: see
+[Names](#names). The [compose file reference](../../reference/compose-file)
+has every key.
 
 ## Bring it up
 
 ```console
 $ cd shop
 $ dicer compose up -d
-Network shop-backend created (172.30.0.0/24)
+Network shop-default created (10.213.0.0/24)
 Volume shop-pgdata created (20 GiB)
 Image postgres:17 pulled in 14.2s (151 MiB)
-Instance shop-db started in 1.3s (172.30.0.10)
+Instance shop-db started in 1.3s (10.213.0.5)
 Waiting for shop-db to be healthy
 Instance shop-db is healthy
-Instance shop-migrate started in 1.1s (172.30.0.2)
+Instance shop-migrate started in 1.1s (10.213.0.2)
 Waiting for shop-migrate to finish
 Instance shop-migrate finished
-Instance shop-api started in 1.2s (172.30.0.3)
-Instance shop-web started in 1.1s (172.30.0.4)
+Instance shop-api started in 1.2s (10.213.0.3)
+Instance shop-web started in 1.1s (10.213.0.4)
 ```
 
-`up` creates the project's network and volume, pulls the images the host
+`up` creates the project's network, `shop-default`, on a free subnet, and
+its volume, pulls the images the host
 does not have, and starts each service once those it depends on are ready.
 Services that do not depend on each other start at the same time.
 
@@ -126,10 +120,10 @@ $ dicer compose up -d --wait && ./run-integration-tests
 ```console
 $ dicer compose ps
 NAME           SERVICE   IMAGE                STATUS                     IP            PORTS
-shop-api       api       ghcr.io/acme/api:3   Up 2 minutes (healthy)     172.30.0.3    -
-shop-db        db        postgres:17          Up 2 minutes (healthy)     172.30.0.10   -
+shop-api       api       ghcr.io/acme/api:3   Up 2 minutes (healthy)     10.213.0.3    -
+shop-db        db        postgres:17          Up 2 minutes (healthy)     10.213.0.5   -
 shop-migrate   migrate   ghcr.io/acme/api:3   Exited (0) 2 minutes ago   -             -
-shop-web       web       nginx:1.27           Up 2 minutes               172.30.0.4    8080->80/tcp
+shop-web       web       nginx:1.27           Up 2 minutes               10.213.0.4    8080->80/tcp
 $ dicer compose logs -f api
 $ dicer compose exec db psql -U shop
 ```
@@ -144,10 +138,10 @@ stopped, and leaves the rest running:
 ```console
 $ dicer compose up -d
 Instance shop-db is up to date
-Instance shop-migrate started in 1.1s (172.30.0.2)
+Instance shop-migrate started in 1.1s (10.213.0.2)
 Waiting for shop-migrate to finish
 Instance shop-migrate finished
-Instance shop-api recreated in 1.4s (172.30.0.3)
+Instance shop-api recreated in 1.4s (10.213.0.3)
 Instance shop-web is up to date
 ```
 
@@ -170,7 +164,7 @@ Instance shop-web deleted in 1.1s
 Instance shop-api deleted in 1.0s
 Instance shop-migrate deleted in 2ms
 Instance shop-db deleted in 1.2s
-Network shop-backend deleted
+Network shop-default deleted
 ```
 
 `down` deletes the instances, in the reverse of the order they start in,
@@ -178,13 +172,36 @@ and the networks the file declares. Volumes are kept, with their data,
 until `down --volumes`. `stop` and `start` stop and start the instances
 without deleting them.
 
-## Reaching other services
+## Names
 
-Services have no names the others can resolve: a service is reached by its
-address. Give the ones
-others connect to a fixed address on the project's network, with
-`ipv4_address`, as `db` has above, and pass it to the rest in their
-environment.
+The project has a network of its own, `shop-default`, unless the file
+declares one called `default` or every service names another. On it, each
+service is found by its name: `api` connects to `db`, which resolves to the
+database's address. The daemon's DNS answers for the network's running
+instances, by hostname, which is the service's name unless `hostname` gives
+another, and by instance name, `shop-db`. Two projects with a `db` each do
+not mix them up: each `db` is on its own project's network.
+
+A service reaches the host itself as `host.dicer.internal`: see
+[Networking](../../concepts/networking#the-host).
+
+A project brought up by a Dicer from before services had names changes at
+its next `up`: its services that name no network move to the project's
+own, and those that set no `hostname` are given their service's name.
+Both are changes to their definitions, so `up` recreates them, from fresh
+disks and with new addresses, and creates the network first. Keep what must
+survive on a volume, or pin a service where it was with `networks` and
+`hostname`, before that `up`.
+
+To share a network with instances outside the project, name it as an
+external one:
+
+```yaml
+networks:
+  default:
+    name: default
+    external: true
+```
 
 ## Services are machines
 
@@ -199,8 +216,9 @@ a service can say:
   guest each time it starts; a change reaches the guest at its next start.
   With a remote daemon, the path is the daemon's host's.
 - **Each service joins one network.** A service that names none joins the
-  file's network called `default`, if it declares one, or else the
-  daemon's default network. A network needs a `subnet`.
+  project's network called `default`. A network the file gives no `subnet`
+  gets a free one from `10.213.0.0/16`, one that no other network and none
+  of the host's interfaces is on.
 - **Volumes have a size**, 10 GiB unless given.
 - **Sizes are the machine's.** `vcpus` (or `cpus`, a whole number),
   `memory` (or `mem_limit`) and `disk` size the virtual machine: 1 vCPU,

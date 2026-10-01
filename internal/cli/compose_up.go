@@ -192,12 +192,62 @@ func (u *upper) ensureNetworks(services []*compose.Service) error {
 			return fmt.Errorf("external network %s does not exist: create it with dicer network create", n.Name)
 		}
 
-		if _, err := u.client.CreateNetwork(u.ctx(), n.Request); err != nil {
+		created, err := u.createNetwork(n.Request)
+		if err != nil {
 			return fmt.Errorf("create network %s: %w", n.Name, err)
 		}
-		u.out.printf("Network %s created (%s)", n.Name, n.Request.GetSubnet())
+		u.out.printf("Network %s created (%s)", n.Name, created.GetSubnet())
 	}
 	return nil
+}
+
+// maxSubnetTries bounds how many subnets up tries for a network the file
+// gives none, as other networks take them meanwhile.
+const maxSubnetTries = 16
+
+// createNetwork creates a network. One the file gives no subnet is given a
+// free one: the first that overlaps none of the daemon's networks, and the
+// next if the daemon turns it away, as another network has taken it
+// meanwhile or the host is on it.
+func (u *upper) createNetwork(req *dicerdv1.CreateNetworkRequest) (*dicerdv1.Network, error) {
+	if req.GetSubnet() != "" {
+		return u.client.CreateNetwork(u.ctx(), req)
+	}
+
+	var refused []string
+	var err error
+	for range maxSubnetTries {
+		var resp *dicerdv1.ListNetworksResponse
+		if resp, err = u.client.ListNetworks(u.ctx(), &dicerdv1.ListNetworksRequest{}); err != nil {
+			return nil, err
+		}
+		taken := slices.Clone(refused)
+		for _, n := range resp.GetNetworks() {
+			if n.GetName() == req.GetName() {
+				// AlreadyExists was the name's, not the subnet's.
+				return nil, fmt.Errorf("network %s was created meanwhile, by something else: run up again", req.GetName())
+			}
+			taken = append(taken, n.GetSubnet())
+		}
+		subnet, freeErr := compose.FreeSubnet(taken)
+		if freeErr != nil {
+			return nil, freeErr
+		}
+
+		withSubnet, ok := proto.Clone(req).(*dicerdv1.CreateNetworkRequest)
+		if !ok {
+			return nil, errors.New("clone network definition")
+		}
+		withSubnet.Subnet = subnet
+
+		var created *dicerdv1.Network
+		created, err = u.client.CreateNetwork(u.ctx(), withSubnet)
+		if status.Code(err) != codes.AlreadyExists {
+			return created, err
+		}
+		refused = append(refused, subnet)
+	}
+	return nil, err
 }
 
 func (u *upper) ensureVolumes(services []*compose.Service) error {

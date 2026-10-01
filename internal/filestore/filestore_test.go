@@ -6,8 +6,11 @@ package filestore
 import (
 	"errors"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
@@ -238,5 +241,62 @@ func TestCreateRejectsPathTraversal(t *testing.T) {
 	err := s.CreateNetwork(types.Network{ID: "n1", Name: "../escape"})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Fatalf("CreateNetwork(../escape) = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestMatchingInstancesAreThoseMatchAccepts(t *testing.T) {
+	s := newTestManager(t)
+	for _, name := range []string{"web", "db", "cache"} {
+		if err := s.CreateInstance(testInstance(name)); err != nil {
+			t.Fatalf("CreateInstance %s: %v", name, err)
+		}
+	}
+
+	tests := []struct {
+		name  string
+		match func(types.InstanceSpec) bool
+		want  []string
+	}{
+		{"none", func(types.InstanceSpec) bool { return false }, nil},
+		{"some", func(i types.InstanceSpec) bool { return i.Name != "db" }, []string{"cache", "web"}},
+		{"all", func(types.InstanceSpec) bool { return true }, []string{"cache", "db", "web"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, inst := range s.MatchingInstances(tt.match) {
+				got = append(got, inst.Name)
+			}
+			slices.Sort(got)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("MatchingInstances = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Finding one instance among many costs a scan, not a copy and sort of
+// them all, as ListInstances does.
+func BenchmarkMatchingInstances(b *testing.B) {
+	for _, size := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			s, err := NewManager(Config{
+				DataDir: filepath.Join(b.TempDir(), "data"),
+				Logger:  slog.New(slog.DiscardHandler),
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			for i := range size {
+				if err := s.CreateInstance(testInstance("instance-" + strconv.Itoa(i))); err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			b.ReportAllocs()
+			for b.Loop() {
+				s.MatchingInstances(func(i types.InstanceSpec) bool { return i.Name == "instance-5" })
+			}
+		})
 	}
 }

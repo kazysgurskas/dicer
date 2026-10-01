@@ -7,6 +7,7 @@
 package compose
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"strconv"
@@ -59,8 +60,8 @@ func (b *builder) network(key string, raw *rawNetwork) (*Network, error) {
 		}
 		return n, nil
 	}
-	if subnet == "" {
-		return nil, errors.New("it needs a subnet, such as subnet: 172.30.0.0/24")
+	if subnet == "" && gateway != "" {
+		return nil, errors.New("a gateway needs a subnet to be in")
 	}
 
 	n.Request = &dicerdv1.CreateNetworkRequest{
@@ -123,7 +124,7 @@ func (b *builder) service(key string, raw *rawService) (*Service, error) {
 	req := &dicerdv1.CreateInstanceRequest{
 		Name:              name,
 		ImageRef:          raw.Image,
-		Hostname:          raw.Hostname,
+		Hostname:          cmp.Or(raw.Hostname, key),
 		KernelName:        raw.Kernel,
 		KernelArgs:        raw.KernelArgs,
 		HypervisorVersion: raw.HypervisorVer,

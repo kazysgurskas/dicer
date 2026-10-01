@@ -14,10 +14,12 @@ import (
 )
 
 // A network's guests may reach its gateway, the host's address on the
-// network. Dicer's iptables INPUT rules let them, ahead of the host's own;
-// where firewalld runs, its rules come from a table iptables cannot
-// override, so the bridge is also bound to firewalldZone, which decides
-// what on the host they may reach, and lets their traffic be forwarded.
+// network: they ask its DNS server, and reach the host itself as
+// host.dicer.internal. Dicer's iptables INPUT rules let them, ahead of the
+// host's own; where firewalld runs, its rules come from a table iptables
+// cannot override, so the bridge is also bound to firewalldZone, which
+// decides what on the host they may reach, and lets their traffic be
+// forwarded.
 
 // ensureGatewayAccess lets a network's guests reach its gateway, and no
 // other network's guests reach it. A firewalld without firewalldZone is

@@ -54,7 +54,8 @@ type rawService struct {
 	// Changing it replaces the instance at the next `dicer compose up`.
 	ContainerName string `yaml:"container_name"`
 
-	// Hostname is the guest's hostname. Unset is the instance's name.
+	// Hostname is the guest's hostname, which other instances on its
+	// network can look it up by. Unset is the service's name.
 	Hostname string `yaml:"hostname"`
 
 	// Command is the command to run: a list, or a string split as a shell
@@ -101,9 +102,10 @@ type rawService struct {
 
 	// Networks is the network the instance joins: a list of one name, or a
 	// mapping of one name to its settings, which can give the instance a
-	// fixed address. Unset is the file's network called `default`, if it
-	// declares one, and otherwise the daemon's default network. Services
-	// have no DNS names: another service reaches one by its address.
+	// fixed address. Unset is the file's network called `default`, which
+	// the project has whether the file declares it or not: `PROJECT-default`.
+	// On its network, a service is found by its hostname, which is its name
+	// unless it says otherwise, and by its instance's name.
 	//
 	//	networks:
 	//	  backend:
@@ -180,8 +182,8 @@ type rawNetwork struct {
 	// and never creates or deletes it. It takes no other settings.
 	External bool `yaml:"external"`
 
-	// Subnet is the network's subnet, such as `172.30.0.0/24`. Required,
-	// unless the network is external.
+	// Subnet is the network's subnet, such as `172.30.0.0/24`. Unset is a
+	// free /24 of `10.213.0.0/16`, picked by `dicer compose up`.
 	Subnet string `yaml:"subnet"`
 
 	// Gateway is the network's gateway. Unset is the subnet's first address.

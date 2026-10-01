@@ -49,7 +49,8 @@ func (m *Manager) setupNetwork(ctx context.Context, inst types.InstanceSpec) (*n
 		m.hostNetwork.RemoveTAP(ctx, &nw, inst.ID)
 	}
 
-	if err := m.attachTAP(ctx, &nw, &alloc); err != nil {
+	servesDNS, err := m.attachTAP(ctx, &nw, &alloc)
+	if err != nil {
 		return nil, err
 	}
 
@@ -76,9 +77,11 @@ func (m *Manager) setupNetwork(ctx context.Context, inst types.InstanceSpec) (*n
 		mtu = network.DefaultMTU
 	}
 
-	nameservers := nw.Nameservers
-	if len(nameservers) == 0 {
-		nameservers = []string{network.DefaultNameserver}
+	// The gateway, which answers for the network's instances and asks the
+	// upstream nameservers the rest; or, if it cannot, those nameservers.
+	nameservers := []string{nw.Gateway}
+	if !servesDNS {
+		nameservers = upstreamNameservers(nw)
 	}
 
 	return &networkSetup{
@@ -96,21 +99,47 @@ func (m *Manager) setupNetwork(ctx context.Context, inst types.InstanceSpec) (*n
 	}, nil
 }
 
-// attachTAP brings the network's bridge up and attaches the instance's TAP
-// device to it, under the network lock.
-func (m *Manager) attachTAP(ctx context.Context, nw *types.Network, alloc *types.NetworkAllocation) error {
+// upstreamNameservers are the nameservers a network's names are looked up
+// in: its own, or the default.
+func upstreamNameservers(nw types.Network) []string {
+	if len(nw.Nameservers) > 0 {
+		return nw.Nameservers
+	}
+	return []string{network.DefaultNameserver}
+}
+
+// attachTAP brings the network's bridge up, with its DNS server, and
+// attaches the instance's TAP device to it, under the network lock. It
+// reports whether the network's DNS server is serving.
+func (m *Manager) attachTAP(ctx context.Context, nw *types.Network, alloc *types.NetworkAllocation) (bool, error) {
 	lock := m.networkLock(nw.Name)
 	lock.Lock()
 	defer lock.Unlock()
 
 	if err := m.hostNetwork.SetupBridge(ctx, nw); err != nil {
-		return fmt.Errorf("set up bridge %q: %w", nw.Bridge, err)
+		return false, fmt.Errorf("set up bridge %q: %w", nw.Bridge, err)
 	}
 	if err := m.hostNetwork.CreateTAP(ctx, nw, alloc, network.Bandwidth{}); err != nil {
 		m.hostNetwork.RemoveTAP(context.WithoutCancel(ctx), nw, alloc.InstanceID)
-		return fmt.Errorf("create TAP device: %w", err)
+		return false, fmt.Errorf("create TAP device: %w", err)
 	}
-	return nil
+	return m.serveDNS(ctx, *nw), nil
+}
+
+// serveDNS starts the network's DNS server, unless it is serving, and
+// reports whether it is. One that cannot start costs the guests their
+// neighbours' names, not their DNS: they are given the upstream
+// nameservers instead.
+func (m *Manager) serveDNS(ctx context.Context, nw types.Network) bool {
+	if m.dnsServers == nil {
+		return false
+	}
+	if err := m.dnsServers.Serve(ctx, nw); err != nil {
+		m.logger.WarnContext(ctx, "cannot serve DNS on the network; its instances get its upstream nameservers",
+			"network", nw.Name, "error", err)
+		return false
+	}
+	return true
 }
 
 // teardownNetwork removes an instance's published ports and TAP device, and
@@ -137,6 +166,9 @@ func (m *Manager) teardownNetwork(ctx context.Context, inst types.InstanceSpec) 
 
 	m.logger.InfoContext(ctx, "tearing down bridge, no instances left on network",
 		"network", nw.Name, "bridge", nw.Bridge)
+	if m.dnsServers != nil {
+		m.dnsServers.Stop(nw.Name)
+	}
 	m.hostNetwork.TeardownBridge(ctx, &nw)
 }
 

@@ -191,6 +191,12 @@ The daemon's own settings. The sections after them are the API, resources, netwo
 
 `download_burst_multiplier` is how far an instance may briefly exceed its download rate limit, as a multiple of it. Unset is 4.
 
+### `network.dns` {#network-dns}
+
+*boolean*
+
+`dns` answers guests' DNS queries on each network's gateway address, so that an instance can reach another on its network by name; other names are forwarded to the network's nameservers. Off, guests ask those nameservers directly. Unset is true.
+
 ## `defaults` {#defaults}
 
 *mapping*

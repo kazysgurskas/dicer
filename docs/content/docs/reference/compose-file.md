@@ -59,7 +59,7 @@ The project's own keys. The sections after them are its services, networks and v
 
 *string*
 
-`hostname` is the guest's hostname. Unset is the instance's name.
+`hostname` is the guest's hostname, which other instances on its network can look it up by. Unset is the service's name.
 
 ### `services.*.command` {#services-command}
 
@@ -101,7 +101,7 @@ The project's own keys. The sections after them are its services, networks and v
 
 *list of one name, or mapping of one name to a mapping*
 
-`networks` is the network the instance joins: a list of one name, or a mapping of one name to its settings, which can give the instance a fixed address. Unset is the file's network called `default`, if it declares one, and otherwise the daemon's default network. Services have no DNS names: another service reaches one by its address.
+`networks` is the network the instance joins: a list of one name, or a mapping of one name to its settings, which can give the instance a fixed address. Unset is the file's network called `default`, which the project has whether the file declares it or not: `PROJECT-default`. On its network, a service is found by its hostname, which is its name unless it says otherwise, and by its instance's name.
 
 ```yaml
 networks:
@@ -329,7 +329,7 @@ depends_on:
 
 *string*
 
-`subnet` is the network's subnet, such as `172.30.0.0/24`. Required, unless the network is external.
+`subnet` is the network's subnet, such as `172.30.0.0/24`. Unset is a free /24 of `10.213.0.0/16`, picked by `dicer compose up`.
 
 ### `networks.*.gateway` {#networks-gateway}
 
@@ -452,7 +452,7 @@ These keys of a service are refused, saying why, as are `secrets` and `configs` 
 | `extends` | Use YAML anchors and x- extensions to share settings. |
 | `extra_hosts` | An instance's `/etc/hosts` cannot be added to. |
 | `init` | `dicer-init` is always the guest's first process; see `init_mode`. |
-| `links` | Reach other services by address: see networks and ipv4_address. |
+| `links` | Services on a network find each other by name already. |
 | `logging` | The guest's console is kept with the instance: see `dicer compose logs`. |
 | `network_mode` | An instance joins one network, named with networks. |
 | `platform` | An instance runs on the host's architecture. |

@@ -100,6 +100,23 @@ func TestLoadConfigPartialKeepsDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDNSIsOnUnlessTurnedOff(t *testing.T) {
+	if !defaultConfig().Network.DNS {
+		t.Error("DNS is off by default, want it on")
+	}
+
+	cfg, err := loadConfig(writeConfig(t, "network:\n  dns: false\n"))
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.Network.DNS {
+		t.Error("network.dns: false left DNS on")
+	}
+	if cfg.Network.UploadBurstMultiplier != defaultConfig().Network.UploadBurstMultiplier {
+		t.Error("turning DNS off lost the network section's other defaults")
+	}
+}
+
 // A key the daemon does not know is refused rather than ignored, so that a
 // typo cannot silently leave a setting
 // at its default.

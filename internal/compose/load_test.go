@@ -192,8 +192,12 @@ volumes:
 	if got.GetVcpus() != 1 || got.GetMemoryBytes() != 512<<20 || got.GetDiskBytes() != 10<<30 {
 		t.Errorf("sizes = %d vCPU, %d, %d; want dicer run's defaults", got.GetVcpus(), got.GetMemoryBytes(), got.GetDiskBytes())
 	}
-	if got.GetNetworkName() != "" {
-		t.Errorf("network = %q, want the daemon's default", got.GetNetworkName())
+	if got.GetNetworkName() != "shop-default" || got.GetHostname() != "cache" {
+		t.Errorf("network and hostname = %q and %q, want the project's own network, and the service's name",
+			got.GetNetworkName(), got.GetHostname())
+	}
+	if n := p.Networks["default"]; n == nil || n.Request.GetName() != "shop-default" || n.Request.GetSubnet() != "" {
+		t.Errorf("default network = %+v, want shop-default, its subnet left to up", n)
 	}
 	if got.Cmd != nil {
 		t.Errorf("cmd = %q, want the image's", got.GetCmd())
@@ -406,6 +410,37 @@ volumes:
 	}
 }
 
+func TestLoadNamesAndNetworksServices(t *testing.T) {
+	// Every service names its network: there is no project network.
+	p := mustLoad(t, `
+services:
+  db: {image: postgres, hostname: primary, networks: [lan]}
+networks:
+  lan: {}
+`, nil)
+	if _, ok := p.Networks["default"]; ok {
+		t.Error("a project whose services all name a network got a default one too")
+	}
+	db := p.Services["db"].Instance
+	if db.GetHostname() != "primary" || db.GetNetworkName() != "shop-lan" {
+		t.Errorf("db = hostname %q on %q, want its own hostname on shop-lan", db.GetHostname(), db.GetNetworkName())
+	}
+	if p.Networks["lan"].Request.GetSubnet() != "" {
+		t.Error("a network given no subnet was given one before up")
+	}
+
+	// A default network the file declares is used, as it is.
+	p = mustLoad(t, `
+services:
+  web: {image: nginx}
+networks:
+  default: {name: default, external: true}
+`, nil)
+	if got := p.Services["web"].Instance.GetNetworkName(); got != "default" {
+		t.Errorf("web's network = %q, want the daemon's network the file names", got)
+	}
+}
+
 func TestLoadHealthchecks(t *testing.T) {
 	tests := []struct {
 		check string
@@ -475,7 +510,7 @@ func TestLoadRefuses(t *testing.T) {
 		{"two networks", "services: {web: {image: x, networks: [a, b]}}\nnetworks: {a: {subnet: 10.0.0.0/24}, b: {subnet: 10.1.0.0/24}}",
 			"joins one network, not 2"},
 		{"undeclared network", "services: {web: {image: x, networks: [a]}}", "network a is not declared"},
-		{"network without subnet", "services: {web: {image: x}}\nnetworks: {a: {}}", "network a: it needs a subnet"},
+		{"gateway without subnet", "services: {web: {image: x}}\nnetworks: {a: {gateway: 10.0.0.1}}", "a gateway needs a subnet"},
 		{"external network with settings", "services: {web: {image: x}}\nnetworks: {a: {external: true, subnet: 10.0.0.0/24}}",
 			"external network is used as it is"},
 		{"undeclared volume", "services: {web: {image: x, volumes: [data:/data]}}", "volume data is not declared"},
