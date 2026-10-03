@@ -12,8 +12,8 @@ related:
 Dicer runs on one Linux host, as a daemon, `dicerd`, managed by systemd, with
 the `dicer` command line beside it. On Debian, Ubuntu, Fedora, RHEL and its
 rebuilds, and openSUSE, install the `dicer` package, which has both and the
-service; elsewhere, the install script builds them from source and sets the
-daemon up.
+service, by hand or with Ansible; elsewhere, the install script builds them
+from source and sets the daemon up.
 
 ## Requirements
 
@@ -125,6 +125,63 @@ The package installs `dicer` and `dicerd` to `/usr/bin`, the service,
 on, and creates the `dicer` group. The package files are also attached to
 each [release](https://github.com/konradasb/dicer/releases).
 
+## Install with Ansible
+
+The [`konradasb.general`](https://github.com/konradasb/ansible-collection-general)
+collection sets hosts up with [Ansible](https://docs.ansible.com), from the
+packages above. Install it where you run Ansible:
+
+```console
+$ ansible-galaxy collection install konradasb.general
+```
+
+It has two roles:
+
+- **`konradasb.general.dicerd`** sets a host up as the package does: it adds
+  the repository, turning EPEL on where it is needed, installs `dicer`,
+  writes `/etc/dicerd/config.yaml`, and starts the daemon.
+- **`konradasb.general.dicer`** installs only the command line, from the
+  release archives, on a Linux or macOS machine that manages hosts
+  elsewhere, and writes its users' remotes.
+
+Example playbook:
+
+```yaml {filename="dicer.yml"}
+- name: Set up the Dicer hosts
+  hosts:
+  - dicer_hosts
+  become: true
+  roles:
+  - role: konradasb.general.dicerd
+    vars:
+      dicerd_version: 0.3.0
+      dicerd_tls_certificate: "{{ lookup('file', 'tls/' ~ inventory_hostname ~ '.pem') }}"
+      dicerd_tls_private_key: "{{ lookup('file', 'tls/' ~ inventory_hostname ~ '-key.pem') }}"
+      dicerd_tls_client_ca: "{{ lookup('file', 'tls/ca.pem') }}"
+      dicerd_group_members:
+      - alice
+      dicerd_config:
+        api:
+          tcp:
+            listen: 0.0.0.0:7443
+```
+
+```console
+$ ansible-playbook -i inventory dicer.yml
+```
+
+`dicerd_config` holds the keys of the
+[configuration](../../reference/configuration). The role checks it with
+`dicerd validate` before it replaces the file, and restarts the daemon when
+it changes, which leaves the instances running. The TLS files are written
+under `/etc/dicerd/tls`, the private key readable only by root: keep it in
+Ansible Vault. Each role's README lists its variables, as does
+`ansible-doc -t role konradasb.general.dicerd`.
+
+The role installs the package, so use it on a host that has no Dicer yet, or
+has the package: a host the install script set up keeps its own service,
+which starts the binaries the script built.
+
 ## Install from source
 
 ```console
@@ -181,6 +238,7 @@ from another machine, see [Remote access](../../guides/remote-access).
 
 ## Upgrade and remove
 
-Upgrading the package, or running the install script again, upgrades Dicer
-without stopping the instances that are running. See
-[Operating the daemon](../../guides/operating-the-daemon#upgrading) for both.
+Upgrading the package, running the playbook again for a newer version, or
+running the install script again, upgrades Dicer without stopping the
+instances that are running. See
+[Operating the daemon](../../guides/operating-the-daemon#upgrading) for each.

@@ -103,6 +103,17 @@ Upgrade Dicer the way you installed it:
   Where you changed the configuration, rpm keeps yours, and puts the new one
   beside it, as `config.yaml.rpmnew`.
   {{< /tab >}}
+  {{< tab name="Ansible" >}}
+  Set `dicerd_version` to the version you want, in the playbook that runs
+  the `konradasb.general.dicerd` role, and run it again:
+
+  ```console
+  $ ansible-playbook -i inventory dicer.yml
+  ```
+
+  The configuration stays the role's. `dicerd_package_state: latest`, in
+  place of a version, upgrades to each release as it comes.
+  {{< /tab >}}
   {{< tab name="From source" >}}
   Run `install.sh` again, for the version you want:
 
