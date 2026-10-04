@@ -146,8 +146,15 @@ func printTable(item Printable, out io.Writer, includeCols []string) error {
 		return err
 	}
 
+	// Headers are uppercased here rather than by tablewriter, whose own
+	// formatting splits them at digits and punctuation: SHA 256, ADDRESS  /  MASK.
+	headers := make([]string, len(cols))
+	for i, c := range cols {
+		headers[i] = strings.ToUpper(c)
+	}
+
 	table := newTable(out)
-	table.Header(toAny(cols)...)
+	table.Header(toAny(headers)...)
 	for _, r := range item.KV() {
 		row := make([]string, len(cols))
 		for i, c := range cols {
@@ -180,10 +187,10 @@ func newTable(out io.Writer) *tablewriter.Table {
 		}),
 		tablewriter.WithHeaderAlignment(tw.AlignLeft),
 		tablewriter.WithRowAlignment(tw.AlignLeft),
-		tablewriter.WithHeaderAutoFormat(tw.On),
 		tablewriter.WithRowAutoWrap(tw.WrapNone),
 		tablewriter.WithConfig(tablewriter.Config{
-			Header:   tw.CellConfig{Padding: padding},
+			// printTable formats the headers itself.
+			Header:   tw.CellConfig{Padding: padding, Formatting: tw.CellFormatting{AutoFormat: tw.Off}},
 			Row:      tw.CellConfig{Padding: padding},
 			Behavior: tw.Behavior{TrimSpace: tw.Off},
 		}),
