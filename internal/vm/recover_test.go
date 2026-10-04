@@ -317,7 +317,7 @@ func TestRecoverReleasesOrphanedAllocations(t *testing.T) {
 	if !ok {
 		t.Fatalf("addresses is %T, want *fakeAddresses", mgr.addresses)
 	}
-	allocs := addrs.byNetwork["default"]
+	allocs := addrs.allocations("default")
 	for _, a := range allocs {
 		if a.InstanceID == "id-ghost" {
 			t.Errorf("orphaned allocation for %s survived recovery", a.InstanceID)

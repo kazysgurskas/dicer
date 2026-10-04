@@ -196,8 +196,10 @@ func (f *fakeDefinitions) GetVolume(nameOrID string) (types.Volume, error) {
 	return types.Volume{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-// fakeAddresses is an in-memory Addresses.
+// fakeAddresses is an in-memory Addresses. It is safe for concurrent use, as
+// a restart the manager schedules allocates from another goroutine.
 type fakeAddresses struct {
+	mu        sync.Mutex
 	byNetwork map[string][]types.NetworkAllocation
 	next      int
 }
@@ -207,6 +209,9 @@ func newFakeAddresses() *fakeAddresses {
 }
 
 func (f *fakeAddresses) Allocate(n types.Network, instanceID, staticIP string) (types.NetworkAllocation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	for _, existing := range f.byNetwork[n.Name] {
 		if existing.InstanceID == instanceID {
 			return existing, nil
@@ -230,6 +235,9 @@ func (f *fakeAddresses) Allocate(n types.Network, instanceID, staticIP string) (
 }
 
 func (f *fakeAddresses) Get(networkName, instanceID string) (types.NetworkAllocation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	for _, alloc := range f.byNetwork[networkName] {
 		if alloc.InstanceID == instanceID {
 			return alloc, nil
@@ -239,6 +247,9 @@ func (f *fakeAddresses) Get(networkName, instanceID string) (types.NetworkAlloca
 }
 
 func (f *fakeAddresses) InstanceAt(networkName, ip string) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	for _, alloc := range f.byNetwork[networkName] {
 		if alloc.IP == ip {
 			return alloc.InstanceID, true
@@ -248,6 +259,9 @@ func (f *fakeAddresses) InstanceAt(networkName, ip string) (string, bool) {
 }
 
 func (f *fakeAddresses) Release(networkName, instanceID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	kept := f.byNetwork[networkName][:0]
 	for _, alloc := range f.byNetwork[networkName] {
 		if alloc.InstanceID != instanceID {
@@ -258,7 +272,18 @@ func (f *fakeAddresses) Release(networkName, instanceID string) error {
 	return nil
 }
 
+// allocations returns a copy of the network's allocations.
+func (f *fakeAddresses) allocations(networkName string) []types.NetworkAllocation {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return slices.Clone(f.byNetwork[networkName])
+}
+
 func (f *fakeAddresses) Reconcile(networks []string, live map[string]struct{}) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	var released int
 	for _, n := range networks {
 		kept := make([]types.NetworkAllocation, 0, len(f.byNetwork[n]))
