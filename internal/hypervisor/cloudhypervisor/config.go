@@ -26,8 +26,8 @@ func vmConfig(spec hypervisor.VMSpec) VmConfig {
 		Cpus:    ptr(cpusConfig(spec.CPU)),
 		Memory:  ptr(memoryConfig(spec.Memory)),
 		Disks:   ptr(mapSlice(spec.Disks, diskConfig)),
-		Serial:  &ConsoleConfig{Mode: ConsoleConfigModeFile, File: ptr(spec.Console.Path)},
-		Console: &ConsoleConfig{Mode: ConsoleConfigModeOff},
+		Serial:  &SerialConfig{Mode: ConsoleModeFile, File: ptr(spec.Console.Path)},
+		Console: &ConsoleConfig{Mode: ConsoleModeOff},
 		Net:     optionalSlice(mapSlice(spec.NetworkInterfaces, netConfig)),
 		Vsock:   vsockConfig(spec.Vsock),
 		Devices: optionalSlice(deviceConfigs(spec)),
@@ -72,8 +72,12 @@ func memoryConfig(m hypervisor.MemoryConfig) MemoryConfig {
 
 // diskConfig translates a disk. A rate limit is a token bucket holding what
 // the disk may do in a second, refilled every second.
+//
+// Every disk is declared raw. From v51, Cloud Hypervisor refuses writes to
+// sector 0 of a raw disk whose type it had to guess, and ext4 writes its
+// superblock there. Older versions ignore the field.
 func diskConfig(d hypervisor.DiskConfig) DiskConfig {
-	disk := DiskConfig{Path: ptr(d.Path)}
+	disk := DiskConfig{Path: ptr(d.Path), ImageType: ptr(Raw)}
 	if d.ReadOnly {
 		disk.Readonly = ptr(true)
 	}
@@ -114,11 +118,11 @@ func vsockConfig(v *hypervisor.VsockConfig) *VsockConfig {
 // VFIO: the PCI devices, then the GPU's mediated device.
 func deviceConfigs(spec hypervisor.VMSpec) []DeviceConfig {
 	devices := mapSlice(spec.PCIDevices, func(d hypervisor.PCIDeviceConfig) DeviceConfig {
-		return DeviceConfig{Path: d.Path}
+		return DeviceConfig{Path: ptr(d.Path)}
 	})
 	if spec.GPU != nil {
 		devices = append(devices, DeviceConfig{
-			Path: path.Join(mediatedDeviceDir, spec.GPU.MediatedDeviceUUID),
+			Path: ptr(path.Join(mediatedDeviceDir, spec.GPU.MediatedDeviceUUID)),
 		})
 	}
 	return devices

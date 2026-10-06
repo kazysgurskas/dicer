@@ -27,7 +27,7 @@ func TestVMConfigPassesThroughDevices(t *testing.T) {
 			spec: hypervisor.VMSpec{PCIDevices: []hypervisor.PCIDeviceConfig{
 				{Path: "/sys/bus/pci/devices/0000:01:00.0"},
 			}},
-			want: &[]DeviceConfig{{Path: "/sys/bus/pci/devices/0000:01:00.0"}},
+			want: &[]DeviceConfig{{Path: ptr("/sys/bus/pci/devices/0000:01:00.0")}},
 		},
 		{
 			name: "gpu",
@@ -35,7 +35,7 @@ func TestVMConfigPassesThroughDevices(t *testing.T) {
 				Profile:            "nvidia-35",
 				MediatedDeviceUUID: "c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b",
 			}},
-			want: &[]DeviceConfig{{Path: "/sys/bus/mdev/devices/c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b"}},
+			want: &[]DeviceConfig{{Path: ptr("/sys/bus/mdev/devices/c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b")}},
 		},
 		{
 			name: "pci devices and gpu",
@@ -44,8 +44,8 @@ func TestVMConfigPassesThroughDevices(t *testing.T) {
 				GPU:        &hypervisor.GPUConfig{MediatedDeviceUUID: "c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b"},
 			},
 			want: &[]DeviceConfig{
-				{Path: "/sys/bus/pci/devices/0000:01:00.0"},
-				{Path: "/sys/bus/mdev/devices/c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b"},
+				{Path: ptr("/sys/bus/pci/devices/0000:01:00.0")},
+				{Path: ptr("/sys/bus/mdev/devices/c2f8e1a4-0d6b-4c3e-9f5a-2b7d8e9f0a1b")},
 			},
 		},
 	}
@@ -121,5 +121,15 @@ func TestDiskRateLimitIsPerSecondBuckets(t *testing.T) {
 				t.Errorf("rate_limiter_config = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDisksAreDeclaredRaw checks that no disk is left for Cloud Hypervisor
+// to guess the type of, which from v51 makes it refuse writes to sector 0.
+func TestDisksAreDeclaredRaw(t *testing.T) {
+	for _, disk := range []hypervisor.DiskConfig{{Path: "overlay.img"}, {Path: "rootfs.erofs", ReadOnly: true}} {
+		if got := diskConfig(disk).ImageType; got == nil || *got != Raw {
+			t.Errorf("image_type of %s = %v, want Raw", disk.Path, got)
+		}
 	}
 }
