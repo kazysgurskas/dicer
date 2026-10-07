@@ -88,7 +88,7 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		transport: transportUnix,
 		address:   d.cfg.API.Socket.Path,
 		listener:  socket,
-		server:    d.newGRPCServer(api),
+		server:    d.newGRPCServer(api, grpc.Creds(unixPeerCredentials{})),
 	})
 
 	if tcp == nil {

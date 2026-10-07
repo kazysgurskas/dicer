@@ -203,13 +203,17 @@ more detail when tracking down a problem.
 
 The daemon logs every API call that can change something, with
 `component=audit`. Calls that only read, such as `Get` and `List` calls,
-are left out. Each line names the method, its gRPC status code and how
-long it took:
+are left out. Each line names the method, the resource it was called on,
+who called it, its gRPC status code and how long it took:
 
 ```console
 $ journalctl -u dicerd | grep component=audit
-time=2026-10-06T09:14:02.511Z level=INFO msg="api call" component=audit method=StopInstance code=OK duration=2.10412875s
+time=2026-10-06T09:14:02.511Z level=INFO msg="api call" component=audit method=StopInstance resource=web uid=1000 pid=48213 code=OK duration=2.10412875s
 ```
 
-The audit records what was called, but not by whom or on which resource.
-For the resource, match the call to its [event](#events) by time.
+| Attribute | What it is |
+|---|---|
+| `resource` | The name of the instance, snapshot, network, volume or kernel the call named, or the image's reference. A call that names none, such as a prune, has no `resource`. |
+| `uid`, `pid` | On the Unix socket, the user and process that connected, as the kernel reports them. |
+| `address` | Over TCP, the address the call came from. |
+| `client_certificate` | Over TCP with TLS, the subject of the client's certificate, if it presented one and it was verified. |
