@@ -49,6 +49,35 @@ $ dicer rm web
 
 See `dicer --help` for every command.
 
+## Go client
+
+The `github.com/konradasb/dicer` package does from a program what the
+command line does:
+
+```go
+c, err := dicer.NewClient() // the local daemon
+if err != nil {
+	return err
+}
+defer c.Close()
+
+_, err = c.Instances.Create(ctx, dicer.InstanceSpec{
+	Name:        "web",
+	ImageRef:    "nginx:1.27",
+	VCPUs:       1,
+	MemoryBytes: 512 << 20,
+	DiskBytes:   10 << 30,
+}, dicer.CreateOptions{Start: true})
+if err != nil {
+	return err
+}
+
+out, err := c.Instances.Command("web", "nginx", "-v").Output(ctx)
+```
+
+For more examples, and for calling the API from other languages, see
+[Using the API](docs/content/docs/guides/using-the-api.md).
+
 ## Configuration
 
 `dicerd` reads `/etc/dicerd/config.yaml`. The file is optional: every key has
