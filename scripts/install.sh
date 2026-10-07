@@ -284,24 +284,7 @@ EOF
 echo -e "${NC}"
 info "Dicer installed successfully!"
 echo ""
-echo "Next steps — create a network and import a kernel:"
-echo ""
-echo "  dicer network create default --subnet 172.20.0.0/16"
-echo ""
-case "$ARCH" in
-amd64)
-  echo "  dicer kernel import linux-6.18 --arch x86_64 \\"
-  echo "    --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/vmlinux-x86_64 \\"
-  echo "    --sha256 ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669"
-  ;;
-arm64)
-  echo "  dicer kernel import linux-6.18 --arch aarch64 \\"
-  echo "    --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/Image-arm64 \\"
-  echo "    --sha256 1ce335854bc05535584dd57638f10832db91c4a20cbb76bab7851890c3d14568"
-  ;;
-esac
-echo ""
-echo "Then run your first instance, and open a shell in it:"
+echo "Next steps — run your first instance, and open a shell in it:"
 echo ""
 echo "  dicer run -d --name web -p 8080:80 nginx:1.27"
 echo "  dicer exec web"

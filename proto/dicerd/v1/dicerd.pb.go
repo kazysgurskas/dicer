@@ -1895,8 +1895,7 @@ type CreateInstanceRequest struct {
 	HypervisorType HypervisorType `protobuf:"varint,3,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
 	// A version that hypervisor ships; the newest by default.
 	HypervisorVersion string `protobuf:"bytes,4,opt,name=hypervisor_version,json=hypervisorVersion,proto3" json:"hypervisor_version,omitempty"`
-	// Empty means the daemon's default kernel: see
-	// GetHostInfoResponse.default_kernel.
+	// Empty means the default kernel, "default".
 	KernelName  string `protobuf:"bytes,5,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
 	KernelArgs  string `protobuf:"bytes,6,opt,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
 	Vcpus       int32  `protobuf:"varint,7,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
@@ -1917,8 +1916,7 @@ type CreateInstanceRequest struct {
 	// The bytes per second the guest sends and receives on its network.
 	UploadBytesPerSecond   int64 `protobuf:"varint,31,opt,name=upload_bytes_per_second,json=uploadBytesPerSecond,proto3" json:"upload_bytes_per_second,omitempty"`
 	DownloadBytesPerSecond int64 `protobuf:"varint,32,opt,name=download_bytes_per_second,json=downloadBytesPerSecond,proto3" json:"download_bytes_per_second,omitempty"`
-	// Empty means the daemon's default network: see
-	// GetHostInfoResponse.default_network.
+	// Empty means the default network, "default".
 	NetworkName   string            `protobuf:"bytes,10,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
 	StaticIp      string            `protobuf:"bytes,11,opt,name=static_ip,json=staticIp,proto3" json:"static_ip,omitempty"`
 	Mounts        []*Mount          `protobuf:"bytes,25,rep,name=mounts,proto3" json:"mounts,omitempty"`
@@ -6497,16 +6495,9 @@ type GetHostInfoResponse struct {
 	Hypervisors []*HypervisorInfo `protobuf:"bytes,3,rep,name=hypervisors,proto3" json:"hypervisors,omitempty"`
 	// The addresses the API is served on over TCP, for a client being pointed
 	// at this daemon. Empty if it is not served over TCP.
-	ApiAddresses []string `protobuf:"bytes,5,rep,name=api_addresses,json=apiAddresses,proto3" json:"api_addresses,omitempty"`
-	// The kernel an instance created without one boots with: the one the
-	// daemon's configuration names, or else the only kernel there is. Empty
-	// if there is no such kernel, and an instance must name one.
-	DefaultKernel string `protobuf:"bytes,6,opt,name=default_kernel,json=defaultKernel,proto3" json:"default_kernel,omitempty"`
-	// The network an instance created without one attaches to, chosen as the
-	// default kernel is.
-	DefaultNetwork string `protobuf:"bytes,7,opt,name=default_network,json=defaultNetwork,proto3" json:"default_network,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	ApiAddresses  []string `protobuf:"bytes,5,rep,name=api_addresses,json=apiAddresses,proto3" json:"api_addresses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetHostInfoResponse) Reset() {
@@ -6565,20 +6556,6 @@ func (x *GetHostInfoResponse) GetApiAddresses() []string {
 		return x.ApiAddresses
 	}
 	return nil
-}
-
-func (x *GetHostInfoResponse) GetDefaultKernel() string {
-	if x != nil {
-		return x.DefaultKernel
-	}
-	return ""
-}
-
-func (x *GetHostInfoResponse) GetDefaultNetwork() string {
-	if x != nil {
-		return x.DefaultNetwork
-	}
-	return ""
 }
 
 type GetResourcesRequest struct {
@@ -7715,14 +7692,12 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\")\n" +
 	"\x13DeleteKernelRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x14\n" +
-	"\x12GetHostInfoRequest\"\x83\x02\n" +
+	"\x12GetHostInfoRequest\"\xe0\x01\n" +
 	"\x13GetHostInfoResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12;\n" +
 	"\vhypervisors\x18\x03 \x03(\v2\x19.dicerd.v1.HypervisorInfoR\vhypervisors\x12#\n" +
-	"\rapi_addresses\x18\x05 \x03(\tR\fapiAddresses\x12%\n" +
-	"\x0edefault_kernel\x18\x06 \x01(\tR\rdefaultKernel\x12'\n" +
-	"\x0fdefault_network\x18\a \x01(\tR\x0edefaultNetworkJ\x04\b\x04\x10\x05\"\x15\n" +
+	"\rapi_addresses\x18\x05 \x03(\tR\fapiAddressesJ\x04\b\x04\x10\x05J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\x0edefault_kernelR\x0fdefault_network\"\x15\n" +
 	"\x13GetResourcesRequest\"\xe0\x01\n" +
 	"\x14GetResourcesResponse\x12-\n" +
 	"\x03cpu\x18\x01 \x01(\v2\x1b.dicerd.v1.ResourceCapacityR\x03cpu\x123\n" +

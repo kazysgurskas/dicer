@@ -209,13 +209,15 @@ type DaemonServiceClient interface {
 	// still booting.
 	CopyFromInstance(ctx context.Context, in *CopyFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CopyFromInstanceResponse], error)
 	// CreateNetwork defines a host-local network. Its bridge is brought up
-	// when the first instance on it starts.
+	// when the first instance on it starts. The daemon creates the network
+	// named "default" itself, which an instance joins when it names none.
 	CreateNetwork(ctx context.Context, in *CreateNetworkRequest, opts ...grpc.CallOption) (*Network, error)
 	// ListNetworks returns every network.
 	ListNetworks(ctx context.Context, in *ListNetworksRequest, opts ...grpc.CallOption) (*ListNetworksResponse, error)
 	// GetNetwork returns one network.
 	GetNetwork(ctx context.Context, in *GetNetworkRequest, opts ...grpc.CallOption) (*Network, error)
-	// DeleteNetwork removes a network that no instance references.
+	// DeleteNetwork removes a network that no instance references. The
+	// default network cannot be deleted.
 	DeleteNetwork(ctx context.Context, in *DeleteNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ListNetworkAllocations reports which addresses are assigned on a network.
 	// Allocation itself is a side effect of starting an instance and has no
@@ -243,13 +245,15 @@ type DaemonServiceClient interface {
 	// PruneImages removes every image no instance is defined to boot from.
 	PruneImages(ctx context.Context, in *PruneImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error)
 	// ImportKernel records a guest kernel by URL. It is downloaded the first
-	// time an instance boots with it.
+	// time an instance boots with it. The daemon defines the kernel named
+	// "default" itself, which an instance boots when it names none.
 	ImportKernel(ctx context.Context, in *ImportKernelRequest, opts ...grpc.CallOption) (*Kernel, error)
-	// ListKernels returns every imported kernel.
+	// ListKernels returns every kernel, the default one among them.
 	ListKernels(ctx context.Context, in *ListKernelsRequest, opts ...grpc.CallOption) (*ListKernelsResponse, error)
 	// GetKernel returns one kernel.
 	GetKernel(ctx context.Context, in *GetKernelRequest, opts ...grpc.CallOption) (*Kernel, error)
-	// DeleteKernel removes a kernel that no instance references.
+	// DeleteKernel removes a kernel that no instance references. The default
+	// kernel cannot be deleted.
 	DeleteKernel(ctx context.Context, in *DeleteKernelRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// GetHostInfo reports what the daemon is: its version, the hypervisors it
 	// carries, and how it is reached.
@@ -922,13 +926,15 @@ type DaemonServiceServer interface {
 	// still booting.
 	CopyFromInstance(*CopyFromInstanceRequest, grpc.ServerStreamingServer[CopyFromInstanceResponse]) error
 	// CreateNetwork defines a host-local network. Its bridge is brought up
-	// when the first instance on it starts.
+	// when the first instance on it starts. The daemon creates the network
+	// named "default" itself, which an instance joins when it names none.
 	CreateNetwork(context.Context, *CreateNetworkRequest) (*Network, error)
 	// ListNetworks returns every network.
 	ListNetworks(context.Context, *ListNetworksRequest) (*ListNetworksResponse, error)
 	// GetNetwork returns one network.
 	GetNetwork(context.Context, *GetNetworkRequest) (*Network, error)
-	// DeleteNetwork removes a network that no instance references.
+	// DeleteNetwork removes a network that no instance references. The
+	// default network cannot be deleted.
 	DeleteNetwork(context.Context, *DeleteNetworkRequest) (*emptypb.Empty, error)
 	// ListNetworkAllocations reports which addresses are assigned on a network.
 	// Allocation itself is a side effect of starting an instance and has no
@@ -956,13 +962,15 @@ type DaemonServiceServer interface {
 	// PruneImages removes every image no instance is defined to boot from.
 	PruneImages(context.Context, *PruneImagesRequest) (*PruneImagesResponse, error)
 	// ImportKernel records a guest kernel by URL. It is downloaded the first
-	// time an instance boots with it.
+	// time an instance boots with it. The daemon defines the kernel named
+	// "default" itself, which an instance boots when it names none.
 	ImportKernel(context.Context, *ImportKernelRequest) (*Kernel, error)
-	// ListKernels returns every imported kernel.
+	// ListKernels returns every kernel, the default one among them.
 	ListKernels(context.Context, *ListKernelsRequest) (*ListKernelsResponse, error)
 	// GetKernel returns one kernel.
 	GetKernel(context.Context, *GetKernelRequest) (*Kernel, error)
-	// DeleteKernel removes a kernel that no instance references.
+	// DeleteKernel removes a kernel that no instance references. The default
+	// kernel cannot be deleted.
 	DeleteKernel(context.Context, *DeleteKernelRequest) (*emptypb.Empty, error)
 	// GetHostInfo reports what the daemon is: its version, the hypervisors it
 	// carries, and how it is reached.

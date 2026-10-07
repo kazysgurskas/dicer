@@ -170,12 +170,13 @@ func newNetworkDeleteCommand() *cobra.Command {
 		Use:   "delete (NAME... | --all)",
 		Short: "Delete one or more networks no instance uses, or all of them",
 		Long: "Deletes the networks named, or with --all every network, asking first on a\n" +
-			"terminal. A network an instance is defined on is refused.",
+			"terminal. A network an instance is defined on is refused, and so is the\n" +
+			"default network, which --all leaves alone.",
 		Args:              namesOrAll("network name"),
 		Aliases:           []string{"rm", "remove"},
-		ValidArgsFunction: complete(0, listNetworks),
+		ValidArgsFunction: complete(0, withoutDefault(listNetworks)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return eachNameOrAll(cmd, args, listNetworks, "networks", func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, withoutDefault(listNetworks), "networks", func(client *dicer.Client, name string) error {
 				if _, err := client.DeleteNetwork(cmd.Context(), &dicerdv1.DeleteNetworkRequest{Name: name}); err != nil {
 					return err
 				}

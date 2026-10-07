@@ -24,7 +24,6 @@ import (
 type instanceHandler struct {
 	definitions *filestore.Manager
 	instances   *vm.Manager
-	defaults    defaultResolver
 
 	// statsInterval is how often GetInstanceStats reads stats.
 	statsInterval time.Duration
@@ -59,15 +58,10 @@ func (h *instanceHandler) CreateInstance(
 }
 
 // newInstance validates a create request and returns the instance it
-// defines. A kernel or network left out is the daemon's default.
+// defines. A kernel or network left out is the default one.
 func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (types.InstanceSpec, error) {
-	var err error
-	if req.KernelName, err = h.defaults.resolveKernel(req.GetKernelName()); err != nil {
-		return types.InstanceSpec{}, err
-	}
-	if req.NetworkName, err = h.defaults.resolveNetwork(req.GetNetworkName()); err != nil {
-		return types.InstanceSpec{}, err
-	}
+	req.KernelName = cmp.Or(req.GetKernelName(), types.DefaultKernelName)
+	req.NetworkName = cmp.Or(req.GetNetworkName(), types.DefaultNetworkName)
 
 	ports, err := portMappingsFromProto(req.GetPorts())
 	if err != nil {

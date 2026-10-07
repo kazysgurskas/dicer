@@ -72,10 +72,10 @@ was, and whose message says it for a person:
 | `ExecInstance` | stream [`ExecInstanceRequest`](#execinstancerequest) | stream [`ExecInstanceResponse`](#execinstanceresponse) | ExecInstance runs a command inside a running instance. The first client message must be an ExecInstanceStart; subsequent messages carry stdin data or terminal resize events. If the guest is still booting, the call waits up to 30 seconds for its agent to answer before failing with UNAVAILABLE. |
 | `CopyToInstance` | stream [`CopyToInstanceRequest`](#copytoinstancerequest) | `google.protobuf.Empty` | CopyToInstance writes a file or directory into a running instance. The first message must be a CopyToInstanceStart; the rest carry a tar archive of it, in chunks, which lands at the path as cp would put it. Like ExecInstance, it waits for a guest that is still booting. |
 | `CopyFromInstance` | [`CopyFromInstanceRequest`](#copyfrominstancerequest) | stream [`CopyFromInstanceResponse`](#copyfrominstanceresponse) | CopyFromInstance reads a file or directory out of a running instance, as a tar archive in chunks. Like ExecInstance, it waits for a guest that is still booting. |
-| `CreateNetwork` | [`CreateNetworkRequest`](#createnetworkrequest) | [`Network`](#network) | CreateNetwork defines a host-local network. Its bridge is brought up when the first instance on it starts. |
+| `CreateNetwork` | [`CreateNetworkRequest`](#createnetworkrequest) | [`Network`](#network) | CreateNetwork defines a host-local network. Its bridge is brought up when the first instance on it starts. The daemon creates the network named "default" itself, which an instance joins when it names none. |
 | `ListNetworks` | [`ListNetworksRequest`](#listnetworksrequest) | [`ListNetworksResponse`](#listnetworksresponse) | ListNetworks returns every network. |
 | `GetNetwork` | [`GetNetworkRequest`](#getnetworkrequest) | [`Network`](#network) | GetNetwork returns one network. |
-| `DeleteNetwork` | [`DeleteNetworkRequest`](#deletenetworkrequest) | `google.protobuf.Empty` | DeleteNetwork removes a network that no instance references. |
+| `DeleteNetwork` | [`DeleteNetworkRequest`](#deletenetworkrequest) | `google.protobuf.Empty` | DeleteNetwork removes a network that no instance references. The default network cannot be deleted. |
 | `ListNetworkAllocations` | [`ListNetworkAllocationsRequest`](#listnetworkallocationsrequest) | [`ListNetworkAllocationsResponse`](#listnetworkallocationsresponse) | ListNetworkAllocations reports which addresses are assigned on a network. Allocation itself is a side effect of starting an instance and has no separate RPC. |
 | `CreateVolume` | [`CreateVolumeRequest`](#createvolumerequest) | [`Volume`](#volume) | CreateVolume provisions a persistent block volume. |
 | `ListVolumes` | [`ListVolumesRequest`](#listvolumesrequest) | [`ListVolumesResponse`](#listvolumesresponse) | ListVolumes returns every volume. |
@@ -86,10 +86,10 @@ was, and whose message says it for a person:
 | `GetImage` | [`GetImageRequest`](#getimagerequest) | [`Image`](#image) | GetImage returns one pulled image. |
 | `DeleteImage` | [`DeleteImageRequest`](#deleteimagerequest) | `google.protobuf.Empty` | DeleteImage removes a pulled image. It refuses an image an instance is defined to boot from, unless force is set. |
 | `PruneImages` | [`PruneImagesRequest`](#pruneimagesrequest) | [`PruneImagesResponse`](#pruneimagesresponse) | PruneImages removes every image no instance is defined to boot from. |
-| `ImportKernel` | [`ImportKernelRequest`](#importkernelrequest) | [`Kernel`](#kernel) | ImportKernel records a guest kernel by URL. It is downloaded the first time an instance boots with it. |
-| `ListKernels` | [`ListKernelsRequest`](#listkernelsrequest) | [`ListKernelsResponse`](#listkernelsresponse) | ListKernels returns every imported kernel. |
+| `ImportKernel` | [`ImportKernelRequest`](#importkernelrequest) | [`Kernel`](#kernel) | ImportKernel records a guest kernel by URL. It is downloaded the first time an instance boots with it. The daemon defines the kernel named "default" itself, which an instance boots when it names none. |
+| `ListKernels` | [`ListKernelsRequest`](#listkernelsrequest) | [`ListKernelsResponse`](#listkernelsresponse) | ListKernels returns every kernel, the default one among them. |
 | `GetKernel` | [`GetKernelRequest`](#getkernelrequest) | [`Kernel`](#kernel) | GetKernel returns one kernel. |
-| `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance references. |
+| `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance references. The default kernel cannot be deleted. |
 | `GetHostInfo` | [`GetHostInfoRequest`](#gethostinforequest) | [`GetHostInfoResponse`](#gethostinforesponse) | GetHostInfo reports what the daemon is: its version, the hypervisors it carries, and how it is reached. |
 | `GetResources` | [`GetResourcesRequest`](#getresourcesrequest) | [`GetResourcesResponse`](#getresourcesresponse) | GetResources reports how much CPU and memory instances may be given, how much they hold, and how full the data directory's disk is. |
 | `GetEvents` | [`GetEventsRequest`](#geteventsrequest) | stream [`GetEventsResponse`](#geteventsresponse) | GetEvents streams what has happened to the resources on this host: the history kept, oldest first, in batches, then, with follow, each new event as it happens, none missed between the two. A follower that does not keep up is disconnected with RESOURCE_EXHAUSTED rather than slowing the host. |
@@ -134,7 +134,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | `image_ref` | `string` |  |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | Unspecified means Cloud Hypervisor. |
 | `hypervisor_version` | `string` | A version that hypervisor ships; the newest by default. |
-| `kernel_name` | `string` | Empty means the daemon's default kernel: see GetHostInfoResponse.default_kernel. |
+| `kernel_name` | `string` | Empty means the default kernel, "default". |
 | `kernel_args` | `string` |  |
 | `vcpus` | `int32` |  |
 | `memory_bytes` | `int64` |  |
@@ -145,7 +145,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | `disk_iops` | `int64` |  |
 | `upload_bytes_per_second` | `int64` | The bytes per second the guest sends and receives on its network. |
 | `download_bytes_per_second` | `int64` |  |
-| `network_name` | `string` | Empty means the daemon's default network: see GetHostInfoResponse.default_network. |
+| `network_name` | `string` | Empty means the default network, "default". |
 | `static_ip` | `string` |  |
 | `mounts` | repeated [`Mount`](#mount) |  |
 | `env` | repeated [`CreateInstanceRequest.EnvEntry`](#createinstancerequestenventry) |  |
@@ -373,8 +373,6 @@ GetEventsResponse is a batch of events, oldest first.
 | `hostname` | `string` |  |
 | `hypervisors` | repeated [`HypervisorInfo`](#hypervisorinfo) | The hypervisors this daemon can start instances with. |
 | `api_addresses` | repeated `string` | The addresses the API is served on over TCP, for a client being pointed at this daemon. Empty if it is not served over TCP. |
-| `default_kernel` | `string` | The kernel an instance created without one boots with: the one the daemon's configuration names, or else the only kernel there is. Empty if there is no such kernel, and an instance must name one. |
-| `default_network` | `string` | The network an instance created without one attaches to, chosen as the default kernel is. |
 
 ### GetImageRequest
 

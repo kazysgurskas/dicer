@@ -53,6 +53,10 @@ const (
 	// gatewayIP is the bridge's address on that subnet, which is the first
 	// assignable one.
 	gatewayIP = "172.31.0.1"
+
+	// defaultSubnet is the daemon's default network's, kept apart from the
+	// default network of a daemon the host already runs.
+	defaultSubnet = "172.31.2.0/24"
 )
 
 // paths are where the daemon under test lives on the host. All of them sit
@@ -203,10 +207,12 @@ api:
   tcp:
     listen: %s
 log_level: debug
+network:
+  default_subnet: %s
 metrics:
   enable: true
   listen: %s
-`, e.paths.dataDir, e.paths.runDir, e.paths.socket, e.paths.api, e.paths.metrics)
+`, e.paths.dataDir, e.paths.runDir, e.paths.socket, e.paths.api, defaultSubnet, e.paths.metrics)
 
 	// A heredoc keeps the file's content out of the command line, where it
 	// would have to survive two levels of shell quoting.

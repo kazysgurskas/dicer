@@ -56,7 +56,7 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	}
 
 	flags := cmd.Flags()
-	flags.String("kernel", "", "Kernel to boot with")
+	flags.String("kernel", "", "Kernel to boot with (default: the default kernel)")
 	flags.String("kernel-args", "", "Kernel command line arguments")
 	flags.String("hypervisor-type", "", "Hypervisor: cloud-hypervisor or firecracker (default: cloud-hypervisor)")
 	flags.String("hypervisor-version", "", "Hypervisor version (default: the newest available)")
@@ -70,7 +70,7 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	flags.String("upload-rate", "", "Bytes per second the guest can send, e.g. 10MiB (0: unlimited)")
 	flags.String("download-rate", "", "Bytes per second the guest can receive, e.g. 10MiB (0: unlimited)")
 	flags.Duration("standby-after", 0, "Put the instance on standby once it has been idle this long, e.g. 15m (0: never)")
-	flags.String("network", "", "Network to attach to")
+	flags.String("network", "", "Network to attach to (default: the default network)")
 	flags.String("ip", "", "Static IP address (default: assigned from the subnet)")
 	flags.StringArrayP("publish", "p", nil,
 		"Publish a guest port on the host, as [hostIP:]hostPort:guestPort[/tcp|udp] (repeatable)")

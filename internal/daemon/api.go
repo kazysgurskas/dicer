@@ -79,7 +79,6 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		Events:      d.events,
 		HostSubnets: hostnet.Subnets,
 		DataDir:     d.cfg.DataDir,
-		Defaults:    grpcapi.Defaults{Kernel: d.cfg.Defaults.Kernel, Network: d.cfg.Defaults.Network},
 		Version:     version.Version,
 	})
 

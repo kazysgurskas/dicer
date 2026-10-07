@@ -4,7 +4,6 @@
 package cli
 
 import (
-	"cmp"
 	"fmt"
 	"io"
 	"strings"
@@ -114,7 +113,6 @@ func writeInfo(
 	)
 	v.block(
 		field{"Hypervisors", hypervisorLines(host.GetHypervisors())},
-		field{"Defaults", defaultsLines(host)},
 	)
 	v.block(resourceFields(resources, p)...)
 
@@ -178,15 +176,6 @@ func networkAPILines(host *dicerdv1.GetHostInfoResponse) []string {
 	}
 
 	return []string{strings.Join(host.GetApiAddresses(), ", ")}
-}
-
-// defaultsLines describe what an instance that names no kernel or network
-// gets.
-func defaultsLines(host *dicerdv1.GetHostInfoResponse) []string {
-	return []string{
-		"kernel " + cmp.Or(host.GetDefaultKernel(), "none (name one)"),
-		"network " + cmp.Or(host.GetDefaultNetwork(), "none (name one)"),
-	}
 }
 
 // hypervisorLines describe what an instance may be started with, one

@@ -82,7 +82,7 @@ func writeConfiguration(root, dir string) error {
 					"```\n\n" +
 					"## General {#general}\n\n" +
 					"The daemon's own settings. The sections after them are the API, resources, networking, " +
-					"defaults, metrics, images, events and registries.",
+					"metrics, images, events and registries.",
 				importPath: daemonPackage, structName: "Config",
 			}},
 		},

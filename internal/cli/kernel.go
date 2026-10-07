@@ -58,7 +58,8 @@ func newKernelImportCommand() *cobra.Command {
 		Use:   "import NAME",
 		Short: "Record a kernel to boot instances with",
 		Long: "Records a kernel by URL. It is downloaded, and verified against --sha256\n" +
-			"if given, the first time an instance boots with it.",
+			"if given, the first time an instance boots with it. An instance that names\n" +
+			"no kernel boots the default kernel, which needs no import.",
 		Args: one("a name for the kernel"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url, _ := cmd.Flags().GetString("url")
@@ -145,12 +146,13 @@ func newKernelDeleteCommand() *cobra.Command {
 		Use:   "delete (NAME... | --all)",
 		Short: "Delete one or more kernels no instance uses, or all of them",
 		Long: "Deletes the kernels named, or with --all every kernel, asking first on a\n" +
-			"terminal. A kernel an instance is defined to boot is refused.",
+			"terminal. A kernel an instance is defined to boot is refused, and so is the\n" +
+			"default kernel, which --all leaves alone.",
 		Args:              namesOrAll("kernel name"),
 		Aliases:           []string{"rm", "remove"},
-		ValidArgsFunction: complete(0, listKernels),
+		ValidArgsFunction: complete(0, withoutDefault(listKernels)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return eachNameOrAll(cmd, args, listKernels, "kernels", func(client *dicer.Client, name string) error {
+			return eachNameOrAll(cmd, args, withoutDefault(listKernels), "kernels", func(client *dicer.Client, name string) error {
 				if _, err := client.DeleteKernel(cmd.Context(), &dicerdv1.DeleteKernelRequest{Name: name}); err != nil {
 					return err
 				}

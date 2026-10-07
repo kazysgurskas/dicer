@@ -5,7 +5,8 @@ description: "Record a kernel to boot instances with"
 ---
 
 Records a kernel by URL. It is downloaded, and verified against `--sha`256
-if given, the first time an instance boots with it.
+if given, the first time an instance boots with it. An instance that names
+no kernel boots the default kernel, which needs no import.
 
 ## Usage
 

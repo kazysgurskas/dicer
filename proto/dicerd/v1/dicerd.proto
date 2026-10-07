@@ -148,13 +148,15 @@ service DaemonService {
   rpc CopyFromInstance(CopyFromInstanceRequest) returns (stream CopyFromInstanceResponse);
 
   // CreateNetwork defines a host-local network. Its bridge is brought up
-  // when the first instance on it starts.
+  // when the first instance on it starts. The daemon creates the network
+  // named "default" itself, which an instance joins when it names none.
   rpc CreateNetwork(CreateNetworkRequest) returns (Network);
   // ListNetworks returns every network.
   rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse);
   // GetNetwork returns one network.
   rpc GetNetwork(GetNetworkRequest) returns (Network);
-  // DeleteNetwork removes a network that no instance references.
+  // DeleteNetwork removes a network that no instance references. The
+  // default network cannot be deleted.
   rpc DeleteNetwork(DeleteNetworkRequest) returns (google.protobuf.Empty);
   // ListNetworkAllocations reports which addresses are assigned on a network.
   // Allocation itself is a side effect of starting an instance and has no
@@ -185,13 +187,15 @@ service DaemonService {
   rpc PruneImages(PruneImagesRequest) returns (PruneImagesResponse);
 
   // ImportKernel records a guest kernel by URL. It is downloaded the first
-  // time an instance boots with it.
+  // time an instance boots with it. The daemon defines the kernel named
+  // "default" itself, which an instance boots when it names none.
   rpc ImportKernel(ImportKernelRequest) returns (Kernel);
-  // ListKernels returns every imported kernel.
+  // ListKernels returns every kernel, the default one among them.
   rpc ListKernels(ListKernelsRequest) returns (ListKernelsResponse);
   // GetKernel returns one kernel.
   rpc GetKernel(GetKernelRequest) returns (Kernel);
-  // DeleteKernel removes a kernel that no instance references.
+  // DeleteKernel removes a kernel that no instance references. The default
+  // kernel cannot be deleted.
   rpc DeleteKernel(DeleteKernelRequest) returns (google.protobuf.Empty);
 
   // GetHostInfo reports what the daemon is: its version, the hypervisors it
@@ -558,8 +562,7 @@ message CreateInstanceRequest {
   HypervisorType hypervisor_type = 3;
   // A version that hypervisor ships; the newest by default.
   string hypervisor_version = 4;
-  // Empty means the daemon's default kernel: see
-  // GetHostInfoResponse.default_kernel.
+  // Empty means the default kernel, "default".
   string kernel_name = 5;
   string kernel_args = 6;
   int32 vcpus = 7;
@@ -580,8 +583,7 @@ message CreateInstanceRequest {
   // The bytes per second the guest sends and receives on its network.
   int64 upload_bytes_per_second = 31;
   int64 download_bytes_per_second = 32;
-  // Empty means the daemon's default network: see
-  // GetHostInfoResponse.default_network.
+  // Empty means the default network, "default".
   string network_name = 10;
   string static_ip = 11;
   reserved 12, 13;
@@ -1206,13 +1208,10 @@ message GetHostInfoResponse {
   // The addresses the API is served on over TCP, for a client being pointed
   // at this daemon. Empty if it is not served over TCP.
   repeated string api_addresses = 5;
-  // The kernel an instance created without one boots with: the one the
-  // daemon's configuration names, or else the only kernel there is. Empty
-  // if there is no such kernel, and an instance must name one.
-  string default_kernel = 6;
-  // The network an instance created without one attaches to, chosen as the
-  // default kernel is.
-  string default_network = 7;
+  // Fields 6 and 7 held the default kernel and network, back when they
+  // could be configured. Both are now named "default".
+  reserved 6, 7;
+  reserved "default_kernel", "default_network";
 }
 
 message GetResourcesRequest {}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
@@ -101,4 +102,21 @@ func TestDeletingAFetchedKernelSaysItsCopyWentToo(t *testing.T) {
 	if last.Action != events.ActionDeleted || last.Message != "Deleted kernel and its fetched copy" {
 		t.Errorf("last event = %+v, want the kernel deleted with its copy", last)
 	}
+}
+
+// TestDefaultKernelIsReserved checks that the default kernel cannot be
+// deleted, and that no kernel can be imported under its name.
+func TestDefaultKernelIsReserved(t *testing.T) {
+	s, definitions := newTestServer(t)
+	if err := definitions.CreateKernel(types.Kernel{ID: "k-1", Name: types.DefaultKernelName}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: types.DefaultKernelName})
+	wantClass(t, err, errdefs.ErrInvalidArgument)
+
+	_, err = s.ImportKernel(t.Context(), &dicerdv1.ImportKernelRequest{
+		Name: types.DefaultKernelName, Url: "https://example.invalid/vmlinux", Arch: dicerdv1.Architecture_ARCHITECTURE_X86_64,
+	})
+	wantClass(t, err, errdefs.ErrInvalidArgument)
 }

@@ -9,7 +9,12 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/naming"
 )
+
+// DefaultNetworkName is the name of the default network, which the daemon
+// creates itself and an instance joins when it names no network.
+const DefaultNetworkName = "default"
 
 // Network is a bridged network instances attach to, with an address pool of
 // its own.
@@ -49,9 +54,27 @@ type NetworkAllocation struct {
 	TAPDevice    string `yaml:"-"`
 }
 
-// Validate returns an invalid argument error if the network's settings
-// contradict each other.
+// The MTU range a network may have.
+const (
+	MinNetworkMTU = 576
+	MaxNetworkMTU = 9000
+)
+
+// Validate returns an invalid argument error unless the network has a valid
+// name, an MTU in range and nameservers that are IP addresses, and its
+// settings agree with each other.
 func (n Network) Validate() error {
+	if err := naming.Validate(n.Name); err != nil {
+		return err
+	}
+	if n.MTU < MinNetworkMTU || n.MTU > MaxNetworkMTU {
+		return errdefs.InvalidArgument("MTU %d is out of range: want %d to %d", n.MTU, MinNetworkMTU, MaxNetworkMTU)
+	}
+	for _, nameserver := range n.Nameservers {
+		if net.ParseIP(nameserver) == nil {
+			return errdefs.InvalidArgument("nameserver %q is not an IP address", nameserver)
+		}
+	}
 	if n.Internal && len(n.Nameservers) > 0 {
 		return errdefs.InvalidArgument("an internal network cannot use nameservers, " +
 			"since its instances cannot reach them: leave the nameservers out")

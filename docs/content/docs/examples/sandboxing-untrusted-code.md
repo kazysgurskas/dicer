@@ -19,9 +19,6 @@ networks or the host. When the job is done, the instance is deleted.
 
 ## Setup
 
-These steps assume the `default` network and the `linux-6.18` kernel from
-the [quickstart](../../getting-started/quickstart).
-
 {{% steps %}}
 
 ### Create the sandbox network
@@ -38,23 +35,19 @@ in the guest cannot undo it, even as root.
 ### Prepare a base machine
 
 Start the machine every job will be a copy of, with what the jobs need.
-It runs on the `default` network, so that it can download packages:
+It runs on the `default` network, which can reach the outside, so that it
+can download packages:
 
 ```console
-$ dicer run -d --name python-base --network default --kernel linux-6.18 \
-    --vcpus 1 --memory 512MiB python:3.13-slim sleep infinity
+$ dicer run -d --name python-base --vcpus 1 --memory 512MiB \
+    python:3.13-slim sleep infinity
 Instance python-base started in 991ms (172.20.71.242)
 $ dicer exec python-base pip install --quiet --root-user-action=ignore numpy
 ```
 
 `dicer exec` waits while the guest boots, so it can follow `dicer run -d`
-straight away. Every job gets the base's vCPUs, memory and
-disk, so size the base for the largest job.
-
-Now that there are two networks, an instance must name the one it joins,
-as the base does with `--network default`. The exception is a host whose
-daemon configuration sets
-[`defaults.network`](../../reference/configuration#defaults-network).
+straight away. Every job gets the base's vCPUs, memory and disk, so size the
+base for the largest job.
 
 ### Take a snapshot of it
 

@@ -18,49 +18,12 @@ you are not, run them with `sudo`.
 
 {{% steps %}}
 
-### Create a network
-
-An instance is attached to a network. Create one, with a private subnet of
-your choice:
-
-```console
-$ dicer network create default --subnet 172.20.0.0/16
-```
-
-The daemon creates a bridge for it. The network's gateway is the subnet's
-first address, `172.20.0.1`. See [Networking](../../concepts/networking).
-
-### Import a kernel
-
-A container image has no kernel, but a virtual machine needs one. Import
-[Dicer's kernel](https://github.com/konradasb/dicer-kernel), a long-term
-Linux release built for Dicer's guests:
-
-{{< tabs >}}
-  {{< tab name="x86_64" >}}
-  ```console
-  $ dicer kernel import linux-6.18 --arch x86_64 \
-      --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/vmlinux-x86_64 \
-      --sha256 ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669
-  ```
-  {{< /tab >}}
-  {{< tab name="aarch64" >}}
-  ```console
-  $ dicer kernel import linux-6.18 --arch aarch64 \
-      --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/Image-arm64 \
-      --sha256 1ce335854bc05535584dd57638f10832db91c4a20cbb76bab7851890c3d14568
-  ```
-  {{< /tab >}}
-{{< /tabs >}}
-
-Importing only records the kernel. It is downloaded the first time an
-instance boots with it, and checked against the checksum. See
-[Kernels](../../concepts/kernels).
-
 ### Run an image
 
-When there is only one network and one kernel, an instance uses them
-without being told:
+There is nothing to set up first. The daemon creates a network named
+`default` and defines a kernel named `default`, which an instance uses when
+it names no other. See [Networking](../../concepts/networking) and
+[Kernels](../../concepts/kernels).
 
 ```console
 $ dicer run -d --name web -p 8080:80 nginx:1.27
@@ -68,7 +31,8 @@ Instance web started in 1.1s (172.20.61.102)
 ```
 
 Dicer pulled `nginx:1.27`, showing its progress, and converted it to a
-disk. Then it booted the image as a virtual machine, with the guest's port
+disk. It also fetched the default kernel, which only the first instance to
+boot waits for. Then it booted the image as a virtual machine, with the guest's port
 80 published on the host's port 8080. The address in brackets is the
 guest's.
 

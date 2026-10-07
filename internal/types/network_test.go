@@ -82,9 +82,9 @@ func TestValidatePorts(t *testing.T) {
 
 func TestNetworkValidate(t *testing.T) {
 	valid := map[string]Network{
-		"plain":                        {},
-		"nameservers":                  {Nameservers: []string{"8.8.8.8"}},
-		"internal without nameservers": {Internal: true},
+		"plain":                        {Name: "lan", MTU: 1500},
+		"nameservers":                  {Name: "lan", MTU: 1500, Nameservers: []string{"8.8.8.8"}},
+		"internal without nameservers": {Name: "lan", MTU: 1500, Internal: true},
 	}
 	for name, n := range valid {
 		t.Run(name, func(t *testing.T) {
@@ -94,8 +94,18 @@ func TestNetworkValidate(t *testing.T) {
 		})
 	}
 
-	n := Network{Internal: true, Nameservers: []string{"8.8.8.8"}}
-	if err := n.Validate(); !errors.Is(err, errdefs.ErrInvalidArgument) {
-		t.Errorf("Validate() of an internal network with nameservers = %v, want an invalid argument error", err)
+	invalid := map[string]Network{
+		"bad name":                  {Name: "Not Valid", MTU: 1500},
+		"MTU too small":             {Name: "lan", MTU: 100},
+		"MTU too large":             {Name: "lan", MTU: 10000},
+		"bad nameserver":            {Name: "lan", MTU: 1500, Nameservers: []string{"dns.example"}},
+		"internal with nameservers": {Name: "lan", MTU: 1500, Internal: true, Nameservers: []string{"8.8.8.8"}},
+	}
+	for name, n := range invalid {
+		t.Run(name, func(t *testing.T) {
+			if err := n.Validate(); !errors.Is(err, errdefs.ErrInvalidArgument) {
+				t.Errorf("Validate() = %v, want an invalid argument error", err)
+			}
+		})
 	}
 }

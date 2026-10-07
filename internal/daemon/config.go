@@ -26,7 +26,7 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/image"
-	"github.com/konradasb/dicer/internal/naming"
+	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
 	"github.com/konradasb/dicer/internal/types"
 )
@@ -42,6 +42,8 @@ const (
 	defaultReservedMemoryBytes = 1 << 30
 
 	defaultGCInterval = time.Hour
+
+	defaultNetworkSubnet = "172.20.0.0/16"
 
 	// The keepalive defaults leave room for a client's default interval,
 	// dicer.DefaultKeepaliveInterval, above the daemon's minimum.
@@ -76,10 +78,6 @@ type Config struct {
 
 	// Network is the host's networking.
 	Network NetworkConfig `yaml:"network"`
-
-	// Defaults is what an instance gets when its definition leaves something
-	// out.
-	Defaults DefaultsConfig `yaml:"defaults"`
 
 	// Metrics is the Prometheus endpoint, served at `/metrics` without
 	// authentication. Metrics are always recorded: this decides only whether
@@ -386,6 +384,12 @@ func (r *ResourcesConfig) capacity(cpus int, memoryBytes int64) (types.Capacity,
 
 // NetworkConfig controls host networking.
 type NetworkConfig struct {
+	// DefaultSubnet is the subnet of the default network, which the daemon
+	// creates when it first starts and an instance joins when it names no
+	// network. It must not overlap a subnet the host is on. Changing it
+	// later does not change the network. Unset is 172.20.0.0/16.
+	DefaultSubnet string `yaml:"default_subnet,omitempty"`
+
 	// UplinkInterface is the interface NAT traffic leaves by. Unset detects
 	// it from the default route.
 	UplinkInterface string `yaml:"uplink_interface,omitempty"`
@@ -405,29 +409,10 @@ type NetworkConfig struct {
 	DNS bool `yaml:"dns"`
 }
 
-// DefaultsConfig names the kernel and network an instance gets when it names
-// none. Unset, an instance gets the only one there is.
-type DefaultsConfig struct {
-	// Kernel is the kernel an instance boots when it names none. Unset is
-	// the only kernel, if there is exactly one.
-	Kernel string `yaml:"kernel,omitempty"`
-
-	// Network is the network an instance is attached to when it names none.
-	// Unset is the only network, if there is exactly one.
-	Network string `yaml:"network,omitempty"`
-}
-
-// validate reports whether the defaults are valid names.
-func (d *DefaultsConfig) validate() error {
-	if d.Kernel != "" {
-		if err := naming.Validate(d.Kernel); err != nil {
-			return fmt.Errorf("defaults.kernel: %w", err)
-		}
-	}
-	if d.Network != "" {
-		if err := naming.Validate(d.Network); err != nil {
-			return fmt.Errorf("defaults.network: %w", err)
-		}
+// validate reports whether the default network's subnet is valid.
+func (n *NetworkConfig) validate() error {
+	if _, err := network.ParseSubnet(n.DefaultSubnet); err != nil {
+		return fmt.Errorf("network.default_subnet: %w", err)
 	}
 	return nil
 }
@@ -533,7 +518,7 @@ func (c *Config) Validate() error {
 	if err := c.Resources.validate(); err != nil {
 		return err
 	}
-	if err := c.Defaults.validate(); err != nil {
+	if err := c.Network.validate(); err != nil {
 		return err
 	}
 	if err := c.Images.validate(); err != nil {
@@ -623,6 +608,7 @@ func defaultConfig() Config {
 			ReservedMemoryBytes: defaultReservedMemoryBytes,
 		},
 		Network: NetworkConfig{
+			DefaultSubnet:           defaultNetworkSubnet,
 			UploadBurstMultiplier:   hostnet.DefaultBurstMultiplier,
 			DownloadBurstMultiplier: hostnet.DefaultBurstMultiplier,
 			DNS:                     true,

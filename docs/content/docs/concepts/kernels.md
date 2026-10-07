@@ -1,7 +1,7 @@
 ---
 title: Kernels
 weight: 4
-description: "Why every instance boots a kernel of its own, and how to import one."
+description: "Why every instance boots a kernel of its own, the default kernel, and how to import another."
 icon: chip
 related:
   - /docs/concepts/hypervisors
@@ -10,17 +10,35 @@ related:
 ---
 
 A container image holds no kernel, because containers share their host's. A
-virtual machine needs one of its own, so every instance boots a kernel you
-choose, kept apart from its image.
+virtual machine needs one of its own, so every instance boots a kernel, kept
+apart from its image.
+
+## The default kernel
+
+The daemon defines a kernel named `default`: a release of
+[Dicer's kernel](#kernel-requirements) for the host's architecture, pinned by
+this version of Dicer. An instance that names no kernel boots it. Like any
+kernel, it is downloaded the first time an instance boots with it, and
+checked against its checksum.
+
+A new version of Dicer may pin a newer release. When the daemon is upgraded,
+it updates the default kernel and discards the old download. Instances that
+use the default kernel boot the new one the next time they start. A running
+instance keeps the kernel it booted, and so does one restored from a
+snapshot or resumed from standby.
+
+The default kernel cannot be deleted, and no other kernel can be imported
+under its name.
 
 ## Importing a kernel
 
-A kernel is imported by name, from a URL, for an architecture:
+To boot a kernel of your own, import it by name, from a URL, for an
+architecture:
 
 ```console
-$ dicer kernel import linux-6.18 --arch x86_64 \
-    --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/vmlinux-x86_64 \
-    --sha256 ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669
+$ dicer kernel import custom-6.18 --arch x86_64 \
+    --url https://example.com/kernels/vmlinux-6.18 \
+    --sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
 ```
 
 Importing only records the kernel. It is downloaded the first time an
@@ -53,10 +71,8 @@ place to start.
 ## Choosing a kernel
 
 An instance names its kernel with `--kernel`. An instance that names none
-gets the daemon's default kernel. That is the kernel set as
-[`defaults.kernel`](../../reference/configuration#defaults-kernel) in the
-daemon's configuration, or, if that is unset and there is exactly one
-kernel, that one. `dicer info` shows which applies.
+boots the [default kernel](#the-default-kernel). Importing other kernels
+does not change that.
 
 ## Kernel arguments
 

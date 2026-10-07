@@ -67,6 +67,29 @@ func TestInstanceLifecycle(t *testing.T) {
 	env.waitForState(t, name, "Stopped")
 }
 
+// TestInstanceUsesTheDefaultKernelAndNetwork runs an instance as the
+// quickstart does, naming neither a kernel nor a network: the daemon has
+// created the default network, and fetches the default kernel it pins.
+func TestInstanceUsesTheDefaultKernelAndNetwork(t *testing.T) {
+	name := instanceName(t)
+
+	env.dicer(t, "run", "-d", "--name", name, "--memory", "512MiB", testImage, "sleep", "3600")
+	t.Cleanup(func() { env.deleteInstance(t, name) })
+
+	running := env.waitForState(t, name, "Running")
+	if !strings.HasPrefix(running.IP, "172.31.2.") {
+		t.Errorf("address %q is not from the default network's subnet, %s", running.IP, defaultSubnet)
+	}
+	env.exec(t, name, "true")
+
+	if _, err := env.tryDicer(t, "network", "delete", "default"); err == nil {
+		t.Error("the default network was deleted")
+	}
+	if _, err := env.tryDicer(t, "kernel", "delete", "default"); err == nil {
+		t.Error("the default kernel was deleted")
+	}
+}
+
 // TestInstanceHypervisors boots the same image under every VMM the daemon
 // carries.
 //

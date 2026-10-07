@@ -109,6 +109,14 @@ func (d *daemon) Run(ctx context.Context) error {
 	d.instances.Recover(ctx)
 	defer d.instances.Close()
 
+	// Created before serving, so that no request finds either missing.
+	if err := d.ensureDefaultNetwork(); err != nil {
+		return err
+	}
+	if err := d.ensureDefaultKernel(); err != nil {
+		return err
+	}
+
 	listeners, err := d.listenAPI(ctx)
 	if err != nil {
 		return err

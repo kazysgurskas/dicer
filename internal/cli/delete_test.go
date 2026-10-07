@@ -184,13 +184,13 @@ func TestDeleteAllResources(t *testing.T) {
 	for _, n := range []string{"data", "cache"} {
 		d.volumeSet[n] = true
 	}
-	for _, n := range []string{"linux-6.18", "linux-6.12"} {
+	for _, n := range []string{"default", "linux-6.18", "linux-6.12"} {
 		d.kernelSet[n] = true
 	}
 	for _, n := range []string{"web-before", "db-before"} {
 		d.snapshotSet[n] = true
 	}
-	d.inUse["default"] = true
+	d.inUse["lan"] = true
 	d.inUse["linux-6.18"] = true
 	serveFakeDaemon(t, d)
 
@@ -199,9 +199,9 @@ func TestDeleteAllResources(t *testing.T) {
 		set  map[string]bool
 		left []string
 	}{
-		{[]string{"network", "rm", "--all"}, d.networkSet, []string{"default"}},
+		{[]string{"network", "rm", "--all"}, d.networkSet, []string{"default", "lan"}},
 		{[]string{"volume", "delete", "-A"}, d.volumeSet, nil},
-		{[]string{"kernel", "rm", "-A", "-y"}, d.kernelSet, []string{"linux-6.18"}},
+		{[]string{"kernel", "rm", "-A", "-y"}, d.kernelSet, []string{"default", "linux-6.18"}},
 		{[]string{"snapshot", "rm", "--all"}, d.snapshotSet, nil},
 	}
 	for _, tt := range tests {
@@ -210,7 +210,7 @@ func TestDeleteAllResources(t *testing.T) {
 			t.Errorf("%q = %v, want an error %v:\n%s", tt.args, err, wantErr, out)
 		}
 		if got := d.names(tt.set); !slices.Equal(got, tt.left) {
-			t.Errorf("%q left %q, want %q: those in use", tt.args, got, tt.left)
+			t.Errorf("%q left %q, want %q: the default and those in use", tt.args, got, tt.left)
 		}
 	}
 }

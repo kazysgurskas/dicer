@@ -51,9 +51,6 @@ type Config struct {
 	// DataDir is the data directory, whose disk GetResources reports on.
 	DataDir string
 
-	// Defaults are the configured default kernel and network.
-	Defaults Defaults
-
 	// Version is the daemon's version, as GetHostInfo reports it.
 	Version string
 }
@@ -93,13 +90,10 @@ type Server struct {
 
 // NewServer creates a Server with the given configuration.
 func NewServer(cfg Config) *Server {
-	defaults := defaultResolver{definitions: cfg.Definitions, configured: cfg.Defaults}
-
 	return &Server{
 		instanceHandler: instanceHandler{
 			definitions: cfg.Definitions,
 			instances:   cfg.Instances,
-			defaults:    defaults,
 
 			statsInterval: instanceStatsInterval,
 		},
@@ -134,7 +128,6 @@ func NewServer(cfg Config) *Server {
 			version:     cfg.Version,
 			hypervisors: cfg.Hypervisors,
 			apiAddress:  cfg.APIAddress,
-			defaults:    defaults,
 		},
 		eventsHandler: eventsHandler{events: cfg.Events},
 	}

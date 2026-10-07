@@ -5,7 +5,8 @@ description: "Delete one or more kernels no instance uses, or all of them"
 ---
 
 Deletes the kernels named, or with `--all` every kernel, asking first on a
-terminal. A kernel an instance is defined to boot is refused.
+terminal. A kernel an instance is defined to boot is refused, and so is the
+default kernel, which `--all` leaves alone.
 
 ## Usage
 

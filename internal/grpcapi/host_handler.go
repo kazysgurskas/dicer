@@ -17,23 +17,20 @@ type hostHandler struct {
 	version     string
 	hypervisors map[types.HypervisorType][]hypervisor.Starter
 	apiAddress  string
-	defaults    defaultResolver
 }
 
-// GetHostInfo reports the daemon's version, hostname, hypervisors, API
-// addresses and default kernel and network.
+// GetHostInfo reports the daemon's version, hostname, hypervisors and API
+// addresses.
 func (h *hostHandler) GetHostInfo(
 	_ context.Context, _ *dicerdv1.GetHostInfoRequest,
 ) (*dicerdv1.GetHostInfoResponse, error) {
 	hostname, _ := os.Hostname()
 
 	return &dicerdv1.GetHostInfoResponse{
-		Version:        h.version,
-		Hostname:       hostname,
-		Hypervisors:    h.hypervisorInfos(),
-		ApiAddresses:   h.apiAddresses(),
-		DefaultKernel:  h.defaults.kernel(),
-		DefaultNetwork: h.defaults.network(),
+		Version:      h.version,
+		Hostname:     hostname,
+		Hypervisors:  h.hypervisorInfos(),
+		ApiAddresses: h.apiAddresses(),
 	}, nil
 }
 

@@ -18,30 +18,6 @@ instance's, and its containers cannot reach them.
 
 {{% steps %}}
 
-### Import Dicer's kernel
-
-Docker builds its networks from netfilter, NAT and bridges.
-[Dicer's kernel](https://github.com/konradasb/dicer-kernel) has them from
-`v6.18.53-1`. Skip this step if you imported it in the
-[quickstart](../../getting-started/quickstart).
-
-{{< tabs >}}
-  {{< tab name="x86_64" >}}
-  ```console
-  $ dicer kernel import linux-6.18 --arch x86_64 \
-      --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/vmlinux-x86_64 \
-      --sha256 ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669
-  ```
-  {{< /tab >}}
-  {{< tab name="aarch64" >}}
-  ```console
-  $ dicer kernel import linux-6.18 --arch aarch64 \
-      --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/Image-arm64 \
-      --sha256 1ce335854bc05535584dd57638f10832db91c4a20cbb76bab7851890c3d14568
-  ```
-  {{< /tab >}}
-{{< /tabs >}}
-
 ### Create a volume for Docker's data
 
 ```console
@@ -54,13 +30,15 @@ explains why Docker needs a volume.
 ### Run Docker
 
 ```console
-$ dicer run -d --name docker --kernel linux-6.18 --vcpus 2 --memory 2GiB \
+$ dicer run -d --name docker --vcpus 2 --memory 2GiB \
     --mount source=docker-data,target=/var/lib/docker \
     docker:27-dind
 ```
 
 `docker:27-dind` is Docker's official Docker-in-Docker image, which runs the
-Docker daemon as its main process. Here that daemon is the instance's
+Docker daemon as its main process. Docker builds its networks from
+netfilter, NAT and bridges, which the
+[default kernel](../../concepts/kernels#the-default-kernel) has. Here that daemon is the instance's
 workload. Docker and its containers share the instance's memory, so give it
 2 GiB or more.
 

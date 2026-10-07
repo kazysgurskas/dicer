@@ -125,7 +125,7 @@ Every network event has `subnet` and `gateway` attributes.
 
 | Event | `action` | Attributes | What it means |
 |---|---|---|---|
-| Created | `EVENT_ACTION_CREATED` | `subnet`, `gateway` | The network was created with `dicer network create`. The message also says whether it is isolated or internal. |
+| Created | `EVENT_ACTION_CREATED` | `subnet`, `gateway` | The network was created with `dicer network create`, or it is the default network, which the daemon creates when it first starts. The message also says whether it is isolated or internal. |
 | Deleted | `EVENT_ACTION_DELETED` | `subnet`, `gateway` | The network was deleted, and the addresses it had allocated were released. |
 
 ## Volumes
@@ -143,6 +143,7 @@ Every kernel event has a `url` attribute.
 
 | Event | `action` | Attributes | What it means |
 |---|---|---|---|
-| Imported | `EVENT_ACTION_IMPORTED` | `url`, `arch` | The kernel was imported with `dicer kernel import`. It is recorded by its URL, and fetched when an instance first starts with it. `arch` is its architecture. The message says when it has no checksum to verify it against. |
+| Imported | `EVENT_ACTION_IMPORTED` | `url`, `arch` | The kernel was imported with `dicer kernel import`, or it is the default kernel, which the daemon defines when it first starts. It is recorded by its URL, and fetched when an instance first starts with it. `arch` is its architecture. The message says when it has no checksum to verify it against. |
+| Updated | `EVENT_ACTION_UPDATED` | `url`, `arch` | The daemon was upgraded to a version that pins a newer default kernel. The old download was removed, and the new kernel is fetched when an instance next starts with it. |
 | Fetched | `EVENT_ACTION_FETCHED` | `url`, `fetched_bytes` | The kernel was downloaded, or copied from a local path, and verified against its checksum if it has one. `fetched_bytes` is its size. |
 | Deleted | `EVENT_ACTION_DELETED` | `url`, `arch` | The kernel was deleted, along with its fetched copy if it had one. |

@@ -27,7 +27,7 @@ images:
 
 ## General {#general}
 
-The daemon's own settings. The sections after them are the API, resources, networking, defaults, metrics, images, events and registries.
+The daemon's own settings. The sections after them are the API, resources, networking, metrics, images, events and registries.
 
 ### `data_dir` {#data-dir}
 
@@ -167,6 +167,12 @@ The daemon's own settings. The sections after them are the API, resources, netwo
 
 `network` is the host's networking.
 
+### `network.default_subnet` {#network-default-subnet}
+
+*string*
+
+`default_subnet` is the subnet of the default network, which the daemon creates when it first starts and an instance joins when it names no network. It must not overlap a subnet the host is on. Changing it later does not change the network. Unset is 172.20.0.0/16.
+
 ### `network.uplink_interface` {#network-uplink-interface}
 
 *string*
@@ -190,24 +196,6 @@ The daemon's own settings. The sections after them are the API, resources, netwo
 *boolean*
 
 `dns` answers guests' DNS queries on each network's gateway address, so that an instance can reach another on its network by name; other names are forwarded to the network's nameservers. Off, guests ask those nameservers directly. Unset is true.
-
-## `defaults` {#defaults}
-
-*mapping*
-
-`defaults` is what an instance gets when its definition leaves something out.
-
-### `defaults.kernel` {#defaults-kernel}
-
-*string*
-
-`kernel` is the kernel an instance boots when it names none. Unset is the only kernel, if there is exactly one.
-
-### `defaults.network` {#defaults-network}
-
-*string*
-
-`network` is the network an instance is attached to when it names none. Unset is the only network, if there is exactly one.
 
 ## `metrics` {#metrics}
 

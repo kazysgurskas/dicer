@@ -148,6 +148,19 @@ func listKernels(ctx context.Context, client *dicer.Client, _ []string) ([]strin
 	return names, nil
 }
 
+// defaultName is the name of the default network and of the default kernel,
+// which the daemon provides and which cannot be deleted.
+const defaultName = "default"
+
+// withoutDefault returns list without the default network or kernel, so that
+// delete --all and completion skip what cannot be deleted.
+func withoutDefault(list completer) completer {
+	return func(ctx context.Context, client *dicer.Client, args []string) ([]string, error) {
+		names, err := list(ctx, client, args)
+		return slices.DeleteFunc(names, func(n string) bool { return completionValue(n) == defaultName }), err
+	}
+}
+
 // listSnapshots completes snapshot names, each described by its instance
 // and age.
 func listSnapshots(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {

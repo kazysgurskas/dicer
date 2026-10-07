@@ -52,7 +52,6 @@ func TestWriteInfo(t *testing.T) {
 			},
 			{Type: dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER, Versions: []string{"v1.17.0"}},
 		},
-		DefaultKernel: "vmlinux-6.12",
 	}
 	instances := instancesInStates(stateRunning, stateRunning, stateStopped)
 	local := target{name: remote.Local, remote: remote.Remote{Address: dicer.DefaultAddress}}
@@ -75,8 +74,6 @@ func TestWriteInfo(t *testing.T) {
 
     Hypervisors: cloud-hypervisor v49.0.0 (default), v48.0.0
                  firecracker v1.17.0
-       Defaults: kernel vmlinux-6.12
-                 network none (name one)
 
            vCPU: █████░░░░░░░░░░░░░░░  4 of 16         25%
                  4 CPUs, 4× overcommit

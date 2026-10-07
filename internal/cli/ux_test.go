@@ -201,20 +201,6 @@ func TestPsWatch(t *testing.T) {
 	}
 }
 
-func TestInfoShowsDefaults(t *testing.T) {
-	d := newFakeInstanceDaemon()
-	d.host = &dicerdv1.GetHostInfoResponse{Version: "v1", DefaultNetwork: "default"}
-	serveFakeDaemon(t, d)
-
-	out, err := run(t, "info")
-	if err != nil {
-		t.Fatalf("info: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "Defaults: kernel none (name one)\n                 network default\n") {
-		t.Errorf("info should say what an instance gets by default:\n%s", out)
-	}
-}
-
 func TestInstanceStatusForAnInstanceThatEnded(t *testing.T) {
 	ago := timestamppb.New(time.Now().Add(-2 * time.Minute))
 	soon := timestamppb.New(time.Now().Add(30 * time.Second))

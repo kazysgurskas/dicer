@@ -28,7 +28,7 @@ A network is a subnet, and a bridge on the host that holds the network's
 gateway address:
 
 ```console
-$ dicer network create default --subnet 172.20.0.0/16
+$ dicer network create backend --subnet 172.21.0.0/16
 ```
 
 What `dicer network create` does not set takes a default:
@@ -50,10 +50,18 @@ the network starts, and removed when the last one stops.
 Networks are local to their host. To connect guests on different hosts,
 connect the hosts.
 
-An instance that names no network gets the daemon's default: the one
-`defaults.network` names in its
-[configuration](../../reference/configuration#defaults-network), or the only
-network, if there is exactly one.
+## The default network
+
+The daemon creates a network named `default` when it first starts, on
+`172.20.0.0/16`. An instance that names no network joins it. Creating other
+networks does not change that, and the default network cannot be deleted.
+
+To put the default network on another subnet, set
+[`network.default_subnet`](../../reference/configuration#network-default-subnet)
+in the daemon's configuration before its first start. The daemon will not
+start if the subnet overlaps one the host is on. It only uses the setting to
+create the network, so changing it later does not move a network that already
+exists.
 
 ## Addresses
 
@@ -76,8 +84,8 @@ nameserver they are given. A running instance's name or hostname resolves to
 its address, either bare or followed by the network's name:
 
 ```console
-$ dicer run -d --name db --network default postgres:17
-$ dicer run -d --name app --network default alpine:3.21 sleep infinity
+$ dicer run -d --name db postgres:17
+$ dicer run -d --name app alpine:3.21 sleep infinity
 $ dicer exec app ping -c 1 db.default
 PING db.default (172.20.0.5): 56 data bytes
 …

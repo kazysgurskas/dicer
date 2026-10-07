@@ -5,7 +5,8 @@ description: "Delete one or more networks no instance uses, or all of them"
 ---
 
 Deletes the networks named, or with `--all` every network, asking first on a
-terminal. A network an instance is defined on is refused.
+terminal. A network an instance is defined on is refused, and so is the
+default network, which `--all` leaves alone.
 
 ## Usage
 

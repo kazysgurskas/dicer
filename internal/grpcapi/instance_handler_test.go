@@ -127,3 +127,22 @@ func TestInstanceRateLimits(t *testing.T) {
 	})
 	wantClass(t, err, errdefs.ErrInvalidArgument)
 }
+
+// An instance that names no kernel or network gets the default ones.
+func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
+	s, definitions := newTestServer(t)
+	seedKernelAndNetwork(t, definitions)
+	if err := definitions.CreateKernel(types.Kernel{ID: "k-2", Name: types.DefaultKernelName}); err != nil {
+		t.Fatal(err)
+	}
+
+	instance, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
+		Name: "web", ImageRef: "alpine", Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30,
+	})
+	if err != nil {
+		t.Fatalf("newInstance: %v", err)
+	}
+	if instance.KernelName != types.DefaultKernelName || instance.NetworkName != types.DefaultNetworkName {
+		t.Errorf("kernel %q, network %q; want both %q", instance.KernelName, instance.NetworkName, "default")
+	}
+}

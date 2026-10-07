@@ -33,18 +33,10 @@ systemd service.
 
 ## Quickstart
 
-Create a network and import [Dicer's kernel](https://github.com/konradasb/dicer-kernel)
-(on arm64, use `--arch aarch64`, `Image-arm64` and its checksum from the
-release's `SHA256SUMS`):
-
-```console
-$ dicer network create default --subnet 172.20.0.0/16
-$ dicer kernel import linux-6.18 --arch x86_64 \
-    --url https://github.com/konradasb/dicer-kernel/releases/download/v6.18.53-1/vmlinux-x86_64 \
-    --sha256 ca5db6c291deb8a409db1f1ab14cc55ef6d35504daf17fc0f5577ffc1662b669
-```
-
-With one network and one kernel, instances use them by default:
+The daemon creates a network named `default`, and a kernel named `default`
+that is [Dicer's kernel](https://github.com/konradasb/dicer-kernel). An
+instance that names no network or kernel uses them, so there is nothing to
+set up first:
 
 ```console
 $ dicer run -d --name web -p 8080:80 nginx:1.27

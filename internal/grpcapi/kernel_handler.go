@@ -50,6 +50,9 @@ func (h *kernelHandler) ImportKernel(
 	if err := k.Validate(); err != nil {
 		return nil, err
 	}
+	if k.Name == types.DefaultKernelName {
+		return nil, errdefs.InvalidArgument("%q is the default kernel's name: import the kernel under another", k.Name)
+	}
 	if _, err := h.definitions.Kernel(k.Name); err == nil {
 		return nil, errdefs.Exists("kernel %q already exists", k.Name)
 	}
@@ -94,14 +97,17 @@ func (h *kernelHandler) GetKernel(
 	return kernelToProto(k), nil
 }
 
-// DeleteKernel removes a kernel and its fetched copy, refusing one an
-// instance uses.
+// DeleteKernel removes a kernel and its fetched copy, refusing the default
+// kernel and one an instance uses.
 func (h *kernelHandler) DeleteKernel(
 	_ context.Context, req *dicerdv1.DeleteKernelRequest,
 ) (*emptypb.Empty, error) {
 	k, err := h.definitions.Kernel(req.GetName())
 	if err != nil {
 		return nil, err
+	}
+	if k.Name == types.DefaultKernelName {
+		return nil, errdefs.InvalidArgument("the default kernel cannot be deleted")
 	}
 
 	inUse := func(instance types.InstanceSpec) bool { return instance.KernelName == k.Name }

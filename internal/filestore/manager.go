@@ -228,6 +228,11 @@ func (m *Manager) Kernel(nameOrID string) (types.Kernel, error) {
 	return m.kernels.definition(nameOrID)
 }
 
+// UpdateKernel replaces a kernel definition.
+func (m *Manager) UpdateKernel(v types.Kernel) error {
+	return m.kernels.update(v)
+}
+
 // DeleteKernel removes a kernel definition. The binary is the kernel
 // manager's to delete.
 func (m *Manager) DeleteKernel(nameOrID string) error {
