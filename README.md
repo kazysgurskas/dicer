@@ -16,6 +16,13 @@ Dicer pulls an OCI image, converts it to a read-only root filesystem and boots
 it as a VM under Cloud Hypervisor or Firecracker, with a writable overlay on
 top.
 
+> [!WARNING]
+> Dicer has not reached version 1.0, so nothing in it is stable yet. Until
+> then, a minor release can break the API, the Go package, the command line,
+> its JSON output, the configuration file or the daemon's saved state. Read
+> the release notes before you upgrade. [RELEASES.md](RELEASES.md) explains
+> how versions work.
+
 ## Requirements
 
 - Linux with KVM (`/dev/kvm`)
