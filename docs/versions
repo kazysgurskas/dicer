@@ -2,8 +2,9 @@
 # first: a name, which is also its path on the site, and the Git ref it is
 # built from, where "." is the working tree.
 #
-# dev is main, which is not released yet. The first release listed is the
-# latest, where the site's root leads; until there is one, dev is.
+# dev is main, which is not released yet, and where the site's root leads.
+# The first release listed is the latest, which the version switcher marks
+# and the other versions' banners link to.
 dev   .
 v0.3  v0.3.0
 v0.2  v0.2.0

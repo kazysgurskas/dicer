@@ -6,8 +6,7 @@
 # Builds every version of the documentation that docs/versions lists into
 # one directory, as the site is published: each under its own path, with a
 # switcher between them, the ones that are not the latest release saying
-# so, and the site's root, and every path without a version, leading to the
-# latest.
+# so, and the site's root, and every path without a version, leading to dev.
 #
 #   docs/build-versions.sh HUGO OUT
 #
@@ -51,6 +50,13 @@ for name in "${names[@]}"; do
     latest=$name
     break
   fi
+done
+
+# The site's root, and every path without a version, lead to dev, which is
+# what main and its README describe; without dev, to the latest release.
+home=$latest
+for name in "${names[@]}"; do
+  [[ $name == dev ]] && home=dev
 done
 
 work=$(mktemp -d)
@@ -110,22 +116,22 @@ for i in "${!names[@]}"; do
     --destination "$out/$name" --gc --minify --quiet
 done
 
-# The site's root leads to the latest version, and its 404 page stands in
-# for any path no version has.
+# The site's root leads to the home version, and its 404 page stands in for
+# any path no version has.
 cat >"$out/index.html" <<HTML
 <!doctype html>
 <meta charset="utf-8">
 <title>Dicer</title>
-<link rel="canonical" href="$base_url/$latest/">
-<meta http-equiv="refresh" content="0; url=$prefix/$latest/">
-<a href="$prefix/$latest/">Dicer documentation</a>
+<link rel="canonical" href="$base_url/$home/">
+<meta http-equiv="refresh" content="0; url=$prefix/$home/">
+<a href="$prefix/$home/">Dicer documentation</a>
 HTML
-cp "$out/$latest/404.html" "$out/404.html"
+cp "$out/$home/404.html" "$out/404.html"
 
-# Every page of the latest version is also reached without the version, so
+# Every page of the home version is also reached without the version, so
 # links that carry none, as the README and the installers' messages do, lead
-# to the latest release. A path that is itself a version is left to it.
-(cd "$out/$latest" && find . -mindepth 2 -name index.html) | while read -r page; do
+# to it. A path that is itself a version is left to it.
+(cd "$out/$home" && find . -mindepth 2 -name index.html) | while read -r page; do
   path=${page#./}
   path=${path%index.html}
   [[ $seen == *" ${path%%/*} "* ]] && continue
@@ -134,9 +140,9 @@ cp "$out/$latest/404.html" "$out/404.html"
 <!doctype html>
 <meta charset="utf-8">
 <title>Dicer</title>
-<link rel="canonical" href="$base_url/$latest/$path">
-<meta http-equiv="refresh" content="0; url=$prefix/$latest/$path">
-<script>location.replace("$prefix/$latest/$path" + location.hash)</script>
-<a href="$prefix/$latest/$path">Dicer documentation</a>
+<link rel="canonical" href="$base_url/$home/$path">
+<meta http-equiv="refresh" content="0; url=$prefix/$home/$path">
+<script>location.replace("$prefix/$home/$path" + location.hash)</script>
+<a href="$prefix/$home/$path">Dicer documentation</a>
 HTML
 done
