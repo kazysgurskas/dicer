@@ -145,9 +145,9 @@ func newInstanceStandbyCommand() *cobra.Command {
 		Use:   "standby NAME...",
 		Short: "Freeze one or more running instances to disk, freeing their CPU and memory",
 		Long: "Freezes each running or paused instance to disk and ends its hypervisor, so\n" +
-			"that it holds no CPU or memory. It keeps its disk, address, published ports\n" +
-			"and writable volumes. Starting it resumes it where it was; stopping it\n" +
-			"discards what it froze.",
+			"that no CPU or memory is committed to it. It keeps its disk, address,\n" +
+			"published ports and writable volumes. Starting it resumes it where it was;\n" +
+			"stopping it discards what it froze.",
 		Args:              oneOrMore("instance name"),
 		ValidArgsFunction: complete(0, instancesIn(stateRunning, statePaused)),
 		RunE: func(cmd *cobra.Command, args []string) error {

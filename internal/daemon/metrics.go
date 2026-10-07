@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/konradasb/dicer/internal/metrics"
@@ -61,7 +62,7 @@ func (d *daemon) instanceSummary() metrics.InstanceSummary {
 
 	byState := make(map[string]int, len(usage.ByState))
 	for state, n := range usage.ByState {
-		byState[state.Lowercase()] = n
+		byState[strings.ToLower(string(state))] = n
 	}
 	byHealth := make(map[string]int, len(usage.ByHealth))
 	for status, n := range usage.ByHealth {

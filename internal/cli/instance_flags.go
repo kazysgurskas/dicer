@@ -59,7 +59,7 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	flags.String("kernel", "", "Kernel to boot with (default: the default kernel)")
 	flags.String("kernel-args", "", "Kernel command line arguments")
 	flags.String("hypervisor-type", "", "Hypervisor: cloud-hypervisor or firecracker (default: cloud-hypervisor)")
-	flags.String("hypervisor-version", "", "Hypervisor version (default: the newest available)")
+	flags.String("hypervisor-version", "", "Hypervisor version (default: the hypervisor's default version, which 'dicer info' shows)")
 	flags.Int32("vcpus", vcpus, "Number of virtual CPUs")
 	flags.StringP("memory", "m", memory, "Memory, e.g. 512MiB or 2GiB")
 	flags.Int32("max-vcpus", 0, "Most vCPUs 'dicer resize' can give the running instance, on Cloud Hypervisor (0: none)")

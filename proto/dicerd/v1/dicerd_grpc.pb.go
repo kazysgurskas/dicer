@@ -126,7 +126,7 @@ type DaemonServiceClient interface {
 	// ResumeInstance continues a paused instance.
 	ResumeInstance(ctx context.Context, in *ResumeInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
 	// StandbyInstance freezes a running or paused instance to disk and ends
-	// its hypervisor, freeing the CPU and memory it holds, and keeping its
+	// its hypervisor, freeing the CPU and memory committed to it. It keeps its
 	// address, host ports and writable volumes. StartInstance resumes it where
 	// it was; StopInstance discards what was frozen.
 	StandbyInstance(ctx context.Context, in *StandbyInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
@@ -145,8 +145,8 @@ type DaemonServiceClient interface {
 	// CPU with at least 40 bits of physical address. vCPUs can be resized on
 	// Cloud Hypervisor only. The guest's kernel must support virtio-mem and
 	// CPU hotplug. Growing needs room on the host (RESOURCE_EXHAUSTED). If the
-	// guest fails the resize, the instance holds the larger of the two sizes
-	// until it next starts.
+	// guest fails the resize, the larger of the two sizes stays committed to
+	// the instance until it next starts.
 	ResizeInstance(ctx context.Context, in *ResizeInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
 	// DeleteInstance removes an instance and its overlay disk. It refuses a
 	// running instance unless force is set.
@@ -259,7 +259,8 @@ type DaemonServiceClient interface {
 	// carries, and how it is reached.
 	GetHostInfo(ctx context.Context, in *GetHostInfoRequest, opts ...grpc.CallOption) (*GetHostInfoResponse, error)
 	// GetResources reports how much CPU and memory instances may be given,
-	// how much they hold, and how full the data directory's disk is.
+	// how much is committed to them, and how full the data directory's disk
+	// is.
 	GetResources(ctx context.Context, in *GetResourcesRequest, opts ...grpc.CallOption) (*GetResourcesResponse, error)
 	// GetEvents streams what has happened to the resources on this host: the
 	// history kept, oldest first, in batches, then, with follow, each new
@@ -843,7 +844,7 @@ type DaemonServiceServer interface {
 	// ResumeInstance continues a paused instance.
 	ResumeInstance(context.Context, *ResumeInstanceRequest) (*Instance, error)
 	// StandbyInstance freezes a running or paused instance to disk and ends
-	// its hypervisor, freeing the CPU and memory it holds, and keeping its
+	// its hypervisor, freeing the CPU and memory committed to it. It keeps its
 	// address, host ports and writable volumes. StartInstance resumes it where
 	// it was; StopInstance discards what was frozen.
 	StandbyInstance(context.Context, *StandbyInstanceRequest) (*Instance, error)
@@ -862,8 +863,8 @@ type DaemonServiceServer interface {
 	// CPU with at least 40 bits of physical address. vCPUs can be resized on
 	// Cloud Hypervisor only. The guest's kernel must support virtio-mem and
 	// CPU hotplug. Growing needs room on the host (RESOURCE_EXHAUSTED). If the
-	// guest fails the resize, the instance holds the larger of the two sizes
-	// until it next starts.
+	// guest fails the resize, the larger of the two sizes stays committed to
+	// the instance until it next starts.
 	ResizeInstance(context.Context, *ResizeInstanceRequest) (*Instance, error)
 	// DeleteInstance removes an instance and its overlay disk. It refuses a
 	// running instance unless force is set.
@@ -976,7 +977,8 @@ type DaemonServiceServer interface {
 	// carries, and how it is reached.
 	GetHostInfo(context.Context, *GetHostInfoRequest) (*GetHostInfoResponse, error)
 	// GetResources reports how much CPU and memory instances may be given,
-	// how much they hold, and how full the data directory's disk is.
+	// how much is committed to them, and how full the data directory's disk
+	// is.
 	GetResources(context.Context, *GetResourcesRequest) (*GetResourcesResponse, error)
 	// GetEvents streams what has happened to the resources on this host: the
 	// history kept, oldest first, in batches, then, with follow, each new

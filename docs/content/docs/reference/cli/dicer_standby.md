@@ -5,9 +5,9 @@ description: "Freeze one or more running instances to disk, freeing their CPU an
 ---
 
 Freezes each running or paused instance to disk and ends its hypervisor, so
-that it holds no CPU or memory. It keeps its disk, address, published ports
-and writable volumes. Starting it resumes it where it was; stopping it
-discards what it froze.
+that no CPU or memory is committed to it. It keeps its disk, address,
+published ports and writable volumes. Starting it resumes it where it was;
+stopping it discards what it froze.
 
 ## Usage
 

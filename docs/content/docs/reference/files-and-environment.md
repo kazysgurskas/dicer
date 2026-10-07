@@ -68,7 +68,7 @@ take.
 ```text
 /run/dicer/
 ├── dicer.sock                the API
-└── instances/<id>/           one per instance that is running, or was since boot
+└── instances/<id>/           one per instance that is running, or ended on its own since boot
     ├── state.json            its state: pid, address, how it last ended
     ├── hypervisor.sock       the hypervisor's API
     ├── vsock.sock            the channel to the guest's agent

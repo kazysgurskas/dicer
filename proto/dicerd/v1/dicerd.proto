@@ -62,7 +62,7 @@ service DaemonService {
   // ResumeInstance continues a paused instance.
   rpc ResumeInstance(ResumeInstanceRequest) returns (Instance);
   // StandbyInstance freezes a running or paused instance to disk and ends
-  // its hypervisor, freeing the CPU and memory it holds, and keeping its
+  // its hypervisor, freeing the CPU and memory committed to it. It keeps its
   // address, host ports and writable volumes. StartInstance resumes it where
   // it was; StopInstance discards what was frozen.
   rpc StandbyInstance(StandbyInstanceRequest) returns (Instance);
@@ -81,8 +81,8 @@ service DaemonService {
   // CPU with at least 40 bits of physical address. vCPUs can be resized on
   // Cloud Hypervisor only. The guest's kernel must support virtio-mem and
   // CPU hotplug. Growing needs room on the host (RESOURCE_EXHAUSTED). If the
-  // guest fails the resize, the instance holds the larger of the two sizes
-  // until it next starts.
+  // guest fails the resize, the larger of the two sizes stays committed to
+  // the instance until it next starts.
   rpc ResizeInstance(ResizeInstanceRequest) returns (Instance);
   // DeleteInstance removes an instance and its overlay disk. It refuses a
   // running instance unless force is set.
@@ -202,7 +202,8 @@ service DaemonService {
   // carries, and how it is reached.
   rpc GetHostInfo(GetHostInfoRequest) returns (GetHostInfoResponse);
   // GetResources reports how much CPU and memory instances may be given,
-  // how much they hold, and how full the data directory's disk is.
+  // how much is committed to them, and how full the data directory's disk
+  // is.
   rpc GetResources(GetResourcesRequest) returns (GetResourcesResponse);
 
   // GetEvents streams what has happened to the resources on this host: the
@@ -235,12 +236,13 @@ enum InstanceState {
   // A stop is in progress.
   INSTANCE_STATE_STOPPING = 5;
   // The instance ended without being asked to, and its restart policy will
-  // start it again at next_restart_time. It holds nothing meanwhile.
+  // start it again at next_restart_time. Nothing is committed to it
+  // meanwhile.
   INSTANCE_STATE_RESTARTING = 6;
   // The last operation failed; state_error says why.
   INSTANCE_STATE_FAILED = 7;
-  // The guest is frozen to disk, its hypervisor ended: it holds no CPU or
-  // memory, and starting it resumes it where it was.
+  // The guest is frozen to disk and its hypervisor has ended, so no CPU or
+  // memory is committed to it. Starting it resumes it where it was.
   INSTANCE_STATE_STANDBY = 8;
 }
 
@@ -394,7 +396,8 @@ message Instance {
   // The hypervisor the instance runs on: Cloud Hypervisor if it was created
   // without one.
   HypervisorType hypervisor_type = 5;
-  // A version that hypervisor ships; the newest by default.
+  // A version that hypervisor ships. Empty is its default version, which
+  // HypervisorInfo lists first.
   string hypervisor_version = 6;
   string kernel_name = 7;
   string kernel_args = 8;
@@ -561,7 +564,8 @@ message CreateInstanceRequest {
   string image_ref = 2;
   // Unspecified means Cloud Hypervisor.
   HypervisorType hypervisor_type = 3;
-  // A version that hypervisor ships; the newest by default.
+  // A version that hypervisor ships. Empty is its default version, which
+  // HypervisorInfo lists first.
   string hypervisor_version = 4;
   // Empty means the default kernel, "default".
   string kernel_name = 5;
@@ -804,8 +808,10 @@ enum LogSource {
   // The guest's serial console: the kernel's boot messages, dicer-init's,
   // and whatever the workload writes to the console.
   LOG_SOURCE_GUEST = 1;
-  // The hypervisor's own log, which explains a guest that never booted. It
-  // is discarded when the instance stops.
+  // The hypervisor's own log, which explains a guest that crashed or never
+  // booted. It is kept after the instance ends on its own, and across its
+  // restarts. It is discarded when the instance is stopped, put on standby
+  // or deleted, when a start fails, and when the host reboots.
   LOG_SOURCE_HYPERVISOR = 2;
 }
 
@@ -1226,13 +1232,13 @@ message GetResourcesResponse {
   ResourceCapacity memory = 2;
   // The filesystem holding the data directory. Reported, not enforced.
   DiskUsage disk = 3;
-  // The instances holding CPU and memory -- those starting, running or
-  // paused -- in name order.
+  // The instances CPU and memory are committed to -- those starting,
+  // running or paused -- in name order.
   repeated InstanceResources instances = 4;
 }
 
 // ResourceCapacity is how much of one resource instances may be given, and
-// how much they hold. A start that would take allocated past allocatable is
+// how much is committed to them. A start that would take allocated past allocatable is
 // refused.
 message ResourceCapacity {
   // What the host has: its logical CPUs, or its memory.
@@ -1243,7 +1249,7 @@ message ResourceCapacity {
   double overcommit = 3;
   // What instances may be given in total: (host - reserved) * overcommit.
   int64 allocatable = 4;
-  // What instances hold.
+  // What is committed to instances.
   int64 allocated = 5;
   // What is left for further instances: allocatable - allocated, or 0.
   int64 available = 6;
@@ -1263,7 +1269,7 @@ message DiskUsage {
   int64 provisioned_bytes = 4;
 }
 
-// InstanceResources is what one instance holds.
+// InstanceResources is what is committed to one instance.
 message InstanceResources {
   string name = 1;
   InstanceState state = 2;

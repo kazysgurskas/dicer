@@ -185,7 +185,8 @@ type rawService struct {
 	Hypervisor string `yaml:"hypervisor"`
 
 	// HypervisorVersion is a version of the hypervisor the daemon ships, as
-	// `dicer run --hypervisor-version`. Unset is the newest.
+	// `dicer run --hypervisor-version`. Unset is the hypervisor's default
+	// version, which `dicer info` shows.
 	HypervisorVersion string `yaml:"hypervisor_version"`
 
 	// InitMode is `auto`, `exec` or `systemd`, as `dicer run --init-mode`: see

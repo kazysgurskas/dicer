@@ -27,8 +27,8 @@ func newInfoCommand() *cobra.Command {
 		Short: "Show the daemon, and how much of its host is in use",
 		Long: "Shows the daemon, how it is reached, and how much of its host's CPU,\n" +
 			"memory and disk is in use.\n\n" +
-			"An instance holds its vCPUs and memory while it is starting, running or\n" +
-			"paused. A start that would take more than the host allows is refused; what\n" +
+			"An instance's vCPUs and memory are committed to it while it is starting,\n" +
+			"running or paused. A start that would take more than the host allows is refused; what\n" +
 			"it allows is its CPUs and memory, less a reserve, stretched by the\n" +
 			"overcommit set in the daemon's configuration. Disk is reported, not\n" +
 			"enforced: disks are sparse, and what an instance has been given says\n" +

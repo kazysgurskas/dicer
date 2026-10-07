@@ -31,8 +31,9 @@ const (
 	// LogSourceGuest is the guest's serial console. It is the default.
 	LogSourceGuest LogSource = "guest"
 
-	// LogSourceHypervisor is the hypervisor's log. It is discarded when the
-	// instance stops.
+	// LogSourceHypervisor is the hypervisor's log. It is in the runtime
+	// directory, and goes with it: when the instance is stopped, put on
+	// standby or deleted, and when a start fails.
 	LogSourceHypervisor LogSource = "hypervisor"
 )
 

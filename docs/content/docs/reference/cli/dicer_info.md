@@ -7,8 +7,8 @@ description: "Show the daemon, and how much of its host is in use"
 Shows the daemon, how it is reached, and how much of its host's CPU,
 memory and disk is in use.
 
-An instance holds its vCPUs and memory while it is starting, running or
-paused. A start that would take more than the host allows is refused; what
+An instance's vCPUs and memory are committed to it while it is starting,
+running or paused. A start that would take more than the host allows is refused; what
 it allows is its CPUs and memory, less a reserve, stretched by the
 overcommit set in the daemon's configuration. Disk is reported, not
 enforced: disks are sparse, and what an instance has been given says

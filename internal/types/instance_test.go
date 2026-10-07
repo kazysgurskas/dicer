@@ -61,6 +61,20 @@ func TestInstanceStateCanTransitionTo(t *testing.T) {
 	}
 }
 
+// Lowercase is what follows "is" in a message: "instance web is on
+// standby", not "is standby".
+func TestInstanceStateLowercase(t *testing.T) {
+	for state, want := range map[InstanceState]string{
+		InstanceStateRunning:    "running",
+		InstanceStateRestarting: "restarting",
+		InstanceStateStandby:    "on standby",
+	} {
+		if got := state.Lowercase(); got != want {
+			t.Errorf("%s.Lowercase() = %q, want %q", state, got, want)
+		}
+	}
+}
+
 func TestRestartPolicyValidate(t *testing.T) {
 	valid := []RestartPolicy{
 		{},

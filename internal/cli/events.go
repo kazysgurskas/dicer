@@ -33,12 +33,13 @@ const maxNameWidth = 40
 func newEventsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "events",
-		Short: "Show what has happened to the instances, images, networks, volumes and kernels on the host",
+		Short: "Show what has happened to the instances, snapshots, images, networks, volumes and kernels on the host",
 		Long: "Shows what has happened on the host: instances created, started, stopped,\n" +
-			"crashed and restarted, health checks failing and recovering, images pulled\n" +
-			"and collected, networks and volumes created and deleted, kernels imported\n" +
-			"and fetched. The daemon keeps them, so they explain what happened while\n" +
-			"nobody was looking, and they survive it restarting.\n\n" +
+			"crashed and restarted, health checks failing and recovering, snapshots\n" +
+			"taken and deleted, images pulled and collected, networks and volumes\n" +
+			"created and deleted, kernels imported and fetched. The daemon keeps them,\n" +
+			"so they explain what happened while nobody was looking, and they survive\n" +
+			"it restarting.\n\n" +
 			"Like logs, it prints what is kept and exits; -f keeps following new\n" +
 			"events. With --format json it prints one JSON object a line, for scripts.",
 		Example: "  dicer events\n" +

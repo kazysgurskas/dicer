@@ -209,7 +209,7 @@ depends_on:
 
 *string*
 
-`hypervisor_version` is a version of the hypervisor the daemon ships, as `dicer run --hypervisor-version`. Unset is the newest.
+`hypervisor_version` is a version of the hypervisor the daemon ships, as `dicer run --hypervisor-version`. Unset is the hypervisor's default version, which `dicer info` shows.
 
 ### `services.*.init_mode` {#services-init-mode}
 

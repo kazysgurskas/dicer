@@ -54,9 +54,9 @@ was, and whose message says it for a person:
 | `StopInstance` | [`StopInstanceRequest`](#stopinstancerequest) | [`Instance`](#instance) | StopInstance shuts a running instance down, keeping its definition, overlay disk and address. |
 | `PauseInstance` | [`PauseInstanceRequest`](#pauseinstancerequest) | [`Instance`](#instance) | PauseInstance halts a running instance's vCPUs, keeping it resident. |
 | `ResumeInstance` | [`ResumeInstanceRequest`](#resumeinstancerequest) | [`Instance`](#instance) | ResumeInstance continues a paused instance. |
-| `StandbyInstance` | [`StandbyInstanceRequest`](#standbyinstancerequest) | [`Instance`](#instance) | StandbyInstance freezes a running or paused instance to disk and ends its hypervisor, freeing the CPU and memory it holds, and keeping its address, host ports and writable volumes. StartInstance resumes it where it was; StopInstance discards what was frozen. |
+| `StandbyInstance` | [`StandbyInstanceRequest`](#standbyinstancerequest) | [`Instance`](#instance) | StandbyInstance freezes a running or paused instance to disk and ends its hypervisor, freeing the CPU and memory committed to it. It keeps its address, host ports and writable volumes. StartInstance resumes it where it was; StopInstance discards what was frozen. |
 | `ForkInstance` | [`ForkInstanceRequest`](#forkinstancerequest) | [`Instance`](#instance) | ForkInstance creates an instance as a copy of another. It is the same as CreateSnapshot followed by ForkSnapshot, except that no snapshot is kept. A running or paused instance is paused while its memory is written, and its fork runs. A stopped instance's fork is stopped. An instance that can write to a volume can be forked only while it is stopped. |
-| `ResizeInstance` | [`ResizeInstanceRequest`](#resizeinstancerequest) | [`Instance`](#instance) | ResizeInstance changes a running instance's vCPUs and memory without restarting it, within its max_vcpus and max_memory_bytes, and its definition with them, so it keeps them when it next starts. Memory can be resized from what the instance booted with up to its maximum, in steps of 2 MiB, and waits for the guest where the hypervisor can tell: Firecracker can, Cloud Hypervisor cannot; Firecracker also needs a host CPU with at least 40 bits of physical address. vCPUs can be resized on Cloud Hypervisor only. The guest's kernel must support virtio-mem and CPU hotplug. Growing needs room on the host (RESOURCE_EXHAUSTED). If the guest fails the resize, the instance holds the larger of the two sizes until it next starts. |
+| `ResizeInstance` | [`ResizeInstanceRequest`](#resizeinstancerequest) | [`Instance`](#instance) | ResizeInstance changes a running instance's vCPUs and memory without restarting it, within its max_vcpus and max_memory_bytes, and its definition with them, so it keeps them when it next starts. Memory can be resized from what the instance booted with up to its maximum, in steps of 2 MiB, and waits for the guest where the hypervisor can tell: Firecracker can, Cloud Hypervisor cannot; Firecracker also needs a host CPU with at least 40 bits of physical address. vCPUs can be resized on Cloud Hypervisor only. The guest's kernel must support virtio-mem and CPU hotplug. Growing needs room on the host (RESOURCE_EXHAUSTED). If the guest fails the resize, the larger of the two sizes stays committed to the instance until it next starts. |
 | `DeleteInstance` | [`DeleteInstanceRequest`](#deleteinstancerequest) | `google.protobuf.Empty` | DeleteInstance removes an instance and its overlay disk. It refuses a running instance unless force is set. |
 | `ListInstances` | [`ListInstancesRequest`](#listinstancesrequest) | [`ListInstancesResponse`](#listinstancesresponse) | ListInstances returns every defined instance. |
 | `GetInstance` | [`GetInstanceRequest`](#getinstancerequest) | [`Instance`](#instance) | GetInstance returns one instance. |
@@ -91,7 +91,7 @@ was, and whose message says it for a person:
 | `GetKernel` | [`GetKernelRequest`](#getkernelrequest) | [`Kernel`](#kernel) | GetKernel returns one kernel. |
 | `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance references. The default kernel cannot be deleted. |
 | `GetHostInfo` | [`GetHostInfoRequest`](#gethostinforequest) | [`GetHostInfoResponse`](#gethostinforesponse) | GetHostInfo reports what the daemon is: its version, the hypervisors it carries, and how it is reached. |
-| `GetResources` | [`GetResourcesRequest`](#getresourcesrequest) | [`GetResourcesResponse`](#getresourcesresponse) | GetResources reports how much CPU and memory instances may be given, how much they hold, and how full the data directory's disk is. |
+| `GetResources` | [`GetResourcesRequest`](#getresourcesrequest) | [`GetResourcesResponse`](#getresourcesresponse) | GetResources reports how much CPU and memory instances may be given, how much is committed to them, and how full the data directory's disk is. |
 | `GetEvents` | [`GetEventsRequest`](#geteventsrequest) | stream [`GetEventsResponse`](#geteventsresponse) | GetEvents streams what has happened to the resources on this host: the history kept, oldest first, in batches, then, with follow, each new event as it happens, none missed between the two. A follower that does not keep up is disconnected with RESOURCE_EXHAUSTED rather than slowing the host. |
 
 
@@ -133,7 +133,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | `name` | `string` |  |
 | `image_ref` | `string` |  |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | Unspecified means Cloud Hypervisor. |
-| `hypervisor_version` | `string` | A version that hypervisor ships; the newest by default. |
+| `hypervisor_version` | `string` | A version that hypervisor ships. Empty is its default version, which HypervisorInfo lists first. |
 | `kernel_name` | `string` | Empty means the default kernel, "default". |
 | `kernel_args` | `string` |  |
 | `vcpus` | `int32` |  |
@@ -430,7 +430,7 @@ GetEventsResponse is a batch of events, oldest first.
 | `cpu` | [`ResourceCapacity`](#resourcecapacity) | vCPUs, counted in vCPUs. |
 | `memory` | [`ResourceCapacity`](#resourcecapacity) | Guest memory, counted in bytes. |
 | `disk` | [`DiskUsage`](#diskusage) | The filesystem holding the data directory. Reported, not enforced. |
-| `instances` | repeated [`InstanceResources`](#instanceresources) | The instances holding CPU and memory -- those starting, running or paused -- in name order. |
+| `instances` | repeated [`InstanceResources`](#instanceresources) | The instances CPU and memory are committed to -- those starting, running or paused -- in name order. |
 
 ### GetSnapshotRequest
 
@@ -544,7 +544,7 @@ is not running.
 | `hostname` | `string` |  |
 | `image_ref` | `string` |  |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | The hypervisor the instance runs on: Cloud Hypervisor if it was created without one. |
-| `hypervisor_version` | `string` | A version that hypervisor ships; the newest by default. |
+| `hypervisor_version` | `string` | A version that hypervisor ships. Empty is its default version, which HypervisorInfo lists first. |
 | `kernel_name` | `string` |  |
 | `kernel_args` | `string` |  |
 | `vcpus` | `int32` |  |
@@ -605,7 +605,7 @@ is not running.
 
 ### InstanceResources
 
-InstanceResources is what one instance holds.
+InstanceResources is what is committed to one instance.
 
 | Field | Type | Description |
 |---|---|---|
@@ -854,7 +854,7 @@ are set, leaving the other as it is. At least one must be.
 ### ResourceCapacity
 
 ResourceCapacity is how much of one resource instances may be given, and
-how much they hold. A start that would take allocated past allocatable is
+how much is committed to them. A start that would take allocated past allocatable is
 refused.
 
 | Field | Type | Description |
@@ -863,7 +863,7 @@ refused.
 | `reserved` | `int64` | What is kept back from instances for the host itself. |
 | `overcommit` | `double` | How far what remains is stretched: 4 lets four vCPUs share each CPU. |
 | `allocatable` | `int64` | What instances may be given in total: (host - reserved) * overcommit. |
-| `allocated` | `int64` | What instances hold. |
+| `allocated` | `int64` | What is committed to instances. |
 | `available` | `int64` | What is left for further instances: allocatable - allocated, or 0. |
 
 ### RestartPolicy
@@ -1090,9 +1090,9 @@ InstanceState is where an instance is in its lifecycle.
 | `INSTANCE_STATE_RUNNING` | 3 | The guest is running. |
 | `INSTANCE_STATE_PAUSED` | 4 | The guest's vCPUs are halted, and it is kept resident. |
 | `INSTANCE_STATE_STOPPING` | 5 | A stop is in progress. |
-| `INSTANCE_STATE_RESTARTING` | 6 | The instance ended without being asked to, and its restart policy will start it again at next_restart_time. It holds nothing meanwhile. |
+| `INSTANCE_STATE_RESTARTING` | 6 | The instance ended without being asked to, and its restart policy will start it again at next_restart_time. Nothing is committed to it meanwhile. |
 | `INSTANCE_STATE_FAILED` | 7 | The last operation failed; state_error says why. |
-| `INSTANCE_STATE_STANDBY` | 8 | The guest is frozen to disk, its hypervisor ended: it holds no CPU or memory, and starting it resumes it where it was. |
+| `INSTANCE_STATE_STANDBY` | 8 | The guest is frozen to disk and its hypervisor has ended, so no CPU or memory is committed to it. Starting it resumes it where it was. |
 
 ### LogSource
 
@@ -1102,7 +1102,7 @@ LogSource is one of the logs an instance produces.
 |---|---|---|
 | `LOG_SOURCE_UNSPECIFIED` | 0 | Defaults to the guest's console. |
 | `LOG_SOURCE_GUEST` | 1 | The guest's serial console: the kernel's boot messages, dicer-init's, and whatever the workload writes to the console. |
-| `LOG_SOURCE_HYPERVISOR` | 2 | The hypervisor's own log, which explains a guest that never booted. It is discarded when the instance stops. |
+| `LOG_SOURCE_HYPERVISOR` | 2 | The hypervisor's own log, which explains a guest that crashed or never booted. It is kept after the instance ends on its own, and across its restarts. It is discarded when the instance is stopped, put on standby or deleted, when a start fails, and when the host reboots. |
 
 ### MountType
 

@@ -333,9 +333,14 @@ func (s InstanceState) IsActive() bool {
 // String returns the state as it is written: "Running".
 func (s InstanceState) String() string { return string(s) }
 
-// Lowercase returns the state as a sentence says it: "running", not
-// "Running".
-func (s InstanceState) Lowercase() string { return strings.ToLower(string(s)) }
+// Lowercase returns the state as a sentence says it after "is": "running",
+// not "Running", and "on standby".
+func (s InstanceState) Lowercase() string {
+	if s == InstanceStateStandby {
+		return "on standby"
+	}
+	return strings.ToLower(string(s))
+}
 
 // InitMode is how the guest starts an instance's command.
 type InitMode string

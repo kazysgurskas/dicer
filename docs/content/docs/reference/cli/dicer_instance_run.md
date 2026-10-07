@@ -50,7 +50,7 @@ $ dicer run -d --vcpus 2 alpine:3.21 sleep infinity
 | `--health-timeout duration` | Time a health check may take (default 5s). |
 | `--hostname string` | Guest hostname (default: the instance name). |
 | `--hypervisor-type string` | Hypervisor: cloud-hypervisor or firecracker (default: cloud-hypervisor). |
-| `--hypervisor-version string` | Hypervisor version (default: the newest available). |
+| `--hypervisor-version string` | Hypervisor version (default: the hypervisor's default version, which `dicer info` shows). |
 | `--init-mode string` | How the guest starts the command: auto, exec (as PID 1 of its own PID namespace) or systemd (default auto). |
 | `--ip string` | Static IP address (default: assigned from the subnet). |
 | `--kernel string` | Kernel to boot with (default: the default kernel). |

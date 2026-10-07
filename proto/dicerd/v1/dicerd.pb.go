@@ -94,12 +94,13 @@ const (
 	// A stop is in progress.
 	InstanceState_INSTANCE_STATE_STOPPING InstanceState = 5
 	// The instance ended without being asked to, and its restart policy will
-	// start it again at next_restart_time. It holds nothing meanwhile.
+	// start it again at next_restart_time. Nothing is committed to it
+	// meanwhile.
 	InstanceState_INSTANCE_STATE_RESTARTING InstanceState = 6
 	// The last operation failed; state_error says why.
 	InstanceState_INSTANCE_STATE_FAILED InstanceState = 7
-	// The guest is frozen to disk, its hypervisor ended: it holds no CPU or
-	// memory, and starting it resumes it where it was.
+	// The guest is frozen to disk and its hypervisor has ended, so no CPU or
+	// memory is committed to it. Starting it resumes it where it was.
 	InstanceState_INSTANCE_STATE_STANDBY InstanceState = 8
 )
 
@@ -742,8 +743,10 @@ const (
 	// The guest's serial console: the kernel's boot messages, dicer-init's,
 	// and whatever the workload writes to the console.
 	LogSource_LOG_SOURCE_GUEST LogSource = 1
-	// The hypervisor's own log, which explains a guest that never booted. It
-	// is discarded when the instance stops.
+	// The hypervisor's own log, which explains a guest that crashed or never
+	// booted. It is kept after the instance ends on its own, and across its
+	// restarts. It is discarded when the instance is stopped, put on standby
+	// or deleted, when a start fails, and when the host reboots.
 	LogSource_LOG_SOURCE_HYPERVISOR LogSource = 2
 )
 
@@ -914,7 +917,8 @@ type Instance struct {
 	// The hypervisor the instance runs on: Cloud Hypervisor if it was created
 	// without one.
 	HypervisorType HypervisorType `protobuf:"varint,5,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
-	// A version that hypervisor ships; the newest by default.
+	// A version that hypervisor ships. Empty is its default version, which
+	// HypervisorInfo lists first.
 	HypervisorVersion string `protobuf:"bytes,6,opt,name=hypervisor_version,json=hypervisorVersion,proto3" json:"hypervisor_version,omitempty"`
 	KernelName        string `protobuf:"bytes,7,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
 	KernelArgs        string `protobuf:"bytes,8,opt,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
@@ -1894,7 +1898,8 @@ type CreateInstanceRequest struct {
 	ImageRef string                 `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
 	// Unspecified means Cloud Hypervisor.
 	HypervisorType HypervisorType `protobuf:"varint,3,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
-	// A version that hypervisor ships; the newest by default.
+	// A version that hypervisor ships. Empty is its default version, which
+	// HypervisorInfo lists first.
 	HypervisorVersion string `protobuf:"bytes,4,opt,name=hypervisor_version,json=hypervisorVersion,proto3" json:"hypervisor_version,omitempty"`
 	// Empty means the default kernel, "default".
 	KernelName  string `protobuf:"bytes,5,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
@@ -6605,8 +6610,8 @@ type GetResourcesResponse struct {
 	Memory *ResourceCapacity `protobuf:"bytes,2,opt,name=memory,proto3" json:"memory,omitempty"`
 	// The filesystem holding the data directory. Reported, not enforced.
 	Disk *DiskUsage `protobuf:"bytes,3,opt,name=disk,proto3" json:"disk,omitempty"`
-	// The instances holding CPU and memory -- those starting, running or
-	// paused -- in name order.
+	// The instances CPU and memory are committed to -- those starting,
+	// running or paused -- in name order.
 	Instances     []*InstanceResources `protobuf:"bytes,4,rep,name=instances,proto3" json:"instances,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -6671,7 +6676,7 @@ func (x *GetResourcesResponse) GetInstances() []*InstanceResources {
 }
 
 // ResourceCapacity is how much of one resource instances may be given, and
-// how much they hold. A start that would take allocated past allocatable is
+// how much is committed to them. A start that would take allocated past allocatable is
 // refused.
 type ResourceCapacity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -6683,7 +6688,7 @@ type ResourceCapacity struct {
 	Overcommit float64 `protobuf:"fixed64,3,opt,name=overcommit,proto3" json:"overcommit,omitempty"`
 	// What instances may be given in total: (host - reserved) * overcommit.
 	Allocatable int64 `protobuf:"varint,4,opt,name=allocatable,proto3" json:"allocatable,omitempty"`
-	// What instances hold.
+	// What is committed to instances.
 	Allocated int64 `protobuf:"varint,5,opt,name=allocated,proto3" json:"allocated,omitempty"`
 	// What is left for further instances: allocatable - allocated, or 0.
 	Available     int64 `protobuf:"varint,6,opt,name=available,proto3" json:"available,omitempty"`
@@ -6838,7 +6843,7 @@ func (x *DiskUsage) GetProvisionedBytes() int64 {
 	return 0
 }
 
-// InstanceResources is what one instance holds.
+// InstanceResources is what is committed to one instance.
 type InstanceResources struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
