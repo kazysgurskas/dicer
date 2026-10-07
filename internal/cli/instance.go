@@ -247,6 +247,8 @@ func newInstanceUpdateCommand() *cobra.Command {
 			"leaves the rest as it was. A list or map given -- --env, --label,\n" +
 			"--publish, --mount -- replaces the old one whole.\n\n" +
 			"A command after -- replaces the one the instance runs.\n\n" +
+			"A larger --disk grows the overlay disk at the next start. The disk cannot\n" +
+			"shrink.\n\n" +
 			"The restart policy and --standby-after alone can be changed while the\n" +
 			"instance runs: they apply at once.",
 		Example: "  dicer update web --memory 2GiB --vcpus 2\n" +

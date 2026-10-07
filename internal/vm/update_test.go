@@ -5,6 +5,7 @@ package vm
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -64,4 +65,35 @@ func TestUpdateChangesTheRestartPolicyOfARunningInstance(t *testing.T) {
 	h.crash(t)
 	h.waitForVMMs(t, 2)
 	h.waitForState(t, types.InstanceStateRunning)
+}
+
+// An overlay disk grows to a larger disk_bytes at the next start, but cannot
+// shrink, so an update to less than it has is refused.
+func TestUpdateRefusesToShrinkTheOverlayDisk(t *testing.T) {
+	tests := []struct {
+		name       string
+		diskBytes  int64
+		hasOverlay bool
+		want       error
+	}{
+		{name: "larger", diskBytes: 64 << 20, hasOverlay: true},
+		{name: "smaller", diskBytes: 1 << 20, hasOverlay: true, want: errdefs.ErrInvalidArgument},
+		{name: "smaller before the first start", diskBytes: 1 << 20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			if !tt.hasOverlay {
+				if err := os.Remove(h.overlay); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			changed := h.instance
+			changed.DiskBytes = tt.diskBytes
+			if err := h.manager.Update(t.Context(), changed); !errors.Is(err, tt.want) {
+				t.Errorf("Update = %v, want %v", err, tt.want)
+			}
+		})
+	}
 }

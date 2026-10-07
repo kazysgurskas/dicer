@@ -6,8 +6,11 @@ package vm
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -23,7 +26,8 @@ import (
 
 // Update replaces a stopped instance's definition. A change to its restart
 // policy or standby_after alone is accepted in any state. Changing the network or static IP
-// releases the instance's address.
+// releases the instance's address. A larger disk_bytes grows the overlay
+// disk at the next start; a smaller one than the overlay disk is refused.
 func (m *Manager) Update(ctx context.Context, updated types.InstanceSpec) error {
 	lock := m.lock(updated.ID)
 	lock.Lock()
@@ -38,8 +42,8 @@ func (m *Manager) Update(ctx context.Context, updated types.InstanceSpec) error 
 	if err != nil {
 		return err
 	}
-	if status.State != types.InstanceStateStopped && !onlyPoliciesDiffer(current, updated) {
-		return errdefs.InvalidState("instance %q is %s; stop it before changing it", current.Name, status.State.Lowercase())
+	if err := m.checkCanUpdate(current, updated, status.State); err != nil {
+		return err
 	}
 
 	if err := m.definitions.UpdateInstance(updated); err != nil {
@@ -54,6 +58,34 @@ func (m *Manager) Update(ctx context.Context, updated types.InstanceSpec) error 
 		}
 	}
 
+	return nil
+}
+
+// checkCanUpdate returns an error unless current, in state, can be changed
+// to updated: only its restart policy and standby_after can change while it
+// is not stopped, and its overlay disk cannot shrink.
+func (m *Manager) checkCanUpdate(current, updated types.InstanceSpec, state types.InstanceState) error {
+	if state != types.InstanceStateStopped && !onlyPoliciesDiffer(current, updated) {
+		return errdefs.InvalidState("instance %q is %s; stop it before changing it", current.Name, state.Lowercase())
+	}
+	if updated.DiskBytes == current.DiskBytes {
+		return nil
+	}
+
+	// The overlay disk grows to disk_bytes at the next start. Before the
+	// first, there is none to shrink.
+	info, err := os.Stat(m.overlayDiskPath(current))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read overlay disk size: %w", err)
+	}
+	if updated.DiskBytes < info.Size() {
+		return errdefs.InvalidArgument("instance %q has a %s overlay disk, which cannot shrink: "+
+			"give it at least %[2]s, or recreate the instance for a smaller disk",
+			current.Name, humanize.Bytes(info.Size()))
+	}
 	return nil
 }
 

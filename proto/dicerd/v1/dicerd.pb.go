@@ -2203,7 +2203,9 @@ type UpdateInstanceRequest struct {
 	// Zero removes the maximum.
 	MaxVcpus       *int32 `protobuf:"varint,25,opt,name=max_vcpus,json=maxVcpus,proto3,oneof" json:"max_vcpus,omitempty"`
 	MaxMemoryBytes *int64 `protobuf:"varint,26,opt,name=max_memory_bytes,json=maxMemoryBytes,proto3,oneof" json:"max_memory_bytes,omitempty"`
-	DiskBytes      *int64 `protobuf:"varint,9,opt,name=disk_bytes,json=diskBytes,proto3,oneof" json:"disk_bytes,omitempty"`
+	// The overlay disk grows to it at the instance's next start. It cannot
+	// shrink, so a size smaller than the overlay disk is refused.
+	DiskBytes *int64 `protobuf:"varint,9,opt,name=disk_bytes,json=diskBytes,proto3,oneof" json:"disk_bytes,omitempty"`
 	// Zero removes the limit.
 	DiskBytesPerSecond     *int64 `protobuf:"varint,27,opt,name=disk_bytes_per_second,json=diskBytesPerSecond,proto3,oneof" json:"disk_bytes_per_second,omitempty"`
 	DiskIops               *int64 `protobuf:"varint,28,opt,name=disk_iops,json=diskIops,proto3,oneof" json:"disk_iops,omitempty"`

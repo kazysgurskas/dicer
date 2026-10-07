@@ -631,6 +631,8 @@ message UpdateInstanceRequest {
   // Zero removes the maximum.
   optional int32 max_vcpus = 25;
   optional int64 max_memory_bytes = 26;
+  // The overlay disk grows to it at the instance's next start. It cannot
+  // shrink, so a size smaller than the overlay disk is refused.
   optional int64 disk_bytes = 9;
   // Zero removes the limit.
   optional int64 disk_bytes_per_second = 27;

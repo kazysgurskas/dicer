@@ -945,7 +945,7 @@ the existing value whole.
 | `memory_bytes` | optional `int64` | One of `_memory_bytes`.  |
 | `max_vcpus` | optional `int32` | One of `_max_vcpus`. Zero removes the maximum. |
 | `max_memory_bytes` | optional `int64` | One of `_max_memory_bytes`.  |
-| `disk_bytes` | optional `int64` | One of `_disk_bytes`.  |
+| `disk_bytes` | optional `int64` | One of `_disk_bytes`. The overlay disk grows to it at the instance's next start. It cannot shrink, so a size smaller than the overlay disk is refused. |
 | `disk_bytes_per_second` | optional `int64` | One of `_disk_bytes_per_second`. Zero removes the limit. |
 | `disk_iops` | optional `int64` | One of `_disk_iops`.  |
 | `upload_bytes_per_second` | optional `int64` | One of `_upload_bytes_per_second`.  |

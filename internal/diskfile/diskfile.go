@@ -1,12 +1,13 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package diskfile makes, copies and measures disk files: the sparse files
+// Package diskfile makes, grows, copies and measures disk files: the sparse files
 // that hold a guest's disks on the host.
 package diskfile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,6 +67,43 @@ func create(ctx context.Context, path string, sizeBytes int64, dir string) (err 
 
 	if err := os.Rename(partial, path); err != nil {
 		return fmt.Errorf("install disk: %w", err)
+	}
+	return nil
+}
+
+// GrowExt4 grows the ext4 disk file at path, and its filesystem, to
+// sizeBytes. A disk that is already that large is left as it is. The
+// filesystem must not be mounted. Growing needs e2fsck and resize2fs, from
+// e2fsprogs. If the filesystem cannot be grown, the file keeps its size.
+func GrowExt4(ctx context.Context, path string, sizeBytes int64) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.Size() >= sizeBytes {
+		return nil
+	}
+
+	// resize2fs refuses a filesystem that has not just been checked. Exit
+	// status 1 means e2fsck fixed what it found.
+	out, err := exec.CommandContext(ctx, "e2fsck", "-f", "-p", path).CombinedOutput()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		err = nil
+	}
+	if err != nil {
+		return fmt.Errorf("check disk: %w: %s", err, out)
+	}
+
+	if err := os.Truncate(path, sizeBytes); err != nil {
+		return fmt.Errorf("grow disk file: %w", err)
+	}
+	if out, err := exec.CommandContext(ctx, "resize2fs", path).CombinedOutput(); err != nil {
+		resizeErr := fmt.Errorf("grow filesystem: %w: %s", err, out)
+		if err := os.Truncate(path, info.Size()); err != nil {
+			return errors.Join(resizeErr, fmt.Errorf("restore disk file size: %w", err))
+		}
+		return resizeErr
 	}
 	return nil
 }

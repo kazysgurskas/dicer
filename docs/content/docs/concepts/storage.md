@@ -30,11 +30,17 @@ It is kept across stops and restarts until the instance is deleted.
 Disks are sparse: each takes up only the space the guest has written to it,
 however large it is.
 
-{{< callout type="warning" >}}
-  An overlay disk's size is fixed when it is created. Changing an
-  instance's `--disk` afterwards does not resize the overlay disk it
-  already has.
-{{< /callout >}}
+To give a stopped instance a larger overlay disk, raise its `--disk`:
+
+```console
+$ dicer update web --disk 20GiB
+```
+
+The disk and the filesystem in it grow when the instance next starts, and
+what the guest has written is kept. An overlay disk cannot shrink, so a
+size smaller than the disk already has is refused. Restoring a snapshot
+puts back the disk as it was then, at its size then, and it grows again at
+the next start.
 
 ## Volumes
 

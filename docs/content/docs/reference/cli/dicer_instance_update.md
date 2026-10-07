@@ -10,6 +10,9 @@ leaves the rest as it was. A list or map given -- `--env`, `--label`,
 
 A command after -- replaces the one the instance runs.
 
+A larger `--disk` grows the overlay disk at the next start. The disk cannot
+shrink.
+
 The restart policy and `--standby-after` alone can be changed while the
 instance runs: they apply at once.
 

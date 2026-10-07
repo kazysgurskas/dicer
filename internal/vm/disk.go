@@ -16,9 +16,13 @@ import (
 )
 
 // ensureOverlayDisk creates the writable ext4 overlay disk if it does not
-// exist.
+// exist, and grows one smaller than sizeBytes: one the instance's disk_bytes
+// has been raised for, or one a snapshot restored at its older size.
 func ensureOverlayDisk(ctx context.Context, path string, sizeBytes int64) error {
 	if _, err := os.Stat(path); err == nil {
+		if err := diskfile.GrowExt4(ctx, path, sizeBytes); err != nil {
+			return fmt.Errorf("grow overlay disk: %w", err)
+		}
 		return nil
 	}
 	if err := diskfile.CreateExt4(ctx, path, sizeBytes); err != nil {
