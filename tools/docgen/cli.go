@@ -262,7 +262,7 @@ func writeFlags(b *bytes.Buffer, flags *pflag.FlagSet, note string, commands map
 			name = "`-" + f.Shorthand + "`, " + name
 		}
 
-		text := asCode(strings.TrimSuffix(usage, ".")+".", nil, commands)
+		text := asCode(quotedCommands(strings.TrimSuffix(usage, "."))+".", nil, commands)
 		if !zeroDefaults[f.DefValue] && !strings.Contains(usage, "(default") {
 			text += " Default: `" + f.DefValue + "`."
 		}

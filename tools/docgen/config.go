@@ -656,7 +656,7 @@ func anchor(key string) string {
 // an environment variable, or a configuration key of more than one word.
 var codeWords = regexp.MustCompile(
 	`\bdicer(?: [a-z][a-z-]*){0,2}\b` +
-		`|(?:^|[\s(])--[a-z][a-z-]*` +
+		`|(?:^|[\s(])--[a-z][a-z0-9-]*` +
 		`|(?:^|[\s(])/(?:etc|run|var|usr|home|tmp|opt)/[\w./@:-]*[\w/]` +
 		`|\$?\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b` +
 		`|\b[a-z][a-z0-9]*(?:[._][a-z0-9]+)+\b`)
@@ -705,7 +705,7 @@ func asCode(text string, keys, commands map[string]bool) string {
 
 // commandFlags matches a command written as code and a flag after it, which
 // are one piece of code: `dicer compose up --pull`.
-var commandFlags = regexp.MustCompile("`(dicer [^`]*)` `(--[a-z][a-z-]*)`")
+var commandFlags = regexp.MustCompile("`(dicer [^`]*)` `(--[a-z][a-z0-9-]*)`")
 
 // replaceWords replaces each match of codeWords in text with what replace
 // returns for it, given the text after it.
