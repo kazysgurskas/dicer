@@ -165,7 +165,8 @@ type DaemonServiceClient interface {
 	GetInstanceStats(ctx context.Context, in *GetInstanceStatsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetInstanceStatsResponse], error)
 	// ListInstanceProcesses returns the processes running in a running
 	// instance, as its guest sees them: kernel threads are left out, and PIDs
-	// are the ones a command run by ExecInstance sees.
+	// are the ones a command run by ExecInstance sees. Like ExecInstance, it
+	// waits for a guest that is still booting.
 	ListInstanceProcesses(ctx context.Context, in *ListInstanceProcessesRequest, opts ...grpc.CallOption) (*ListInstanceProcessesResponse, error)
 	// CreateSnapshot freezes an instance to disk. Of a running or paused
 	// instance it takes a memory snapshot: its memory, its device state and a
@@ -195,14 +196,17 @@ type DaemonServiceClient interface {
 	ForkSnapshot(ctx context.Context, in *ForkSnapshotRequest, opts ...grpc.CallOption) (*Instance, error)
 	// ExecInstance runs a command inside a running instance. The first client
 	// message must be an ExecInstanceStart; subsequent messages carry stdin data
-	// or terminal resize events.
+	// or terminal resize events. If the guest is still booting, the call waits
+	// up to 30 seconds for its agent to answer before failing with UNAVAILABLE.
 	ExecInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInstanceRequest, ExecInstanceResponse], error)
 	// CopyToInstance writes a file or directory into a running instance. The
 	// first message must be a CopyToInstanceStart; the rest carry a tar
 	// archive of it, in chunks, which lands at the path as cp would put it.
+	// Like ExecInstance, it waits for a guest that is still booting.
 	CopyToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyToInstanceRequest, emptypb.Empty], error)
 	// CopyFromInstance reads a file or directory out of a running instance, as
-	// a tar archive in chunks.
+	// a tar archive in chunks. Like ExecInstance, it waits for a guest that is
+	// still booting.
 	CopyFromInstance(ctx context.Context, in *CopyFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CopyFromInstanceResponse], error)
 	// CreateNetwork defines a host-local network. Its bridge is brought up
 	// when the first instance on it starts.
@@ -874,7 +878,8 @@ type DaemonServiceServer interface {
 	GetInstanceStats(*GetInstanceStatsRequest, grpc.ServerStreamingServer[GetInstanceStatsResponse]) error
 	// ListInstanceProcesses returns the processes running in a running
 	// instance, as its guest sees them: kernel threads are left out, and PIDs
-	// are the ones a command run by ExecInstance sees.
+	// are the ones a command run by ExecInstance sees. Like ExecInstance, it
+	// waits for a guest that is still booting.
 	ListInstanceProcesses(context.Context, *ListInstanceProcessesRequest) (*ListInstanceProcessesResponse, error)
 	// CreateSnapshot freezes an instance to disk. Of a running or paused
 	// instance it takes a memory snapshot: its memory, its device state and a
@@ -904,14 +909,17 @@ type DaemonServiceServer interface {
 	ForkSnapshot(context.Context, *ForkSnapshotRequest) (*Instance, error)
 	// ExecInstance runs a command inside a running instance. The first client
 	// message must be an ExecInstanceStart; subsequent messages carry stdin data
-	// or terminal resize events.
+	// or terminal resize events. If the guest is still booting, the call waits
+	// up to 30 seconds for its agent to answer before failing with UNAVAILABLE.
 	ExecInstance(grpc.BidiStreamingServer[ExecInstanceRequest, ExecInstanceResponse]) error
 	// CopyToInstance writes a file or directory into a running instance. The
 	// first message must be a CopyToInstanceStart; the rest carry a tar
 	// archive of it, in chunks, which lands at the path as cp would put it.
+	// Like ExecInstance, it waits for a guest that is still booting.
 	CopyToInstance(grpc.ClientStreamingServer[CopyToInstanceRequest, emptypb.Empty]) error
 	// CopyFromInstance reads a file or directory out of a running instance, as
-	// a tar archive in chunks.
+	// a tar archive in chunks. Like ExecInstance, it waits for a guest that is
+	// still booting.
 	CopyFromInstance(*CopyFromInstanceRequest, grpc.ServerStreamingServer[CopyFromInstanceResponse]) error
 	// CreateNetwork defines a host-local network. Its bridge is brought up
 	// when the first instance on it starts.

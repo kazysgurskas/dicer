@@ -4,6 +4,8 @@
 package grpcapi
 
 import (
+	"context"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -12,14 +14,15 @@ import (
 )
 
 // agent connects to the guest agent of the running instance with the given
-// name or ID. The returned function closes the connection.
-func (h *instanceHandler) agent(nameOrID string) (diceragentv1.AgentServiceClient, func(), error) {
+// name or ID, waiting for it if the guest is still booting. The returned
+// function closes the connection.
+func (h *instanceHandler) agent(ctx context.Context, nameOrID string) (diceragentv1.AgentServiceClient, func(), error) {
 	instance, err := h.definitions.Instance(nameOrID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return h.instances.Agent(instance)
+	return h.instances.Agent(ctx, instance)
 }
 
 // agentError passes a guest agent's status through, explaining an

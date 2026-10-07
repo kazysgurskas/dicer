@@ -15,7 +15,7 @@ import (
 func (h *instanceHandler) ListInstanceProcesses(
 	ctx context.Context, req *dicerdv1.ListInstanceProcessesRequest,
 ) (*dicerdv1.ListInstanceProcessesResponse, error) {
-	agent, closeAgent, err := h.agent(req.GetName())
+	agent, closeAgent, err := h.agent(ctx, req.GetName())
 	if err != nil {
 		return nil, err
 	}

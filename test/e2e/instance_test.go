@@ -172,14 +172,12 @@ func TestInstanceStopKeepsWrites(t *testing.T) {
 
 	env.createInstance(t, name)
 	env.startInstance(t, name)
-	env.waitForAgent(t, name)
 
 	env.exec(t, name, "sh", "-c", "echo kept > /root/marker")
 
 	env.dicer(t, "instance", "stop", name)
 	env.waitForState(t, name, "Stopped")
 	env.startInstance(t, name)
-	env.waitForAgent(t, name)
 
 	if out, _ := env.tryExec(t, name, "cat", "/root/marker"); strings.TrimSpace(out) != "kept" {
 		t.Errorf("marker = %q after a stop and start, want %q", strings.TrimSpace(out), "kept")
@@ -778,27 +776,16 @@ func (e *environment) tapDeviceAt(t *testing.T, ip string) string {
 	return ""
 }
 
-// waitForAgent blocks until the guest's agent answers.
-//
-// `instance start` returns once the VM is running, which is before the guest
-// kernel has finished booting userspace. Waiting here, rather than retrying
-// whatever a test wanted to run, keeps the two apart: once this returns, a
-// failing command has failed on its own merits.
+// waitForAgent blocks until the guest's agent answers. Tests that measure the
+// guest, or act on it from outside, call it to start with a booted guest. A
+// test that only runs commands in the guest need not, because exec waits by
+// itself.
 func (e *environment) waitForAgent(t *testing.T, name string) {
 	t.Helper()
 
-	var lastErr error
-	for deadline := time.Now().Add(2 * time.Minute); time.Now().Before(deadline); {
-		_, err := e.tryDicer(t, "instance", "exec", name, "--", "true")
-		if err == nil {
-			return
-		}
-
-		lastErr = err
-		time.Sleep(2 * time.Second)
+	if _, err := e.tryDicer(t, "instance", "exec", name, "--", "true"); err != nil {
+		t.Fatalf("the agent in %s did not answer: %v", name, err)
 	}
-
-	t.Fatalf("the agent in %s never answered: %v", name, lastErr)
 }
 
 // exec runs a command inside a guest and returns its output, failing the test
@@ -818,8 +805,6 @@ func (e *environment) exec(t *testing.T, name string, command ...string) string 
 // failing, for tests asserting on what the command itself does.
 func (e *environment) tryExec(t *testing.T, name string, command ...string) (string, error) {
 	t.Helper()
-
-	e.waitForAgent(t, name)
 
 	return e.tryDicer(t, append([]string{"instance", "exec", name, "--"}, command...)...)
 }

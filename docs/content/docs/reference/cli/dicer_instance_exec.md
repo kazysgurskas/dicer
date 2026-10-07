@@ -11,6 +11,9 @@ stdout -- so a shell is interactive, and output piped elsewhere is not
 mangled by one. -t and -T force it on or off. Flags go before the name:
 everything after it is the command's.
 
+If the instance is still booting, exec waits up to 30 seconds for its guest
+agent to answer.
+
 ## Usage
 
 ```console

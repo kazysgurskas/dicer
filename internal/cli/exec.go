@@ -27,7 +27,9 @@ func newInstanceExecCommand() *cobra.Command {
 			"A pseudo-TTY is allocated when this terminal is on both ends -- stdin and\n" +
 			"stdout -- so a shell is interactive, and output piped elsewhere is not\n" +
 			"mangled by one. -t and -T force it on or off. Flags go before the name:\n" +
-			"everything after it is the command's.",
+			"everything after it is the command's.\n\n" +
+			"If the instance is still booting, exec waits up to 30 seconds for its guest\n" +
+			"agent to answer.",
 		Example: "  dicer exec web\n" +
 			"  dicer exec web ls -la /srv\n" +
 			"  dicer exec -e DEBUG=1 -w /srv web ./check.sh\n" +

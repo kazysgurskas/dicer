@@ -101,7 +101,8 @@ service DaemonService {
   rpc GetInstanceStats(GetInstanceStatsRequest) returns (stream GetInstanceStatsResponse);
   // ListInstanceProcesses returns the processes running in a running
   // instance, as its guest sees them: kernel threads are left out, and PIDs
-  // are the ones a command run by ExecInstance sees.
+  // are the ones a command run by ExecInstance sees. Like ExecInstance, it
+  // waits for a guest that is still booting.
   rpc ListInstanceProcesses(ListInstanceProcessesRequest) returns (ListInstanceProcessesResponse);
 
   // CreateSnapshot freezes an instance to disk. Of a running or paused
@@ -133,14 +134,17 @@ service DaemonService {
 
   // ExecInstance runs a command inside a running instance. The first client
   // message must be an ExecInstanceStart; subsequent messages carry stdin data
-  // or terminal resize events.
+  // or terminal resize events. If the guest is still booting, the call waits
+  // up to 30 seconds for its agent to answer before failing with UNAVAILABLE.
   rpc ExecInstance(stream ExecInstanceRequest) returns (stream ExecInstanceResponse);
   // CopyToInstance writes a file or directory into a running instance. The
   // first message must be a CopyToInstanceStart; the rest carry a tar
   // archive of it, in chunks, which lands at the path as cp would put it.
+  // Like ExecInstance, it waits for a guest that is still booting.
   rpc CopyToInstance(stream CopyToInstanceRequest) returns (google.protobuf.Empty);
   // CopyFromInstance reads a file or directory out of a running instance, as
-  // a tar archive in chunks.
+  // a tar archive in chunks. Like ExecInstance, it waits for a guest that is
+  // still booting.
   rpc CopyFromInstance(CopyFromInstanceRequest) returns (stream CopyFromInstanceResponse);
 
   // CreateNetwork defines a host-local network. Its bridge is brought up

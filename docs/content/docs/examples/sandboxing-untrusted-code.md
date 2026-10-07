@@ -44,13 +44,12 @@ It runs on the `default` network, so that it can download packages:
 $ dicer run -d --name python-base --network default --kernel linux-6.18 \
     --vcpus 1 --memory 512MiB python:3.13-slim sleep infinity
 Instance python-base started in 991ms (172.20.71.242)
-$ until dicer exec python-base true 2>/dev/null; do sleep 0.2; done
 $ dicer exec python-base pip install --quiet --root-user-action=ignore numpy
 ```
 
-The guest agent that runs `dicer exec` takes a moment to start after the
-machine does, so the loop waits for it. Every job gets the base's vCPUs,
-memory and disk, so size the base for the largest job.
+`dicer exec` waits while the guest boots, so it can follow `dicer run -d`
+straight away. Every job gets the base's vCPUs, memory and
+disk, so size the base for the largest job.
 
 Now that there are two networks, an instance must name the one it joins,
 as the base does with `--network default`. The exception is a host whose

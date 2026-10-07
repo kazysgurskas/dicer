@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	grpcbackoff "google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -24,9 +26,16 @@ import (
 // filesystems before ending its VMM regardless.
 const guestSyncTimeout = 10 * time.Second
 
-// Agent connects to a running instance's guest agent over vsock. The returned
-// function closes the connection.
-func (m *Manager) Agent(instance types.InstanceSpec) (diceragentv1.AgentServiceClient, func(), error) {
+// agentReadyTimeout bounds how long a request waits for a running guest's
+// agent, which starts a moment after the guest does.
+const agentReadyTimeout = 30 * time.Second
+
+// Agent connects to a running instance's guest agent over vsock. If the guest
+// is still booting, Agent waits up to agentReadyTimeout for its agent to
+// answer. It returns an ErrUnavailable error if the agent does not answer in
+// time, and an ErrInvalidState one if the instance is not running or stops.
+// The returned function closes the connection.
+func (m *Manager) Agent(ctx context.Context, instance types.InstanceSpec) (diceragentv1.AgentServiceClient, func(), error) {
 	status, err := m.Status(instance)
 	if err != nil {
 		return nil, nil, err
@@ -35,22 +44,76 @@ func (m *Manager) Agent(instance types.InstanceSpec) (diceragentv1.AgentServiceC
 		return nil, nil, errdefs.InvalidState("instance %q is %s, not running", instance.Name, status.State.Lowercase())
 	}
 
-	return dialAgent(status.VsockPath)
+	conn, err := dialAgent(status.VsockPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := m.waitForAgent(ctx, instance, conn); err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+
+	return diceragentv1.NewAgentServiceClient(conn), func() { _ = conn.Close() }, nil
 }
 
-// dialAgent connects to the guest agent behind vsockPath.
-func dialAgent(vsockPath string) (diceragentv1.AgentServiceClient, func(), error) {
+// waitForAgent waits until conn reaches the instance's guest agent. It gives
+// up once the instance stops running, or after agentReadyTimeout.
+func (m *Manager) waitForAgent(ctx context.Context, instance types.InstanceSpec, conn *grpc.ClientConn) error {
+	readyCtx, cancel := context.WithTimeout(ctx, agentReadyTimeout)
+	defer cancel()
+
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		conn.Connect()
+
+		// A connection that keeps failing may not change state, so the
+		// instance is checked at least once a second.
+		changeCtx, cancelChange := context.WithTimeout(readyCtx, time.Second)
+		conn.WaitForStateChange(changeCtx, state)
+		cancelChange()
+
+		switch {
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case readyCtx.Err() != nil:
+			return errdefs.Unavailable("the guest agent of instance %q did not answer within %s; "+
+				"see 'dicer logs %s' for how the guest booted", instance.Name, agentReadyTimeout, instance.Name)
+		}
+
+		status, err := m.Status(instance)
+		if err != nil {
+			return err
+		}
+		if status.State != types.InstanceStateRunning {
+			return errdefs.InvalidState("instance %q is %s, not running", instance.Name, status.State.Lowercase())
+		}
+	}
+}
+
+// dialAgent returns a connection to the guest agent behind vsockPath. The
+// connection is made on first use. Failed attempts are retried quickly,
+// because an agent that is not listening yet is usually about to.
+func dialAgent(vsockPath string) (*grpc.ClientConn, error) {
+	retry := grpcbackoff.DefaultConfig
+	retry.BaseDelay = 100 * time.Millisecond
+	retry.MaxDelay = time.Second
+
 	conn, err := grpc.NewClient("passthrough:///agent",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return hypervisor.DialVsock(ctx, vsockPath, guest.AgentPort)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// gRPC's default; left at zero, it would give each attempt no time.
+		grpc.WithConnectParams(grpc.ConnectParams{Backoff: retry, MinConnectTimeout: 20 * time.Second}),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect to guest agent: %w", err)
+		return nil, fmt.Errorf("connect to guest agent: %w", err)
 	}
 
-	return diceragentv1.NewAgentServiceClient(conn), func() { _ = conn.Close() }, nil
+	return conn, nil
 }
 
 // syncGuest asks a running guest to flush its filesystems before its VMM is
@@ -60,18 +123,18 @@ func (m *Manager) syncGuest(ctx context.Context, instance types.InstanceSpec, st
 		return
 	}
 
-	agent, closeAgent, err := dialAgent(status.VsockPath)
+	conn, err := dialAgent(status.VsockPath)
 	if err != nil {
 		m.logger.WarnContext(ctx, "cannot reach guest agent to flush the guest's disks",
 			"instance", instance.Name, "error", err)
 		return
 	}
-	defer closeAgent()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, guestSyncTimeout)
 	defer cancel()
 
-	if _, err := agent.Sync(ctx, &diceragentv1.SyncRequest{}); err != nil {
+	if _, err := diceragentv1.NewAgentServiceClient(conn).Sync(ctx, &diceragentv1.SyncRequest{}); err != nil {
 		m.logger.WarnContext(ctx, "guest did not flush its disks before stopping",
 			"instance", instance.Name, "error", err)
 	}
@@ -84,32 +147,33 @@ const restoredAgentTimeout = 10 * time.Second
 
 // setGuestClock sets the clock of the guest behind vsockPath to t.
 func setGuestClock(ctx context.Context, vsockPath string, t time.Time) error {
-	agent, closeAgent, err := dialAgent(vsockPath)
+	conn, err := dialAgent(vsockPath)
 	if err != nil {
 		return err
 	}
-	defer closeAgent()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, restoredAgentTimeout)
 	defer cancel()
 
-	_, err = agent.SetClock(ctx, &diceragentv1.SetClockRequest{Time: timestamppb.New(t)}, grpc.WaitForReady(true))
+	req := &diceragentv1.SetClockRequest{Time: timestamppb.New(t)}
+	_, err = diceragentv1.NewAgentServiceClient(conn).SetClock(ctx, req, grpc.WaitForReady(true))
 	return err
 }
 
 // setGuestIdentity gives the guest behind vsockPath the identity req
 // describes.
 func setGuestIdentity(ctx context.Context, vsockPath string, req *diceragentv1.SetIdentityRequest) error {
-	agent, closeAgent, err := dialAgent(vsockPath)
+	conn, err := dialAgent(vsockPath)
 	if err != nil {
 		return err
 	}
-	defer closeAgent()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, restoredAgentTimeout)
 	defer cancel()
 
-	_, err = agent.SetIdentity(ctx, req, grpc.WaitForReady(true))
+	_, err = diceragentv1.NewAgentServiceClient(conn).SetIdentity(ctx, req, grpc.WaitForReady(true))
 	return err
 }
 
@@ -119,15 +183,15 @@ const agentCallTimeout = 5 * time.Second
 // shutdownGuest asks the guest behind vsockPath to shut down, without waiting
 // for it to.
 func shutdownGuest(ctx context.Context, vsockPath string) error {
-	agent, closeAgent, err := dialAgent(vsockPath)
+	conn, err := dialAgent(vsockPath)
 	if err != nil {
 		return err
 	}
-	defer closeAgent()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(ctx, agentCallTimeout)
 	defer cancel()
 
-	_, err = agent.Shutdown(ctx, &diceragentv1.ShutdownRequest{})
+	_, err = diceragentv1.NewAgentServiceClient(conn).Shutdown(ctx, &diceragentv1.ShutdownRequest{})
 	return err
 }

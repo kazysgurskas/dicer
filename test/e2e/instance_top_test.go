@@ -17,7 +17,6 @@ func TestInstanceTopListsTheGuestsProcesses(t *testing.T) {
 	name := instanceName(t)
 	env.createInstance(t, name, "--", "sleep", "3600")
 	env.startInstance(t, name)
-	env.waitForAgent(t, name)
 
 	out := env.dicer(t, "top", "--format", "json", name)
 	processes := rows[map[string]string](t, out, "dicer top")

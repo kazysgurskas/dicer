@@ -143,13 +143,13 @@ func probeGuest(ctx context.Context, vsockPath string, check types.HealthCheck) 
 
 // probeAgent asks the guest agent behind vsockPath to run check once.
 func probeAgent(ctx context.Context, vsockPath string, check types.HealthCheck) (*diceragentv1.ProbeResponse, error) {
-	agent, closeAgent, err := dialAgent(vsockPath)
+	conn, err := dialAgent(vsockPath)
 	if err != nil {
 		return nil, err
 	}
-	defer closeAgent()
+	defer func() { _ = conn.Close() }()
 
-	return agent.Probe(ctx, probeRequest(check))
+	return diceragentv1.NewAgentServiceClient(conn).Probe(ctx, probeRequest(check))
 }
 
 // probeRequest is check as the agent takes it.

@@ -17,7 +17,6 @@ func TestInstanceCopyInAndOut(t *testing.T) {
 	name := instanceName(t)
 	env.createInstance(t, name)
 	env.startInstance(t, name)
-	env.waitForAgent(t, name)
 
 	work := env.paths.root + "/copy-" + name
 	t.Cleanup(func() {
