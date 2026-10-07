@@ -40,10 +40,7 @@ systemd service.
 
 ## Quickstart
 
-The daemon creates a network named `default`, and a kernel named `default`
-that is [Dicer's kernel](https://github.com/konradasb/dicer-kernel). An
-instance that names no network or kernel uses them, so there is nothing to
-set up first:
+Run nginx in a virtual machine of its own, and look around:
 
 ```console
 $ dicer run -d --name web -p 8080:80 nginx:1.27
@@ -53,6 +50,10 @@ $ dicer logs -f web
 $ dicer stop web
 $ dicer rm web
 ```
+
+The instance joins the `default` network and boots the `default` kernel,
+[Dicer's kernel](https://github.com/konradasb/dicer-kernel). The daemon
+sets up both itself, and an instance uses them unless it names others.
 
 See `dicer --help` for every command.
 

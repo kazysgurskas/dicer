@@ -20,11 +20,6 @@ you are not, run them with `sudo`.
 
 ### Run an image
 
-There is nothing to set up first. The daemon creates a network named
-`default` and defines a kernel named `default`, which an instance uses when
-it names no other. See [Networking](../../concepts/networking) and
-[Kernels](../../concepts/kernels).
-
 ```console
 $ dicer run -d --name web -p 8080:80 nginx:1.27
 Instance web started in 1.1s (172.20.61.102)
@@ -32,9 +27,14 @@ Instance web started in 1.1s (172.20.61.102)
 
 Dicer pulled `nginx:1.27`, showing its progress, and converted it to a
 disk. It also fetched the default kernel, which only the first instance to
-boot waits for. Then it booted the image as a virtual machine, with the guest's port
-80 published on the host's port 8080. The address in brackets is the
-guest's.
+boot waits for. Then it booted the image as a virtual machine, with the
+guest's port 80 published on the host's port 8080. The address in brackets
+is the guest's.
+
+The instance joined the `default` network and booted the `default` kernel.
+The daemon sets up both itself, and an instance uses them unless it names
+others. See [Networking](../../concepts/networking) and
+[Kernels](../../concepts/kernels).
 
 ### Reach it
 
