@@ -7,42 +7,29 @@ related:
   - /docs/guides/files-and-volumes
   - /docs/guides/working-inside-guests
   - /docs/concepts/kernels
-  - /docs/guides/capacity
 ---
 
-An instance can run Docker like any Linux machine. Its Docker is its own.
-Behind the hypervisor, it cannot see the host's Docker or another
+An instance can run Docker like any Linux machine. Its Docker is its own:
+behind the hypervisor, it cannot see the host's Docker or another
 instance's, and its containers cannot reach them.
 
-## Setup
+The image here is `docker:27-dind`, Docker's official Docker-in-Docker
+image, which runs the Docker daemon as its main process.
 
-{{% steps %}}
-
-### Create a volume for Docker's data
+## Run Docker
 
 ```console
 $ dicer volume create docker-data --size 20GiB
-```
-
-Size it for the images and containers Docker will keep. [Storage](#storage)
-explains why Docker needs a volume.
-
-### Run Docker
-
-```console
 $ dicer run -d --name docker --vcpus 2 --memory 2GiB \
     --mount source=docker-data,target=/var/lib/docker \
     docker:27-dind
 ```
 
-`docker:27-dind` is Docker's official Docker-in-Docker image, which runs the
-Docker daemon as its main process. Docker builds its networks from
-netfilter, NAT and bridges, which the
-[default kernel](../../concepts/kernels#the-default-kernel) has. Here that daemon is the instance's
-workload. Docker and its containers share the instance's memory, so give it
-2 GiB or more.
+Docker keeps its images and containers on the volume, so size it for them.
+Docker and its containers share the instance's memory, so give it 2 GiB or
+more.
 
-### Use it
+## Use it
 
 ```console
 $ dicer exec docker docker info --format '{{.Driver}}'
@@ -52,54 +39,34 @@ $ dicer exec docker docker run --rm hello-world
 
 `docker info` may take a few seconds to answer while `dockerd` starts.
 
-{{% /steps %}}
-
-## Storage
-
-Without a volume, Docker's data would sit on the instance's root filesystem,
-which is itself an overlay. Docker cannot stack its own overlays on it, so it
-falls back to its `vfs` storage driver. That driver copies every image layer
-in full, which makes pulls and builds slow and takes many times the space.
-
-A volume is ext4, and on it Docker uses `overlay2`. The volume also keeps
-Docker's images and containers after the instance is deleted, until the
-volume itself is deleted. Only one running instance at a time can use a
-volume read-write, so each instance that runs Docker needs a volume of its
-own.
-
-## Networking
-
-### iptables
-
-Dicer's kernel has iptables' legacy tables, not nftables. `docker:dind` uses
-the legacy tables by itself. An image that installs Docker from a
-distribution's packages may default to nftables, and then `dockerd` fails
-with `Failed to initialize nft: Protocol not supported`. Switch such an
-image to the legacy tables when you build it. On Debian or Ubuntu:
-
-```dockerfile
-RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
-```
-
-### IPv6
-
-The kernel has no IPv6. Docker warns that it cannot set up `ip6tables`, and
-carries on over IPv4.
-
-### Published ports
-
 `docker run -p` publishes a container's port on the instance, not on the
 host. To reach it from outside the host, publish the same port on the
-instance too, with `dicer run -p`. For example, with `-p 8080:8080` added to
-the `dicer run` above, this serves nginx on the host's port 8080:
+instance too. With `-p 8080:8080` added to the `dicer run` above, this
+serves nginx on the host's port 8080:
 
 ```console
 $ dicer exec docker docker run -d -p 8080:80 nginx:1.27
 ```
 
-## Images
+## Good to know
 
-Each instance's Docker pulls its images for itself. Instances share no image
-cache with each other or with the host. Where many instances pull the same
-images, a pull-through registry cache near the host saves time and
-bandwidth.
+- Docker needs the volume. Without it, Docker's data sits on the instance's
+  root filesystem, which is itself an overlay, and Docker falls back to its
+  slow `vfs` storage driver. On the volume, which is ext4, it uses
+  `overlay2`. Only one running instance at a time can write to a volume, so
+  each instance that runs Docker needs its own. See
+  [Volumes](../../guides/files-and-volumes#volumes).
+- The volume keeps Docker's images and containers after the instance is
+  deleted, until the volume itself is deleted.
+- Dicer's [default kernel](../../concepts/kernels#the-default-kernel) has
+  iptables' legacy tables, not nftables. `docker:dind` uses them by itself.
+  An image that installs Docker from a distribution's packages may not, and
+  `dockerd` then fails with `Failed to initialize nft: Protocol not
+  supported`. On Debian or Ubuntu, build such an image with
+  `RUN update-alternatives --set iptables /usr/sbin/iptables-legacy`.
+- The kernel has no IPv6. Docker warns that it cannot set up `ip6tables`,
+  and carries on over IPv4.
+- Each instance's Docker pulls images for itself, with no cache shared
+  between instances or with the host. Where many instances pull the same
+  images, a pull-through registry cache near the host saves time and
+  bandwidth.

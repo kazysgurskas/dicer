@@ -1,5 +1,5 @@
 ---
-title: Preview environments
+title: Previewing pull requests
 weight: 3
 description: "Give every pull request a running copy of your app, forked from main in under a second, that sleeps while nobody uses it."
 icon: eye
@@ -96,7 +96,7 @@ connection resumes it where it was, in about 0.3 seconds. Previews that
 nobody is looking at cost only disk space: as much as their memory, for the
 frozen guest.
 
-## Run it from CI
+## From CI
 
 ```yaml {filename=".github/workflows/preview.yaml"}
 name: preview
