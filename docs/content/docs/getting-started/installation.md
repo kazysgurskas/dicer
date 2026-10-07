@@ -33,6 +33,9 @@ install them:
   [Networking](../../concepts/networking#firewalld).
 
 The package brings `erofs-utils`, `e2fsprogs` and `iptables` with it.
+For a production server, see [Choosing hardware](../../guides/choosing-hardware)
+and [Tuning a host](../../guides/tuning-a-host) first: the filesystem under
+`/var/lib/dicer` decides how fast snapshots and forks are.
 
 **To build from source**
 
