@@ -1105,8 +1105,8 @@ message Image {
   // they set their own. Unset if it declares none.
   HealthCheck health_check = 6;
   // When the image was last pulled or in use: by an instance defined to
-  // boot from it, a running guest or a snapshot. Garbage collection judges
-  // it by this.
+  // boot from it, a running guest, a guest on standby or a snapshot.
+  // Garbage collection judges it by this.
   google.protobuf.Timestamp last_used_time = 7;
 }
 

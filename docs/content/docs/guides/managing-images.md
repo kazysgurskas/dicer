@@ -131,7 +131,7 @@ $ dicer run -d --name web nginx:1.27@sha256:9d6b58feebd2…
 ## Remove images
 
 An image is **in use** while an instance is defined to boot from it, a
-running guest booted from it, or a snapshot needs it. `dicer image prune`
+running guest or a guest on standby booted from it, or a snapshot needs it. `dicer image prune`
 deletes every image that is not in use, with the layers that only those
 images needed. It asks first, unless given `-f`:
 
@@ -143,7 +143,8 @@ $ dicer image prune -f
 most recently pulled under it. Given a digest, it deletes that image. An
 image in use is refused, unless you give `--force`. Then an instance defined
 to boot from it pulls it again at its next start, and one running from it
-keeps running.
+keeps running. One on standby pulls the same image again by its digest when
+it resumes.
 
 ```console
 $ dicer rmi nginx:1.27

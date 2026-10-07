@@ -5653,8 +5653,8 @@ type Image struct {
 	// they set their own. Unset if it declares none.
 	HealthCheck *HealthCheck `protobuf:"bytes,6,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
 	// When the image was last pulled or in use: by an instance defined to
-	// boot from it, a running guest or a snapshot. Garbage collection judges
-	// it by this.
+	// boot from it, a running guest, a guest on standby or a snapshot.
+	// Garbage collection judges it by this.
 	LastUsedTime  *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_used_time,json=lastUsedTime,proto3" json:"last_used_time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

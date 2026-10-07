@@ -519,7 +519,7 @@ state to report.
 | `create_time` | `google.protobuf.Timestamp` |  |
 | `update_time` | `google.protobuf.Timestamp` |  |
 | `health_check` | [`HealthCheck`](#healthcheck) | The HEALTHCHECK the image declares, which instances of it run unless they set their own. Unset if it declares none. |
-| `last_used_time` | `google.protobuf.Timestamp` | When the image was last pulled or in use: by an instance defined to boot from it, a running guest or a snapshot. Garbage collection judges it by this. |
+| `last_used_time` | `google.protobuf.Timestamp` | When the image was last pulled or in use: by an instance defined to boot from it, a running guest, a guest on standby or a snapshot. Garbage collection judges it by this. |
 
 ### ImportKernelRequest
 

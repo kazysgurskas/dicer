@@ -219,7 +219,7 @@ The daemon's own settings. The sections after them are the API, resources, netwo
 
 *mapping*
 
-`images` is image garbage collection, which removes only images no instance, running guest or snapshot uses. It is off while `gc_max_unused_age` and `gc_max_size` are both unset.
+`images` is image garbage collection, which removes only images no instance, running guest, guest on standby or snapshot uses. It is off while `gc_max_unused_age` and `gc_max_size` are both unset.
 
 ### `images.gc_max_unused_age` {#images-gc-max-unused-age}
 

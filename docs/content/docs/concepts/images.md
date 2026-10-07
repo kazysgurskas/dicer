@@ -68,8 +68,9 @@ for example because it was deleted with `--force`.
 
 ## Keeping and removing images
 
-An image is **in use** while an instance is defined to boot from it, a
-running guest booted from it, or a memory snapshot's guest booted from it.
+An image is **in use** while an instance is defined to boot from it, or
+while a running guest, a guest on standby or a memory snapshot's guest
+booted from it.
 An image in use is not deleted unless asked with `--force`. An instance
 defined to boot from it then pulls it again at its next start.
 

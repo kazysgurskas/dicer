@@ -103,7 +103,7 @@ func (h *imageHandler) DeleteImage(
 		}
 		if _, ok := inUse[image.Digest]; ok {
 			return nil, errdefs.InvalidState(
-				"image %q is the root disk of a running instance, or of a snapshot", req.GetRef())
+				"image %q is the root disk of a running instance, an instance on standby or a snapshot", req.GetRef())
 		}
 	}
 

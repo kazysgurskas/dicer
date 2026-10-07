@@ -62,3 +62,30 @@ func TestImagesInUseKeepsWhatDefinitionsName(t *testing.T) {
 		t.Errorf("in use = %v, want the image the definition names", inUse)
 	}
 }
+
+// TestImagesInUseKeepsWhatStandbyNeeds checks that an instance on standby
+// keeps the image its frozen guest booted from, even once its reference
+// resolves to a newer image: resuming it needs the old one.
+func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
+	h := newHarness(t)
+	h.start(t)
+	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+		t.Fatalf("Standby: %v", err)
+	}
+
+	images, ok := h.manager.images.(*fakeImages)
+	if !ok {
+		t.Fatalf("images is %T", h.manager.images)
+	}
+	images.held = &types.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
+
+	inUse, err := h.manager.ImagesInUse()
+	if err != nil {
+		t.Fatalf("ImagesInUse: %v", err)
+	}
+	for _, digest := range []string{"sha256:aaaa", "sha256:bbbb"} {
+		if _, ok := inUse[digest]; !ok {
+			t.Errorf("in use = %v, want %s", inUse, digest)
+		}
+	}
+}

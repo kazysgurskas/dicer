@@ -25,8 +25,8 @@ type Image struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// LastUsedAt is when the image was last pulled or in use: by an
-	// instance defined to boot from it, a running guest or a snapshot. It is
-	// what garbage collection judges an image by.
+	// instance defined to boot from it, a running guest, a guest on standby
+	// or a snapshot. It is what garbage collection judges an image by.
 	LastUsedAt time.Time `json:"last_used_at,omitzero"`
 }
 

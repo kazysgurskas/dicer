@@ -3,11 +3,17 @@
 
 package vm
 
-import "github.com/konradasb/dicer/internal/types"
+import (
+	"errors"
+	"io/fs"
+
+	"github.com/konradasb/dicer/internal/types"
+)
 
 // ImagesInUse returns the digests of images that must be kept: those
-// instances are defined to boot from, those active guests booted from, and
-// those memory snapshots' guests booted from.
+// instances are defined to boot from, those active guests booted from, those
+// guests on standby booted from, and those memory snapshots' guests booted
+// from.
 func (m *Manager) ImagesInUse() (map[string]struct{}, error) {
 	inUse := make(map[string]struct{})
 	for _, instance := range m.definitions.Instances() {
@@ -19,8 +25,25 @@ func (m *Manager) ImagesInUse() (map[string]struct{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		if status.ImageDigest != "" && (status.State.HoldsResources() || status.State == types.InstanceStateStopping) {
-			inUse[status.ImageDigest] = struct{}{}
+		switch {
+		case status.State.HoldsResources() || status.State == types.InstanceStateStopping:
+			if status.ImageDigest != "" {
+				inUse[status.ImageDigest] = struct{}{}
+			}
+		case status.State == types.InstanceStateStandby:
+			// Standby leaves no runtime status, so the image is read from
+			// what was frozen. Resuming needs that image, whatever the
+			// definition now names.
+			standby, err := m.readStandby(instance)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // resumed or stopped since its status was read
+			}
+			if err != nil {
+				return nil, err
+			}
+			if standby.ImageDigest != "" {
+				inUse[standby.ImageDigest] = struct{}{}
+			}
 		}
 	}
 	for _, snapshot := range m.definitions.Snapshots() {

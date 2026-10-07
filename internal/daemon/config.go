@@ -85,8 +85,8 @@ type Config struct {
 	Metrics MetricsConfig `yaml:"metrics"`
 
 	// Images is image garbage collection, which removes only images no
-	// instance, running guest or snapshot uses. It is off while
-	// gc_max_unused_age and gc_max_size are both unset.
+	// instance, running guest, guest on standby or snapshot uses. It is off
+	// while gc_max_unused_age and gc_max_size are both unset.
 	Images ImagesConfig `yaml:"images"`
 
 	// Events bounds the events log that dicer events shows.

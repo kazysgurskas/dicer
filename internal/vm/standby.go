@@ -161,13 +161,9 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 func (m *Manager) resumeStandby(ctx context.Context, instance types.InstanceSpec, wokenByPort uint16) error {
 	started := time.Now()
 
-	data, err := os.ReadFile(filepath.Join(m.standbyDir(instance), standbyFile))
+	standby, err := m.readStandby(instance)
 	if err != nil {
-		return fmt.Errorf("read standby: %w", err)
-	}
-	var standby types.Snapshot
-	if err := json.Unmarshal(data, &standby); err != nil {
-		return fmt.Errorf("parse standby: %w", err)
+		return err
 	}
 
 	// Its ports are published again as it resumes. Connections that come
@@ -196,6 +192,21 @@ func (m *Manager) resumeStandby(ctx context.Context, instance types.InstanceSpec
 		why, humanize.Duration(time.Since(started)), humanize.Duration(started.Sub(standby.CreatedAt)), allocation.IP), attrs)
 	m.logger.InfoContext(ctx, "resumed instance from standby", "instance", instance.Name)
 	return nil
+}
+
+// readStandby returns what an instance on standby recorded of its frozen
+// guest. If the instance is not on standby, the error matches
+// fs.ErrNotExist.
+func (m *Manager) readStandby(instance types.InstanceSpec) (types.Snapshot, error) {
+	data, err := os.ReadFile(filepath.Join(m.standbyDir(instance), standbyFile))
+	if err != nil {
+		return types.Snapshot{}, fmt.Errorf("read standby: %w", err)
+	}
+	var standby types.Snapshot
+	if err := json.Unmarshal(data, &standby); err != nil {
+		return types.Snapshot{}, fmt.Errorf("parse standby: %w", err)
+	}
+	return standby, nil
 }
 
 // onStandby reports whether instance has a guest frozen on standby.
