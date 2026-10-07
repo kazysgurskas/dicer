@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/atomicfile"
+	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/process"
 	"github.com/konradasb/dicer/internal/types"
 )
@@ -137,10 +138,9 @@ func (m *Manager) ensureRuntimeDir(instanceID string) error {
 	return nil
 }
 
-// prepareRuntimeDir readies an instance's runtime directory for a new VMM:
-// it removes sockets a previous VMM left behind and links in the overlay
-// disk and console log from the instance directory, which the VMM finds
-// there by name. The directory itself is kept for the previous VMM's log.
+// prepareRuntimeDir readies an instance's runtime directory for a new VMM.
+// It removes sockets a previous VMM left behind, and links the overlay disk
+// and the console and hypervisor logs in from the instance directory.
 func (m *Manager) prepareRuntimeDir(instance types.InstanceSpec) error {
 	if err := m.ensureRuntimeDir(instance.ID); err != nil {
 		return err
@@ -152,18 +152,24 @@ func (m *Manager) prepareRuntimeDir(instance types.InstanceSpec) error {
 		}
 	}
 
-	// Linked afresh each time: a rename moves the instance directory.
-	links := map[string]string{
-		overlayDiskFile: m.overlayDiskPath(instance),
-		serialLogFile:   m.serialLogPath(instance),
+	hypervisorLogLink := hypervisor.LogPath(m.hypervisorSocketPath(instance.ID))
+	if err := os.MkdirAll(filepath.Dir(hypervisorLogLink), 0o750); err != nil {
+		return fmt.Errorf("create hypervisor log directory: %w", err)
 	}
-	for name, target := range links {
-		link := filepath.Join(m.runtimeDir(instance.ID), name)
+
+	// Linked afresh each time: a rename moves the instance directory.
+	dir := m.runtimeDir(instance.ID)
+	links := map[string]string{
+		filepath.Join(dir, overlayDiskFile): m.overlayDiskPath(instance),
+		filepath.Join(dir, serialLogFile):   m.serialLogPath(instance),
+		hypervisorLogLink:                   m.hypervisorLogPath(instance),
+	}
+	for link, target := range links {
 		if err := os.Remove(link); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("remove stale link %s: %w", link, err)
 		}
 		if err := os.Symlink(target, link); err != nil {
-			return fmt.Errorf("link %s into the runtime directory: %w", name, err)
+			return fmt.Errorf("link %s into the runtime directory: %w", target, err)
 		}
 	}
 

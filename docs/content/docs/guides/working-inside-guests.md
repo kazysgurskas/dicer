@@ -155,7 +155,6 @@ $ dicer exec web journalctl -u nginx -n 50
 ```
 
 `--source hypervisor` reads the hypervisor's own log instead. It explains a
-guest that crashed or never got as far as booting. It is kept after the
-instance ends on its own, and across its restarts. It is discarded when the
-instance is stopped, put on standby or deleted, when a start fails, and when
-the host reboots. See [Troubleshooting](../troubleshooting).
+guest that crashed or never got as far as booting. Like the console log, it
+is kept with the instance, across stops and restarts, until the instance is
+deleted. See [Troubleshooting](../troubleshooting).

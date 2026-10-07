@@ -623,10 +623,10 @@ func (f *fakeStarter) DefaultKernelArgs() string { return "console=ttyS0" }
 func (f *fakeStarter) PowerOffEndsVM() bool      { return true }
 
 func (f *fakeStarter) StartVM(
-	_ context.Context, _ string, spec hypervisor.VMSpec,
+	_ context.Context, socketPath string, spec hypervisor.VMSpec,
 ) (*process.Process, hypervisor.Hypervisor, error) {
 	if f.startErr != nil {
-		return nil, nil, f.startErr
+		return nil, nil, failLaunch(socketPath, f.startErr)
 	}
 	f.spec = spec
 	vmm, err := f.launch()
@@ -637,10 +637,10 @@ func (f *fakeStarter) StartVM(
 }
 
 func (f *fakeStarter) RestoreVM(
-	_ context.Context, _ string, snapshotPath string, spec hypervisor.RestoreSpec,
+	_ context.Context, socketPath string, snapshotPath string, spec hypervisor.RestoreSpec,
 ) (*process.Process, hypervisor.Hypervisor, error) {
 	if f.restoreErr != nil {
-		return nil, nil, f.restoreErr
+		return nil, nil, failLaunch(socketPath, f.restoreErr)
 	}
 	f.restoredFrom = append(f.restoredFrom, snapshotPath)
 	f.restoredSpec = spec
@@ -650,6 +650,19 @@ func (f *fakeStarter) RestoreVM(
 		return nil, nil, err
 	}
 	return vmm, f.hv, nil
+}
+
+// failLaunch writes err to the hypervisor's log, as a hypervisor that
+// cannot launch a guest says why, and returns it.
+func failLaunch(socketPath string, err error) error {
+	logPath := hypervisor.LogPath(socketPath)
+	if mkdirErr := os.MkdirAll(filepath.Dir(logPath), 0o750); mkdirErr != nil {
+		return mkdirErr
+	}
+	if writeErr := os.WriteFile(logPath, []byte(err.Error()+"\n"), 0o600); writeErr != nil {
+		return writeErr
+	}
+	return err
 }
 
 func (f *fakeStarter) Connect(string) (hypervisor.Hypervisor, error) { return f.hv, nil }

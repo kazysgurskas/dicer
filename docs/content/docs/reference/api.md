@@ -1102,7 +1102,7 @@ LogSource is one of the logs an instance produces.
 |---|---|---|
 | `LOG_SOURCE_UNSPECIFIED` | 0 | Defaults to the guest's console. |
 | `LOG_SOURCE_GUEST` | 1 | The guest's serial console: the kernel's boot messages, dicer-init's, and whatever the workload writes to the console. |
-| `LOG_SOURCE_HYPERVISOR` | 2 | The hypervisor's own log, which explains a guest that crashed or never booted. It is kept after the instance ends on its own, and across its restarts. It is discarded when the instance is stopped, put on standby or deleted, when a start fails, and when the host reboots. |
+| `LOG_SOURCE_HYPERVISOR` | 2 | The hypervisor's own log, which explains a guest that crashed or never booted. Like the console log, it is kept with the instance, across stops and restarts, until the instance is deleted. |
 
 ### MountType
 

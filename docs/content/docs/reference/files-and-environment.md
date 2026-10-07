@@ -36,6 +36,7 @@ which keeps them consistent.
 │   ├── config.yaml           the instance's definition
 │   ├── overlay.img           its overlay disk (sparse)
 │   ├── serial.log            its console log: dicer logs
+│   ├── hypervisor.log        its hypervisor's log: dicer logs --source hypervisor
 │   └── standby/              on standby, its frozen memory and device state
 ├── snapshots/<name>/
 │   ├── config.yaml           the snapshot's definition
@@ -76,7 +77,7 @@ take.
     ├── status.img            the disk the guest reports how it ended on
     ├── overlay.img           a link to its overlay disk
     ├── serial.log            a link to its console log
-    └── logs/vmm.log          the hypervisor's log: dicer logs --source hypervisor
+    └── logs/vmm.log          a link to its hypervisor's log
 ```
 
 A reboot clears this directory, and every instance is then stopped.

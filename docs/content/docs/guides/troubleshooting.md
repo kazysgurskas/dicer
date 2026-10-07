@@ -194,8 +194,12 @@ Look for:
 - **`/dev/kvm` missing or not usable.** Then no instance boots. Check that
   the host supports virtualisation and that it is enabled.
 
-The hypervisor's log is kept only until the instance is started or stopped
-again, or the host reboots. Read it soon after the failure.
+The hypervisor's log is kept with the instance until the instance is
+deleted. Each start adds to it, so the latest failure is at the end:
+
+```console
+$ dicer logs --source hypervisor -n 50 web
+```
 
 ## An instance does not wake on a connection
 

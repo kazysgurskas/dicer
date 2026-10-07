@@ -17,10 +17,8 @@ func newInstanceLogsCommand() *cobra.Command {
 			"and whatever the workload writes to the console. It is kept with the\n" +
 			"instance, so it can be read after a stop to explain one.\n\n" +
 			"Use --source hypervisor for the hypervisor's own log, which explains a guest\n" +
-			"that crashed or never got as far as booting. It is kept after the instance\n" +
-			"ends on its own, and across its restarts. It is discarded when the instance\n" +
-			"is stopped, put on standby or deleted, when a start fails, and when the\n" +
-			"host reboots.",
+			"that crashed or never got as far as booting. It is kept with the instance\n" +
+			"too, across stops and restarts, until the instance is deleted.",
 		Example: "  dicer logs -f web\n" +
 			"  dicer logs -n 50 web\n" +
 			"  dicer logs --source hypervisor web",

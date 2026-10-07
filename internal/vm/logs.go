@@ -31,9 +31,8 @@ const (
 	// LogSourceGuest is the guest's serial console. It is the default.
 	LogSourceGuest LogSource = "guest"
 
-	// LogSourceHypervisor is the hypervisor's log. It is in the runtime
-	// directory, and goes with it: when the instance is stopped, put on
-	// standby or deleted, and when a start fails.
+	// LogSourceHypervisor is the hypervisor's log. Like the console log, it
+	// is kept with the instance until the instance is deleted.
 	LogSourceHypervisor LogSource = "hypervisor"
 )
 
@@ -112,7 +111,7 @@ func (m *Manager) logPath(instance types.InstanceSpec, source LogSource) (string
 	case LogSourceGuest, "":
 		return m.serialLogPath(instance), nil
 	case LogSourceHypervisor:
-		return m.hypervisorLogPath(instance.ID), nil
+		return m.hypervisorLogPath(instance), nil
 	default:
 		return "", errdefs.InvalidArgument("unknown log source %q: want %s or %s",
 			source, LogSourceGuest, LogSourceHypervisor)

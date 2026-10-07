@@ -6,25 +6,25 @@ package vm
 import (
 	"path/filepath"
 
-	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/types"
 )
 
-// An instance's files live in two places: the persistent instance directory,
-// keyed by name, holds the overlay disk, console log and, on standby, its
-// frozen guest; the runtime
-// directory under RunDir, keyed by ID, holds the status, sockets, config and
-// status disks and the VMM's log.
+// An instance's files live in two places. The persistent instance directory,
+// keyed by name, holds the overlay disk, the console and hypervisor logs and,
+// on standby, its frozen guest. The runtime directory under RunDir, keyed by
+// ID, holds the status, the sockets, and the config and status disks.
 //
 // The VMM runs in the runtime directory, where the overlay disk and console
 // log are linked in, and is given each of these files by its name alone. A
 // snapshot of the guest thus names no directory of the instance's, and
 // restores into any instance's runtime directory: the same instance's after
-// a rename, or another's.
+// a rename, or another's. The VMM's own output goes to the hypervisor log
+// through a link there too, so that the log outlives the VMM.
 const (
 	standbyDirName       = "standby"
 	overlayDiskFile      = "overlay.img"
 	serialLogFile        = "serial.log"
+	hypervisorLogFile    = "hypervisor.log"
 	statusFile           = "state.json"
 	configDiskFile       = "config.img"
 	statusDiskFile       = "status.img"
@@ -94,9 +94,10 @@ func (m *Manager) hypervisorSocketPath(instanceID string) string {
 	return filepath.Join(m.runtimeDir(instanceID), hypervisorSocketFile)
 }
 
-// hypervisorLogPath returns the VMM's own log.
-func (m *Manager) hypervisorLogPath(instanceID string) string {
-	return hypervisor.LogPath(m.hypervisorSocketPath(instanceID))
+// hypervisorLogPath returns the file an instance's VMM writes its own log
+// to, through a link in the runtime directory.
+func (m *Manager) hypervisorLogPath(instance types.InstanceSpec) string {
+	return filepath.Join(m.instanceDir(instance), hypervisorLogFile)
 }
 
 // vsockPath returns the host end of an instance's vsock device.

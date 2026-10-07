@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/types"
 )
 
@@ -194,6 +195,76 @@ func TestStreamLogsFollowsAStartingInstance(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("following a log did not end when the instance failed to start")
+	}
+}
+
+// TestHypervisorLogIsKeptWithTheInstance checks that the hypervisor's log
+// outlives its VMM, as the console log does, so that it can say why a
+// launch failed or what a stopped guest was doing.
+func TestHypervisorLogIsKeptWithTheInstance(t *testing.T) {
+	tests := []struct {
+		name string
+		// end runs the instance and ends it, and returns what the
+		// hypervisor wrote.
+		end func(t *testing.T, h *harness) string
+	}{
+		{"failed start", func(t *testing.T, h *harness) string {
+			h.starter.startErr = errors.New("kvm: permission denied")
+			if err := h.manager.Start(t.Context(), h.instance); err == nil {
+				t.Fatal("the start succeeded, want it to fail")
+			}
+			return "kvm: permission denied"
+		}},
+		{"failed resume from standby", func(t *testing.T, h *harness) string {
+			h.start(t)
+			if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+				t.Fatalf("Standby: %v", err)
+			}
+			h.starter.restoreErr = errors.New("kvm: permission denied")
+			if err := h.manager.Start(t.Context(), h.instance); err == nil {
+				t.Fatal("the resume succeeded, want it to fail")
+			}
+			return "kvm: permission denied"
+		}},
+		{"stop", func(t *testing.T, h *harness) string {
+			h.start(t)
+			writeHypervisorLog(t, h, "virtio-net: queue stalled\n")
+			if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+				t.Fatalf("Stop: %v", err)
+			}
+			return "virtio-net: queue stalled"
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			want := tt.end(t, h)
+
+			var out bytes.Buffer
+			opts := LogOptions{Source: LogSourceHypervisor}
+			if err := h.manager.StreamLogs(t.Context(), h.instance, opts, &out); err != nil {
+				t.Fatalf("StreamLogs: %v", err)
+			}
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("hypervisor log = %q, want %q", out.String(), want)
+			}
+		})
+	}
+}
+
+// writeHypervisorLog appends to the hypervisor's log where a running VMM
+// writes it: through its link in the runtime directory.
+func writeHypervisorLog(t *testing.T, h *harness, contents string) {
+	t.Helper()
+
+	path := hypervisor.LogPath(h.manager.hypervisorSocketPath(h.instance.ID))
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.WriteString(contents); err != nil {
+		t.Fatal(err)
 	}
 }
 

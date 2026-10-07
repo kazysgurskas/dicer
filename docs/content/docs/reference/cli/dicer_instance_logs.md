@@ -9,10 +9,8 @@ and whatever the workload writes to the console. It is kept with the
 instance, so it can be read after a stop to explain one.
 
 Use `--source` hypervisor for the hypervisor's own log, which explains a guest
-that crashed or never got as far as booting. It is kept after the instance
-ends on its own, and across its restarts. It is discarded when the instance
-is stopped, put on standby or deleted, when a start fails, and when the
-host reboots.
+that crashed or never got as far as booting. It is kept with the instance
+too, across stops and restarts, until the instance is deleted.
 
 ## Usage
 

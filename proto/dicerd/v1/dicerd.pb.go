@@ -744,9 +744,8 @@ const (
 	// and whatever the workload writes to the console.
 	LogSource_LOG_SOURCE_GUEST LogSource = 1
 	// The hypervisor's own log, which explains a guest that crashed or never
-	// booted. It is kept after the instance ends on its own, and across its
-	// restarts. It is discarded when the instance is stopped, put on standby
-	// or deleted, when a start fails, and when the host reboots.
+	// booted. Like the console log, it is kept with the instance, across stops
+	// and restarts, until the instance is deleted.
 	LogSource_LOG_SOURCE_HYPERVISOR LogSource = 2
 )
 
