@@ -86,7 +86,7 @@ Anything else is a **failure**:
 - the guest resets, through a kernel panic or a reboot;
 - the hypervisor process dies;
 - a [health check](../../guides/health-checks) finds it unhealthy, and its
-  restart policy would restart it.
+  restart policy restarts failures.
 
 The instance is then Failed, with the reason, unless its restart policy
 starts it again.

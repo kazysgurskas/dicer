@@ -96,9 +96,11 @@ What happens depends on the instance's [restart policy](../restarts):
   then starts it again, and the restart counts towards an `on-failure`
   limit.
 
-An `on-failure:N` instance that has already been restarted `N` times in a
-row is not stopped: its policy would not restart it, so it is reported
-unhealthy and left running.
+An `on-failure:N` instance that is unhealthy again after `N` restarts in a
+row is stopped too. Its policy gives up, as it would for any other failure,
+and the instance ends as Failed with the reason "gave up after N restarts:
+health check … failed 3 times in a row". It stays Failed until you start
+it.
 
 So a check and a restart policy together keep alive a workload that hangs
 rather than exits:

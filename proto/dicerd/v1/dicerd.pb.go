@@ -1599,9 +1599,10 @@ func (x *HealthCheckTCP) GetPort() uint32 {
 	return 0
 }
 
-// Health is what an instance's health check has found. An unhealthy instance
-// is restarted if its restart policy would restart it after a failure, and
-// otherwise left running.
+// Health is what an instance's health check has found. If the instance's
+// restart policy restarts failures, an unhealthy instance is stopped as
+// failed, and the policy restarts it or gives up. Otherwise it is left
+// running.
 type Health struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Status HealthStatus           `protobuf:"varint,1,opt,name=status,proto3,enum=dicerd.v1.HealthStatus" json:"status,omitempty"`

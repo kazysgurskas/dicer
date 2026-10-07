@@ -446,9 +446,10 @@ GetEventsResponse is a batch of events, oldest first.
 
 ### Health
 
-Health is what an instance's health check has found. An unhealthy instance
-is restarted if its restart policy would restart it after a failure, and
-otherwise left running.
+Health is what an instance's health check has found. If the instance's
+restart policy restarts failures, an unhealthy instance is stopped as
+failed, and the policy restarts it or gives up. Otherwise it is left
+running.
 
 | Field | Type | Description |
 |---|---|---|

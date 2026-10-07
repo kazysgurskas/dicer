@@ -111,49 +111,40 @@ func TestUnhealthyInstanceIsRestarted(t *testing.T) {
 	h.waitForHealth(t, types.HealthStatusHealthy)
 }
 
-// Without a policy that would restart it, an unhealthy instance is reported
-// and left running: stopping it would only make things worse.
+// Under the policy no, an unhealthy instance is reported and left running:
+// stopping it would only make things worse.
 func TestUnhealthyInstanceWithoutRestartPolicyKeepsRunning(t *testing.T) {
-	for name, policy := range map[string]types.RestartPolicy{
-		"no":                   {Mode: types.RestartModeNo},
-		"retries already used": {Mode: types.RestartModeOnFailure, MaxRetries: 1},
-	} {
-		t.Run(name, func(t *testing.T) {
-			h, _ := monitored(t, policy, false)
-			h.start(t)
-			if policy.MaxRetries > 0 {
-				forceRestartCount(t, h, policy.MaxRetries)
-			}
+	h, _ := monitored(t, types.RestartPolicy{Mode: types.RestartModeNo}, false)
+	h.start(t)
 
-			health := h.waitForHealth(t, types.HealthStatusUnhealthy)
-			if health.FailingStreak < quickCheck.Retries || !strings.Contains(health.LastOutput, "refused") {
-				t.Errorf("health = %+v, want the failures and what the probe said", health)
-			}
+	health := h.waitForHealth(t, types.HealthStatusUnhealthy)
+	if health.FailingStreak < quickCheck.Retries || !strings.Contains(health.LastOutput, "refused") {
+		t.Errorf("health = %+v, want the failures and what the probe said", health)
+	}
 
-			time.Sleep(50 * time.Millisecond)
-			if status := h.status(t); status.State != types.InstanceStateRunning || h.starter.vmmCount() != 1 {
-				t.Errorf("state = %s with %d VMMs launched, want the first still running", status.State, h.starter.vmmCount())
-			}
-		})
+	time.Sleep(50 * time.Millisecond)
+	if status := h.status(t); status.State != types.InstanceStateRunning || h.starter.vmmCount() != 1 {
+		t.Errorf("state = %s with %d VMMs launched, want the first still running", status.State, h.starter.vmmCount())
 	}
 }
 
-// forceRestartCount records the running instance as having been restarted
-// n times in a row.
-func forceRestartCount(t *testing.T, h *harness, n int) {
-	t.Helper()
+// An on-failure:N instance that is still unhealthy after its N restarts
+// ends as Failed, as one that keeps exiting with an error does.
+func TestUnhealthyInstanceFailsOnceRestartsAreUsedUp(t *testing.T) {
+	h, _ := monitored(t, types.RestartPolicy{Mode: types.RestartModeOnFailure, MaxRetries: 1}, false)
+	h.restartAtOnce()
+	h.start(t)
 
-	lock := h.manager.lock(h.instance.ID)
-	lock.Lock()
-	defer lock.Unlock()
-
-	status, err := h.manager.Status(h.instance)
-	if err != nil {
-		t.Fatal(err)
+	status := h.waitForState(t, types.InstanceStateFailed)
+	if !strings.Contains(status.StateError, "gave up after 1 restart") ||
+		!strings.Contains(status.StateError, "health check") {
+		t.Errorf("state error = %q, want the restarts given up after and the failing check", status.StateError)
 	}
-	status.RestartCount = n
-	if err := h.manager.writeStatus(status); err != nil {
-		t.Fatal(err)
+	if n := h.starter.vmmCount(); n != 2 {
+		t.Errorf("launched %d VMMs, want 2: the first start and its one restart", n)
+	}
+	if _, _, ok := h.manager.Health(h.instance); ok {
+		t.Error("the failed instance is still being probed")
 	}
 }
 

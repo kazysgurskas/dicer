@@ -23,8 +23,9 @@ import (
 )
 
 // Health monitors are started by supervise and stopped by forget. Probes run
-// in the guest agent over vsock. An unhealthy instance is stopped only if its
-// restart policy would restart it; otherwise it is reported and left running.
+// in the guest agent over vsock. If an instance's restart policy restarts
+// failures, an unhealthy instance is stopped as failed, and the policy then
+// restarts it or gives up. Under the policy no, it is only reported.
 
 // agentGrace is added to a probe's timeout for the vsock round trip.
 const agentGrace = 2 * time.Second
@@ -170,7 +171,8 @@ func probeRequest(check types.HealthCheck) *diceragentv1.ProbeRequest {
 }
 
 // handleUnhealthy stops an unhealthy instance and ends it as failed, if its
-// restart policy would restart it.
+// restart policy restarts failures. The policy then restarts it, or leaves
+// it Failed once it has used up its restarts.
 func (m *Manager) handleUnhealthy(ctx context.Context, instance types.InstanceSpec, vmm *process.Process, check types.HealthCheck, health types.Health) {
 	lock := m.lock(instance.ID)
 	lock.Lock()
@@ -190,7 +192,11 @@ func (m *Manager) handleUnhealthy(ctx context.Context, instance types.InstanceSp
 
 	exit := Exit{Failure: fmt.Errorf("health check %q failed %d times in a row: %s",
 		check.String(), health.FailingStreak, firstLine(health.LastOutput))}
-	if !decideRestart(instance.Restart, exit, status.RestartCount, time.Since(status.StartedAt)).restart {
+	// An instance whose policy gave up is stopped too. Left running, it
+	// would be restarted once it had run long enough to reset the restart
+	// count, and the limit would never end it.
+	decision := decideRestart(instance.Restart, exit, status.RestartCount, time.Since(status.StartedAt))
+	if !decision.restart && !decision.gaveUp {
 		return
 	}
 
