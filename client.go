@@ -37,15 +37,20 @@ const (
 	DefaultKeepaliveTimeout = 10 * time.Second
 )
 
-// Client is a connection to a Dicer daemon. It is the generated
-// dicerdv1.DaemonServiceClient, so its methods are the API's RPCs, taking and
-// returning the messages in package dicerdv1, and its errors are gRPC
-// statuses.
+// Client is a connection to a Dicer daemon. Its calls are grouped by the
+// resource they act on, as in c.Instances.Get(ctx, "web"), and those about
+// the host as a whole are methods of its own, such as c.Events.
 //
 // A Client is safe for concurrent use and should be closed when done.
 type Client struct {
-	dicerdv1.DaemonServiceClient
+	Instances *Instances
+	Snapshots *Snapshots
+	Networks  *Networks
+	Volumes   *Volumes
+	Images    *Images
+	Kernels   *Kernels
 
+	api  dicerdv1.DaemonServiceClient
 	conn *grpc.ClientConn
 }
 
@@ -150,7 +155,21 @@ func NewClient(opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("connect to %s: %w", o.address, err)
 	}
 
-	return &Client{DaemonServiceClient: dicerdv1.NewDaemonServiceClient(conn), conn: conn}, nil
+	return newClient(conn, dicerdv1.NewDaemonServiceClient(conn)), nil
+}
+
+// newClient returns a Client making its calls through api.
+func newClient(conn *grpc.ClientConn, api dicerdv1.DaemonServiceClient) *Client {
+	return &Client{
+		Instances: &Instances{api: api},
+		Snapshots: &Snapshots{api: api},
+		Networks:  &Networks{api: api},
+		Volumes:   &Volumes{api: api},
+		Images:    &Images{api: api},
+		Kernels:   &Kernels{api: api},
+		api:       api,
+		conn:      conn,
+	}
 }
 
 // isSocket reports whether a gRPC target is a Unix socket.

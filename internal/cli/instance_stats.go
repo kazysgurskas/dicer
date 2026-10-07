@@ -12,14 +12,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // printableInstanceStats lists what instances use of the host, a row each.
 // Its column names are also a --format template's fields and JSON's keys.
 type printableInstanceStats struct {
-	Instances []*dicerdv1.InstanceStats
+	Instances []dicer.InstanceStats
 }
 
 func (p *printableInstanceStats) Columns() []string {
@@ -30,17 +30,17 @@ func (p *printableInstanceStats) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Instances))
 	for _, s := range p.Instances {
 		memPerc := "--"
-		if s.GetMemoryBytes() > 0 {
-			memPerc = fmt.Sprintf("%.2f%%", float64(s.GetResidentMemoryBytes())/float64(s.GetMemoryBytes())*100)
+		if s.MemoryBytes > 0 {
+			memPerc = fmt.Sprintf("%.2f%%", float64(s.ResidentMemoryBytes)/float64(s.MemoryBytes)*100)
 		}
 		rows = append(rows, map[string]any{
-			"ID":       s.GetId(),
-			"Name":     s.GetName(),
-			"CPUPerc":  fmt.Sprintf("%.2f%%", s.GetCpuPercent()),
-			"MemUsage": humanize.Bytes(s.GetResidentMemoryBytes()) + " / " + humanize.Bytes(s.GetMemoryBytes()),
+			"ID":       s.ID,
+			"Name":     s.Name,
+			"CPUPerc":  fmt.Sprintf("%.2f%%", s.CPUPercent),
+			"MemUsage": humanize.Bytes(s.ResidentMemoryBytes) + " / " + humanize.Bytes(s.MemoryBytes),
 			"MemPerc":  memPerc,
-			"NetIO":    humanize.Bytes(s.GetNetworkReceiveBytes()) + " / " + humanize.Bytes(s.GetNetworkTransmitBytes()),
-			"BlockIO":  humanize.Bytes(s.GetDiskReadBytes()) + " / " + humanize.Bytes(s.GetDiskWrittenBytes()),
+			"NetIO":    humanize.Bytes(s.NetworkReceiveBytes) + " / " + humanize.Bytes(s.NetworkTransmitBytes),
+			"BlockIO":  humanize.Bytes(s.DiskReadBytes) + " / " + humanize.Bytes(s.DiskWrittenBytes),
 		})
 	}
 	return rows
@@ -70,7 +70,7 @@ func newInstanceStatsCommand() *cobra.Command {
 			"  dicer stats web db\n" +
 			"  dicer stats --no-stream --format '{{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}'\n" +
 			"  dicer stats --no-stream --format json",
-		ValidArgsFunction: complete(0, instancesIn(stateRunning, statePaused)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateRunning, dicer.InstanceStatePaused)),
 		RunE:              runInstanceStatsCommand,
 	}
 
@@ -92,27 +92,25 @@ func runInstanceStatsCommand(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(contextOf(cmd), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	stream, err := client.GetInstanceStats(ctx, &dicerdv1.GetInstanceStatsRequest{
-		Names:  args,
-		Follow: !noStream,
-	})
+	stream, err := client.Instances.Stats(ctx, dicer.InstanceStatsOptions{Names: args, Follow: !noStream})
 	if err != nil {
 		return err
 	}
+	defer func() { _ = stream.Close() }()
 
 	if noStream {
-		batch, err := stream.Recv()
+		batch, err := stream.Next()
 		if err != nil {
 			return err
 		}
-		return render(cmd, &printableInstanceStats{Instances: batch.GetInstances()})
+		return render(cmd, &printableInstanceStats{Instances: batch.Instances})
 	}
 
 	screen := newScreen(cmd.OutOrStdout())
 	defer screen.close()
 
 	for {
-		batch, err := stream.Recv()
+		batch, err := stream.Next()
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -123,10 +121,10 @@ func runInstanceStatsCommand(cmd *cobra.Command, args []string) error {
 		// Drawn off screen and written at once, so the screen never shows
 		// half a table.
 		var frame bytes.Buffer
-		if err := renderTo(cmd, &frame, &printableInstanceStats{Instances: batch.GetInstances()}); err != nil {
+		if err := renderTo(cmd, &frame, &printableInstanceStats{Instances: batch.Instances}); err != nil {
 			return err
 		}
-		read := batch.GetReadTime().AsTime().Local().Format(time.TimeOnly)
+		read := batch.ReadTime.Local().Format(time.TimeOnly)
 		screen.draw(read+" · Ctrl+C to stop", frame.Bytes())
 	}
 }

@@ -3,7 +3,7 @@
 
 // Package compose reads compose files: a project's instances, networks and
 // volumes, described together in YAML as Docker Compose describes
-// containers, and turned into the requests the daemon's API takes.
+// containers, and turned into the definitions the client creates them from.
 //
 // A project's instances are found again by their labels: LabelProject names
 // the project, LabelService the service, and LabelConfigHash is a digest of
@@ -14,13 +14,12 @@ package compose
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
 
-	"google.golang.org/protobuf/proto"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 // The labels a project's instances carry.
@@ -66,9 +65,9 @@ type Project struct {
 type Service struct {
 	// Name is the service's name in the file.
 	Name string
-	// Instance is the request that defines the service's instance, without
-	// starting it. Its labels include the project's.
-	Instance *dicerdv1.CreateInstanceRequest
+	// Instance is the definition of the service's instance. Its labels
+	// include the project's.
+	Instance dicer.InstanceSpec
 	// DependsOn are the services to start first, in the order given.
 	DependsOn []Dependency
 }
@@ -101,9 +100,9 @@ type Network struct {
 	Name string
 	// External networks are not created or deleted with the project.
 	External bool
-	// Request creates the network. Nil for an external one. Its subnet is
-	// empty if the file gives none: up picks a free one, with FreeSubnet.
-	Request *dicerdv1.CreateNetworkRequest
+	// Spec defines the network. It is nil for an external one. Its subnet
+	// is empty if the file gives none: up picks a free one, with FreeSubnet.
+	Spec *dicer.NetworkSpec
 }
 
 // Volume is a volume a project uses: its own, created with it, or an
@@ -114,8 +113,9 @@ type Volume struct {
 	Name string
 	// External volumes are not created or deleted with the project.
 	External bool
-	// Request creates the volume. Nil for an external one.
-	Request *dicerdv1.CreateVolumeRequest
+	// SizeBytes is the size the volume is created with. It is zero for an
+	// external one.
+	SizeBytes int64
 }
 
 // ServiceNames returns the names of the project's services, sorted.
@@ -172,28 +172,25 @@ func (p *Project) Select(names ...string) ([]*Service, error) {
 
 // ServiceFor returns the service an instance of the project runs, if it
 // does.
-func (p *Project) ServiceFor(instance *dicerdv1.Instance) (*Service, bool) {
-	if instance.GetLabels()[LabelProject] != p.Name {
+func (p *Project) ServiceFor(instance dicer.Instance) (*Service, bool) {
+	if instance.Labels[LabelProject] != p.Name {
 		return nil, false
 	}
-	s, ok := p.Services[instance.GetLabels()[LabelService]]
+	s, ok := p.Services[instance.Labels[LabelService]]
 	return s, ok
 }
 
-// ConfigHash digests the definition a request gives an instance, leaving out
-// its config-hash label and whether to start it. Two requests with the same
-// hash define the same instance.
-func ConfigHash(req *dicerdv1.CreateInstanceRequest) string {
-	def, ok := proto.Clone(req).(*dicerdv1.CreateInstanceRequest)
-	if !ok {
-		panic("compose: clone of a CreateInstanceRequest is not one")
-	}
-	def.Start = false
-	delete(def.GetLabels(), LabelConfigHash)
+// ConfigHash digests an instance's definition, leaving out its config-hash
+// label. Two definitions with the same hash define the same instance.
+func ConfigHash(spec dicer.InstanceSpec) string {
+	labels := maps.Clone(spec.Labels)
+	delete(labels, LabelConfigHash)
+	spec.Labels = labels
 
-	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(def)
+	// Encoding a struct writes its fields in order, and a map's keys sorted.
+	data, err := json.Marshal(spec)
 	if err != nil {
-		panic(fmt.Sprintf("compose: marshal instance definition: %v", err))
+		panic(fmt.Sprintf("compose: encode instance definition: %v", err))
 	}
 
 	sum := sha256.Sum256(data)

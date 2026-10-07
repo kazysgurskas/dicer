@@ -10,50 +10,45 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/remote"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // testResources is a 4-CPU, 32GiB host with a 1GiB reserve, a quarter of
 // its vCPUs and half its memory given out, and a 250GiB disk.
-func testResources() *dicerdv1.GetResourcesResponse {
-	return &dicerdv1.GetResourcesResponse{
-		Cpu: &dicerdv1.ResourceCapacity{
+func testResources() dicer.Resources {
+	return dicer.Resources{
+		CPU: dicer.ResourceCapacity{
 			Host: 4, Overcommit: 4, Allocatable: 16, Allocated: 4, Available: 12,
 		},
-		Memory: &dicerdv1.ResourceCapacity{
+		Memory: dicer.ResourceCapacity{
 			Host: 32 << 30, Reserved: 1 << 30, Overcommit: 1,
 			Allocatable: 31 << 30, Allocated: 15872 << 20, Available: 15872 << 20,
 		},
-		Disk: &dicerdv1.DiskUsage{
+		Disk: dicer.DiskUsage{
 			Path: "/var/lib/dicer", TotalBytes: 250 << 30, FreeBytes: 225 << 30, ProvisionedBytes: 40 << 30,
 		},
 	}
 }
 
 // instancesInStates is a set of instances, one per state given.
-func instancesInStates(states ...dicerdv1.InstanceState) []*dicerdv1.Instance {
-	out := make([]*dicerdv1.Instance, 0, len(states))
+func instancesInStates(states ...dicer.InstanceState) []dicer.Instance {
+	out := make([]dicer.Instance, 0, len(states))
 	for _, state := range states {
-		out = append(out, &dicerdv1.Instance{State: state})
+		out = append(out, dicer.Instance{State: state})
 	}
 
 	return out
 }
 
 func TestWriteInfo(t *testing.T) {
-	host := &dicerdv1.GetHostInfoResponse{
+	host := dicer.HostInfo{
 		Hostname: "compute-1",
 		Version:  "v0.5.0",
-		Hypervisors: []*dicerdv1.HypervisorInfo{
-			{
-				Type:      dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR,
-				Versions:  []string{"v49.0.0", "v48.0.0"},
-				IsDefault: true,
-			},
-			{Type: dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER, Versions: []string{"v1.17.0"}},
+		Hypervisors: []dicer.HypervisorInfo{
+			{Type: dicer.HypervisorTypeCloudHypervisor, Versions: []string{"v49.0.0", "v48.0.0"}, IsDefault: true},
+			{Type: dicer.HypervisorTypeFirecracker, Versions: []string{"v1.17.0"}},
 		},
 	}
-	instances := instancesInStates(stateRunning, stateRunning, stateStopped)
+	instances := instancesInStates(dicer.InstanceStateRunning, dicer.InstanceStateRunning, dicer.InstanceStateStopped)
 	local := target{name: remote.Local, remote: remote.Remote{Address: dicer.DefaultAddress}}
 
 	var out bytes.Buffer
@@ -88,7 +83,7 @@ func TestWriteInfo(t *testing.T) {
 }
 
 func TestWriteInfoWithNetworkAPI(t *testing.T) {
-	host := &dicerdv1.GetHostInfoResponse{ApiAddresses: []string{"192.0.2.1:7443"}}
+	host := dicer.HostInfo{APIAddresses: []string{"192.0.2.1:7443"}}
 
 	var out bytes.Buffer
 	if err := writeInfo(&out, target{name: remote.Local, remote: remote.Remote{Address: dicer.DefaultAddress}},
@@ -130,8 +125,8 @@ func TestUsageBar(t *testing.T) {
 
 func TestInstanceSummaryOrdersBusiestFirst(t *testing.T) {
 	got := instanceSummary(instancesInStates(
-		stateStopped, stateFailed, statePaused,
-		stateRunning, stateRunning, stateRestarting,
+		dicer.InstanceStateStopped, dicer.InstanceStateFailed, dicer.InstanceStatePaused,
+		dicer.InstanceStateRunning, dicer.InstanceStateRunning, dicer.InstanceStateRestarting,
 	), palette{})
 
 	if want := "2 running, 1 paused, 1 restarting, 1 failed, 1 stopped (6 defined)"; got != want {
@@ -140,17 +135,17 @@ func TestInstanceSummaryOrdersBusiestFirst(t *testing.T) {
 }
 
 func TestHealthSummary(t *testing.T) {
-	health := func(status dicerdv1.HealthStatus) *dicerdv1.Instance {
-		return &dicerdv1.Instance{Health: &dicerdv1.Health{Status: status}}
+	health := func(status dicer.HealthStatus) dicer.Instance {
+		return dicer.Instance{Health: &dicer.Health{Status: status}}
 	}
 
-	got := healthSummary([]*dicerdv1.Instance{
-		health(healthHealthy), health(healthUnhealthy), health(healthHealthy), {},
+	got := healthSummary([]dicer.Instance{
+		health(dicer.HealthStatusHealthy), health(dicer.HealthStatusUnhealthy), health(dicer.HealthStatusHealthy), {},
 	}, palette{})
 	if want := " · 1 unhealthy, 2 healthy"; got != want {
 		t.Errorf("healthSummary = %q, want %q", got, want)
 	}
-	if got := healthSummary([]*dicerdv1.Instance{{}}, palette{}); got != "" {
+	if got := healthSummary([]dicer.Instance{{}}, palette{}); got != "" {
 		t.Errorf("healthSummary with nothing checked = %q, want nothing", got)
 	}
 }
@@ -158,7 +153,7 @@ func TestHealthSummary(t *testing.T) {
 // A bar is coloured by how full it is, on a terminal.
 func TestResourceBarsAreColouredByLevel(t *testing.T) {
 	r := testResources()
-	r.Cpu.Allocated = 15 // 94%: red
+	r.CPU.Allocated = 15 // 94%: red
 	fields := resourceFields(r, palette{enabled: true})
 
 	if !strings.HasPrefix(fields[0].lines[0], ansiRed) {

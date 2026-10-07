@@ -37,8 +37,10 @@ the message, which may change.
 
 ## From Go
 
-The `github.com/konradasb/dicer` package makes the connection, and the
-generated code in `proto/dicerd/v1` is the API:
+The `github.com/konradasb/dicer` package is the Go client. Its calls are
+grouped by the resource they act on, take and return plain Go types, and
+hide the gRPC streams behind readers, writers and an `exec.Cmd`-like
+command:
 
 ```console
 $ go get github.com/konradasb/dicer
@@ -55,11 +57,7 @@ import (
 	"log"
 	"os"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/konradasb/dicer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func main() {
@@ -72,46 +70,61 @@ func main() {
 	}
 	defer c.Close()
 
-	instance, err := c.CreateInstance(ctx, &dicerdv1.CreateInstanceRequest{
+	instance, err := c.Instances.Create(ctx, dicer.InstanceSpec{
 		Name:        "web",
 		ImageRef:    "nginx:1.27",
-		Vcpus:       1,
+		VCPUs:       1,
 		MemoryBytes: 512 << 20,
 		DiskBytes:   10 << 30,
-		Ports: []*dicerdv1.PortMapping{
-			{HostPort: 8080, GuestPort: 80, Protocol: dicerdv1.Protocol_PROTOCOL_TCP},
-		},
-		Start: true,
-	})
-	switch status.Code(err) {
-	case codes.OK:
-		fmt.Printf("%s is %s at %s\n", instance.GetName(), instance.GetState(), instance.GetIp())
-	case codes.AlreadyExists:
+		Ports:       []dicer.PortMapping{{HostPort: 8080, GuestPort: 80}},
+	}, dicer.CreateOptions{Start: true})
+	switch {
+	case err == nil:
+		fmt.Printf("%s is %s at %s\n", instance.Name, instance.State, instance.IP)
+	case errors.Is(err, dicer.ErrAlreadyExists):
 		fmt.Println("web exists already")
 	default:
-		log.Fatal(status.Convert(err).Message())
+		log.Fatal(err)
 	}
 
-	// Follow its console until it stops.
-	logs, err := c.GetInstanceLogs(ctx, &dicerdv1.GetInstanceLogsRequest{Name: "web", Follow: true})
+	// Run a command in it.
+	out, err := c.Instances.Command("web", "nginx", "-v").Output(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for {
-		chunk, err := logs.Recv()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		os.Stdout.Write(chunk.GetData())
+	fmt.Printf("%s", out)
+
+	// Follow its console until it stops.
+	console, err := c.Instances.Logs(ctx, "web", dicer.LogOptions{Follow: true})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer console.Close()
+	if _, err := io.Copy(os.Stdout, console); err != nil {
+		log.Fatal(err)
 	}
 }
 ```
 
-A `dicer.Client` is the generated `DaemonServiceClient`, so its methods are
-the API's calls. It is safe for concurrent use; make one and share it.
+A failed call returns an error that matches the kind of failure with
+`errors.Is`: `dicer.ErrNotFound` for `NOT_FOUND`, `dicer.ErrFailedPrecondition`
+for `FAILED_PRECONDITION`, and so on. Its message is the daemon's. A command
+that exits with a status other than 0 returns a `*dicer.ExitError`, which
+holds the status.
+
+| To | Call |
+|----|------|
+| Define, start, stop and delete instances | `c.Instances.Create`, `Start`, `Stop`, `Delete` |
+| Run a command | `c.Instances.Command(name, args...)`, then `Run`, `Output` or `Start` and `Wait` |
+| Copy files | `c.Instances.WriteFile`, `ReadFile`, `CopyTo`, `CopyFrom` |
+| Wait for an instance to stop | `c.Instances.Wait` |
+| Take, restore and fork snapshots | `c.Snapshots.Create`, `Restore`, `Fork` |
+| Pull images, with progress | `c.Images.Pull` |
+| Follow what happens on the host | `c.Events` |
+
+The [package documentation](https://pkg.go.dev/github.com/konradasb/dicer)
+lists every call. A `dicer.Client` is safe for concurrent use; make one and
+share it.
 
 For a daemon's TCP listener, give its address and a TLS configuration:
 

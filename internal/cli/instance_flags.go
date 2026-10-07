@@ -1,8 +1,8 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Instance flags: turning command-line flags into a create or update
-// request, and parsing the individual flag values.
+// Instance flags: turning command-line flags into a create or an update,
+// and parsing the individual flag values.
 
 package cli
 
@@ -13,35 +13,41 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/naming"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
+
+// instanceCreate is what create and run ask of the daemon: an instance's
+// definition, and how to create it.
+type instanceCreate struct {
+	spec dicer.InstanceSpec
+	opts dicer.CreateOptions
+}
 
 // parseRestartPolicy parses a restart policy as --restart takes it,
 // "on-failure:5".
-func parseRestartPolicy(s string) (*dicerdv1.RestartPolicy, error) {
+func parseRestartPolicy(s string) (dicer.RestartPolicy, error) {
 	modeName, retries, hasRetries := strings.Cut(s, ":")
-	mode, err := parseEnum[dicerdv1.RestartMode]("restart policy", modeName)
+	mode, err := parseChoice("restart policy", modeName, restartModes)
 	if err != nil {
-		return nil, err
+		return dicer.RestartPolicy{}, err
 	}
-	p := &dicerdv1.RestartPolicy{Mode: mode}
+	p := dicer.RestartPolicy{Mode: mode}
 
 	if hasRetries {
 		n, err := strconv.ParseInt(retries, 10, 32)
 		if err != nil || n < 0 {
-			return nil, fmt.Errorf("invalid restart policy %q: want on-failure:N, with N a whole number", s)
+			return dicer.RestartPolicy{}, fmt.Errorf("invalid restart policy %q: want on-failure:N, with N a whole number", s)
 		}
-		p.MaxRetries = int32(n)
+		p.MaxRetries = int(n)
 	}
 
 	return p, nil
@@ -50,7 +56,7 @@ func parseRestartPolicy(s string) (*dicerdv1.RestartPolicy, error) {
 // addInstanceSpecFlags adds the flags that describe an instance, shared by
 // create, run and update (which passes withDefaults false).
 func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
-	vcpus, memory, disk := int32(1), "512MiB", "10GiB"
+	vcpus, memory, disk := 1, "512MiB", "10GiB"
 	if !withDefaults {
 		vcpus, memory, disk = 0, "", ""
 	}
@@ -60,9 +66,9 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	flags.String("kernel-args", "", "Kernel command line arguments")
 	flags.String("hypervisor-type", "", "Hypervisor: cloud-hypervisor or firecracker (default: cloud-hypervisor)")
 	flags.String("hypervisor-version", "", "Hypervisor version (default: the hypervisor's default version, which 'dicer info' shows)")
-	flags.Int32("vcpus", vcpus, "Number of virtual CPUs")
+	flags.Int("vcpus", vcpus, "Number of virtual CPUs")
 	flags.StringP("memory", "m", memory, "Memory, e.g. 512MiB or 2GiB")
-	flags.Int32("max-vcpus", 0, "Most vCPUs 'dicer resize' can give the running instance, on Cloud Hypervisor (0: none)")
+	flags.Int("max-vcpus", 0, "Most vCPUs 'dicer resize' can give the running instance, on Cloud Hypervisor (0: none)")
 	flags.String("max-memory", "", "Most memory 'dicer resize' can give the running instance, e.g. 4GiB (0: none)")
 	flags.String("disk", disk, "Overlay disk size, e.g. 10GiB")
 	flags.String("disk-rate", "", "Bytes per second each disk can be read and written at, e.g. 50MiB (0: unlimited)")
@@ -104,11 +110,11 @@ func addPullFlag(cmd *cobra.Command, usage string) {
 }
 
 // pullPolicyFlag returns the pull policy --pull names.
-func pullPolicyFlag(cmd *cobra.Command) (dicerdv1.PullPolicy, error) {
+func pullPolicyFlag(cmd *cobra.Command) (dicer.PullPolicy, error) {
 	v, _ := cmd.Flags().GetString("pull")
-	policy, err := parseEnum[dicerdv1.PullPolicy]("--pull", v)
+	policy, err := parseChoice("--pull", v, pullPolicies)
 	if err != nil {
-		return 0, usagef(cmd, "%s", err)
+		return "", usagef(cmd, "%s", err)
 	}
 	return policy, nil
 }
@@ -136,62 +142,60 @@ func commandArgs(cmd *cobra.Command, args []string) []string {
 	return nil
 }
 
-// buildCreateRequest assembles a create request from the command's
-// arguments and flags.
-func buildCreateRequest(cmd *cobra.Command, args []string) (*dicerdv1.CreateInstanceRequest, error) {
-	req := &dicerdv1.CreateInstanceRequest{}
+// buildCreate assembles a create from the command's arguments and flags.
+func buildCreate(cmd *cobra.Command, args []string) (instanceCreate, error) {
+	var c instanceCreate
 
 	if name := positionalArgs(cmd, args); len(name) > 0 {
-		req.Name = name[0]
+		c.spec.Name = name[0]
 	}
 	if command := commandArgs(cmd, args); len(command) > 0 {
-		req.Cmd = command
+		c.spec.Cmd = command
 	}
 	if cmd.Flags().Changed("image") {
-		req.ImageRef, _ = cmd.Flags().GetString("image")
+		c.spec.ImageRef, _ = cmd.Flags().GetString("image")
 	}
 
-	if err := applySpecFlags(cmd, req); err != nil {
-		return nil, usagef(cmd, "%s", err)
+	if err := applySpecFlags(cmd, &c.spec); err != nil {
+		return c, usagef(cmd, "%s", err)
 	}
-	req.Start, _ = cmd.Flags().GetBool("start")
+	c.opts.Start, _ = cmd.Flags().GetBool("start")
 
 	var err error
-	if req.PullPolicy, err = pullPolicyFlag(cmd); err != nil {
-		return nil, err
+	if c.opts.PullPolicy, err = pullPolicyFlag(cmd); err != nil {
+		return c, err
 	}
 
-	if req.GetName() == "" {
-		return nil, usagef(cmd, "%s needs an instance name", cmd.CommandPath())
+	if c.spec.Name == "" {
+		return c, usagef(cmd, "%s needs an instance name", cmd.CommandPath())
 	}
 
-	return req, nil
+	return c, nil
 }
 
-// buildRunRequest assembles the request 'dicer run IMAGE [COMMAND...]'
-// makes: a create that also starts the instance.
-func buildRunRequest(cmd *cobra.Command, args []string) (*dicerdv1.CreateInstanceRequest, error) {
-	req := &dicerdv1.CreateInstanceRequest{
-		ImageRef: args[0],
-		Cmd:      trimDash(args[1:]),
-		Start:    true,
+// buildRun assembles what 'dicer run IMAGE [COMMAND...]' asks for: a create
+// that also starts the instance.
+func buildRun(cmd *cobra.Command, args []string) (instanceCreate, error) {
+	c := instanceCreate{
+		spec: dicer.InstanceSpec{ImageRef: args[0], Cmd: trimDash(args[1:])},
+		opts: dicer.CreateOptions{Start: true},
 	}
 
-	req.Name, _ = cmd.Flags().GetString("name")
-	if req.GetName() == "" {
-		req.Name = generateName(req.GetImageRef())
+	c.spec.Name, _ = cmd.Flags().GetString("name")
+	if c.spec.Name == "" {
+		c.spec.Name = generateName(c.spec.ImageRef)
 	}
 
-	if err := applySpecFlags(cmd, req); err != nil {
-		return nil, usagef(cmd, "%s", err)
+	if err := applySpecFlags(cmd, &c.spec); err != nil {
+		return c, usagef(cmd, "%s", err)
 	}
 
 	var err error
-	if req.PullPolicy, err = pullPolicyFlag(cmd); err != nil {
-		return nil, err
+	if c.opts.PullPolicy, err = pullPolicyFlag(cmd); err != nil {
+		return c, err
 	}
 
-	return req, nil
+	return c, nil
 }
 
 // trimDash drops a -- that leads a command: with flags not interspersed,
@@ -206,72 +210,72 @@ func trimDash(args []string) []string {
 	return args
 }
 
-// applySpecFlags sets the fields of req for the flags given, and the sizes,
+// applySpecFlags sets the fields of spec for the flags given, and the sizes,
 // whose defaults are the command line's.
-func applySpecFlags(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error {
+func applySpecFlags(cmd *cobra.Command, spec *dicer.InstanceSpec) error {
 	flags := cmd.Flags()
 	setString := func(flag string, dst *string) {
 		if flags.Changed(flag) {
 			*dst, _ = flags.GetString(flag)
 		}
 	}
-	setString("kernel", &req.KernelName)
-	setString("kernel-args", &req.KernelArgs)
-	setString("hypervisor-version", &req.HypervisorVersion)
-	setString("network", &req.NetworkName)
-	setString("ip", &req.StaticIp)
-	setString("hostname", &req.Hostname)
+	setString("kernel", &spec.KernelName)
+	setString("kernel-args", &spec.KernelArgs)
+	setString("hypervisor-version", &spec.HypervisorVersion)
+	setString("network", &spec.NetworkName)
+	setString("ip", &spec.StaticIP)
+	setString("hostname", &spec.Hostname)
 
 	var err error
 	if flags.Changed("hypervisor-type") {
 		v, _ := flags.GetString("hypervisor-type")
-		if req.HypervisorType, err = parseEnum[dicerdv1.HypervisorType]("hypervisor", v); err != nil {
+		if spec.HypervisorType, err = parseChoice("hypervisor", v, hypervisorTypes); err != nil {
 			return err
 		}
 	}
 	if flags.Changed("init-mode") {
 		v, _ := flags.GetString("init-mode")
-		if req.InitMode, err = parseEnum[dicerdv1.InitMode]("init mode", v); err != nil {
+		if spec.InitMode, err = parseChoice("init mode", v, initModes); err != nil {
 			return err
 		}
 	}
 	if flags.Changed("restart") {
 		v, _ := flags.GetString("restart")
-		if req.RestartPolicy, err = parseRestartPolicy(v); err != nil {
+		if spec.RestartPolicy, err = parseRestartPolicy(v); err != nil {
 			return err
 		}
 	}
 	if flags.Changed("rm") {
-		req.RemoveOnExit, _ = flags.GetBool("rm")
+		spec.RemoveOnExit, _ = flags.GetBool("rm")
 	}
 	switch hc, err := healthCheckFromFlags(cmd); {
 	case err != nil:
 		return err
 	case hc != nil:
-		req.HealthCheck = hc
+		spec.HealthCheck = hc
 	}
 
 	// Sizes are always given: the flags' defaults are the command line's.
-	req.Vcpus, _ = flags.GetInt32("vcpus")
+	spec.VCPUs, _ = flags.GetInt("vcpus")
 	memory, _ := flags.GetString("memory")
-	if req.MemoryBytes, err = parseMemoryBytes(memory); err != nil {
+	if spec.MemoryBytes, err = parseMemoryBytes(memory); err != nil {
 		return err
 	}
 	disk, _ := flags.GetString("disk")
-	if req.DiskBytes, err = parseDiskBytes(disk); err != nil {
+	if spec.DiskBytes, err = parseDiskBytes(disk); err != nil {
 		return err
 	}
-	req.MaxVcpus, _ = flags.GetInt32("max-vcpus")
+	spec.MaxVCPUs, _ = flags.GetInt("max-vcpus")
 	if flags.Changed("max-memory") {
 		v, _ := flags.GetString("max-memory")
-		if req.MaxMemoryBytes, err = parseMemoryBytes(v); err != nil {
+		if spec.MaxMemoryBytes, err = parseMemoryBytes(v); err != nil {
 			return err
 		}
 	}
 	for flag, dst := range map[string]*int64{
-		"disk-rate":     &req.DiskBytesPerSecond,
-		"upload-rate":   &req.UploadBytesPerSecond,
-		"download-rate": &req.DownloadBytesPerSecond,
+		"disk-rate":     &spec.DiskBytesPerSecond,
+		"upload-rate":   &spec.UploadBytesPerSecond,
+		"download-rate": &spec.DownloadBytesPerSecond,
 	} {
 		if flags.Changed(flag) {
 			v, _ := flags.GetString(flag)
@@ -280,38 +284,33 @@ func applySpecFlags(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) err
 			}
 		}
 	}
-	req.DiskIops, _ = flags.GetInt64("disk-iops")
-	if d, _ := flags.GetDuration("standby-after"); d != 0 {
-		req.StandbyAfter = durationpb.New(d)
-	}
+	spec.DiskIOPS, _ = flags.GetInt64("disk-iops")
+	spec.StandbyAfter, _ = flags.GetDuration("standby-after")
 
 	lists, err := parseListFlags(cmd)
 	if err != nil {
 		return err
 	}
 	if lists.ports != nil {
-		req.Ports = lists.ports
+		spec.Ports = lists.ports
 	}
 	if lists.mounts != nil {
-		req.Mounts = lists.mounts
+		spec.Mounts = lists.mounts
 	}
 	if lists.env != nil {
-		req.Env = lists.env
+		spec.Env = lists.env
 	}
 	if lists.labels != nil {
-		req.Labels = lists.labels
+		spec.Labels = lists.labels
 	}
 
 	return nil
 }
 
-// buildUpdateRequest assembles an update that changes only what its flags
-// were given for.
-func buildUpdateRequest(cmd *cobra.Command, args []string) (*dicerdv1.UpdateInstanceRequest, error) {
-	req := &dicerdv1.UpdateInstanceRequest{
-		Name: positionalArgs(cmd, args)[0],
-		Cmd:  commandArgs(cmd, args),
-	}
+// buildUpdate assembles an update of the instance args name that changes
+// only what its flags were given for.
+func buildUpdate(cmd *cobra.Command, args []string) (dicer.InstanceUpdate, error) {
+	update := dicer.InstanceUpdate{Cmd: commandArgs(cmd, args)}
 
 	flags := cmd.Flags()
 	optionalString := func(flag string) *string {
@@ -323,110 +322,112 @@ func buildUpdateRequest(cmd *cobra.Command, args []string) (*dicerdv1.UpdateInst
 		return &v
 	}
 
-	req.ImageRef = optionalString("image")
-	req.KernelName = optionalString("kernel")
-	req.KernelArgs = optionalString("kernel-args")
-	req.HypervisorVersion = optionalString("hypervisor-version")
-	req.NetworkName = optionalString("network")
-	req.StaticIp = optionalString("ip")
-	req.Hostname = optionalString("hostname")
+	update.ImageRef = optionalString("image")
+	update.KernelName = optionalString("kernel")
+	update.KernelArgs = optionalString("kernel-args")
+	update.HypervisorVersion = optionalString("hypervisor-version")
+	update.NetworkName = optionalString("network")
+	update.StaticIP = optionalString("ip")
+	update.Hostname = optionalString("hostname")
 
 	var err error
 	if v := optionalString("hypervisor-type"); v != nil {
-		if req.HypervisorType, err = parseEnum[dicerdv1.HypervisorType]("hypervisor", *v); err != nil {
-			return nil, usagef(cmd, "%s", err)
+		if update.HypervisorType, err = parseChoice("hypervisor", *v, hypervisorTypes); err != nil {
+			return update, usagef(cmd, "%s", err)
 		}
 	}
 	if v := optionalString("init-mode"); v != nil {
-		if req.InitMode, err = parseEnum[dicerdv1.InitMode]("init mode", *v); err != nil {
-			return nil, usagef(cmd, "%s", err)
+		if update.InitMode, err = parseChoice("init mode", *v, initModes); err != nil {
+			return update, usagef(cmd, "%s", err)
 		}
 	}
 	if flags.Changed("vcpus") {
-		v, _ := flags.GetInt32("vcpus")
-		req.Vcpus = &v
+		v, _ := flags.GetInt("vcpus")
+		update.VCPUs = &v
 	}
 	if v := optionalString("memory"); v != nil {
 		bytes, err := parseMemoryBytes(*v)
 		if err != nil {
-			return nil, usagef(cmd, "%s", err)
+			return update, usagef(cmd, "%s", err)
 		}
-		req.MemoryBytes = &bytes
+		update.MemoryBytes = &bytes
 	}
 	if flags.Changed("max-vcpus") {
-		v, _ := flags.GetInt32("max-vcpus")
-		req.MaxVcpus = &v
+		v, _ := flags.GetInt("max-vcpus")
+		update.MaxVCPUs = &v
 	}
 	if v := optionalString("max-memory"); v != nil {
 		bytes, err := parseMemoryBytes(*v)
 		if err != nil {
-			return nil, usagef(cmd, "%s", err)
+			return update, usagef(cmd, "%s", err)
 		}
-		req.MaxMemoryBytes = &bytes
+		update.MaxMemoryBytes = &bytes
 	}
 	if v := optionalString("disk"); v != nil {
 		bytes, err := parseDiskBytes(*v)
 		if err != nil {
-			return nil, usagef(cmd, "%s", err)
+			return update, usagef(cmd, "%s", err)
 		}
-		req.DiskBytes = &bytes
+		update.DiskBytes = &bytes
 	}
 	for flag, dst := range map[string]**int64{
-		"disk-rate":     &req.DiskBytesPerSecond,
-		"upload-rate":   &req.UploadBytesPerSecond,
-		"download-rate": &req.DownloadBytesPerSecond,
+		"disk-rate":     &update.DiskBytesPerSecond,
+		"upload-rate":   &update.UploadBytesPerSecond,
+		"download-rate": &update.DownloadBytesPerSecond,
 	} {
 		if v := optionalString(flag); v != nil {
 			bytes, err := parseBytesPerSecond(flag, *v)
 			if err != nil {
-				return nil, usagef(cmd, "%s", err)
+				return update, usagef(cmd, "%s", err)
 			}
 			*dst = &bytes
 		}
 	}
 	if flags.Changed("disk-iops") {
 		v, _ := flags.GetInt64("disk-iops")
-		req.DiskIops = &v
+		update.DiskIOPS = &v
 	}
 	if flags.Changed("standby-after") {
 		d, _ := flags.GetDuration("standby-after")
-		req.StandbyAfter = durationpb.New(d)
+		update.StandbyAfter = &d
 	}
 	if flags.Changed("restart") {
 		v, _ := flags.GetString("restart")
-		if req.RestartPolicy, err = parseRestartPolicy(v); err != nil {
-			return nil, usagef(cmd, "%s", err)
+		policy, err := parseRestartPolicy(v)
+		if err != nil {
+			return update, usagef(cmd, "%s", err)
 		}
+		update.RestartPolicy = &policy
 	}
 	if flags.Changed("rm") {
 		v, _ := flags.GetBool("rm")
-		req.RemoveOnExit = &v
+		update.RemoveOnExit = &v
 	}
-	if req.HealthCheck, err = healthCheckFromFlags(cmd); err != nil {
-		return nil, usagef(cmd, "%s", err)
+	if update.HealthCheck, err = healthCheckFromFlags(cmd); err != nil {
+		return update, usagef(cmd, "%s", err)
 	}
 
 	lists, err := parseListFlags(cmd)
 	if err != nil {
-		return nil, usagef(cmd, "%s", err)
+		return update, usagef(cmd, "%s", err)
 	}
-	req.Ports = lists.ports
-	req.Mounts = lists.mounts
-	req.Env = lists.env
-	req.Labels = lists.labels
+	update.Ports = lists.ports
+	update.Mounts = lists.mounts
+	update.Env = lists.env
+	update.Labels = lists.labels
 
-	if proto.Equal(req, &dicerdv1.UpdateInstanceRequest{Name: req.GetName()}) {
-		return nil, usagef(cmd, "%s needs something to change: a flag, or a command after --", cmd.CommandPath())
+	if reflect.ValueOf(update).IsZero() {
+		return update, usagef(cmd, "%s needs something to change: a flag, or a command after --", cmd.CommandPath())
 	}
 
-	return req, nil
+	return update, nil
 }
 
 // specLists are the list and map flags of an instance's definition, each
 // nil unless its flag was given.
 type specLists struct {
-	ports  []*dicerdv1.PortMapping
-	mounts []*dicerdv1.Mount
+	ports  []dicer.PortMapping
+	mounts []dicer.Mount
 	env    map[string]string
 	labels map[string]string
 }
@@ -485,16 +486,16 @@ func parseEach[T any](specs []string, parse func(string) (T, error)) ([]T, error
 // separated key=value pairs, e.g. type=volume,source=data,target=/data,readonly.
 // src and dst or destination may stand for source and target, and ro for
 // readonly. The type defaults to volume.
-func parseMount(s string) (*dicerdv1.Mount, error) {
-	m := &dicerdv1.Mount{Type: dicerdv1.MountType_MOUNT_TYPE_VOLUME}
+func parseMount(s string) (dicer.Mount, error) {
+	m := dicer.Mount{Type: dicer.MountTypeVolume}
 
 	for field := range strings.SplitSeq(s, ",") {
 		key, value, hasValue := strings.Cut(field, "=")
 		switch strings.ToLower(strings.TrimSpace(key)) {
 		case "type":
-			t, err := parseEnum[dicerdv1.MountType]("mount type", value)
+			t, err := parseChoice("mount type", value, mountTypes)
 			if err != nil {
-				return nil, fmt.Errorf("invalid mount %q: %w", s, err)
+				return dicer.Mount{}, fmt.Errorf("invalid mount %q: %w", s, err)
 			}
 			m.Type = t
 		case "source", "src":
@@ -508,23 +509,23 @@ func parseMount(s string) (*dicerdv1.Mount, error) {
 			}
 			ro, err := strconv.ParseBool(value)
 			if err != nil {
-				return nil, fmt.Errorf("invalid mount %q: %s=%q is not true or false", s, key, value)
+				return dicer.Mount{}, fmt.Errorf("invalid mount %q: %s=%q is not true or false", s, key, value)
 			}
 			m.ReadOnly = ro
 		default:
-			return nil, fmt.Errorf("invalid mount %q: unknown key %q: want type, source, target or readonly", s, key)
+			return dicer.Mount{}, fmt.Errorf("invalid mount %q: unknown key %q: want type, source, target or readonly", s, key)
 		}
 	}
 
-	if m.GetTarget() == "" {
-		return nil, fmt.Errorf("invalid mount %q: it needs a target", s)
+	if m.Target == "" {
+		return dicer.Mount{}, fmt.Errorf("invalid mount %q: it needs a target", s)
 	}
 	return m, nil
 }
 
 // parsePortMapping parses a mapping as a person writes it: "8080:80",
 // "127.0.0.1:8080:80", "53:53/udp". The daemon checks it further.
-func parsePortMapping(s string) (*dicerdv1.PortMapping, error) {
+func parsePortMapping(s string) (dicer.PortMapping, error) {
 	spec, protoName, hasProto := strings.Cut(s, "/")
 	parts := strings.Split(spec, ":")
 
@@ -535,35 +536,35 @@ func parsePortMapping(s string) (*dicerdv1.PortMapping, error) {
 	case 3:
 		hostIP, hostPort, guestPort = parts[0], parts[1], parts[2]
 	default:
-		return nil, fmt.Errorf("invalid port mapping %q: want [hostIP:]hostPort:guestPort[/tcp|udp], e.g. 8080:80", s)
+		return dicer.PortMapping{}, fmt.Errorf("invalid port mapping %q: want [hostIP:]hostPort:guestPort[/tcp|udp], e.g. 8080:80", s)
 	}
 
 	host, err := parsePort(hostPort)
 	if err != nil {
-		return nil, fmt.Errorf("invalid port mapping %q: host port: %w", s, err)
+		return dicer.PortMapping{}, fmt.Errorf("invalid port mapping %q: host port: %w", s, err)
 	}
 	guest, err := parsePort(guestPort)
 	if err != nil {
-		return nil, fmt.Errorf("invalid port mapping %q: guest port: %w", s, err)
+		return dicer.PortMapping{}, fmt.Errorf("invalid port mapping %q: guest port: %w", s, err)
 	}
 
-	p := &dicerdv1.PortMapping{HostIp: hostIP, HostPort: host, GuestPort: guest}
+	p := dicer.PortMapping{HostIP: hostIP, HostPort: host, GuestPort: guest}
 	if hasProto {
-		if p.Protocol, err = parseEnum[dicerdv1.Protocol]("protocol", protoName); err != nil {
-			return nil, fmt.Errorf("invalid port mapping %q: %w", s, err)
+		if p.Protocol, err = parseChoice("protocol", protoName, protocols); err != nil {
+			return dicer.PortMapping{}, fmt.Errorf("invalid port mapping %q: %w", s, err)
 		}
 	}
 	return p, nil
 }
 
 // parsePort parses a port number.
-func parsePort(s string) (uint32, error) {
+func parsePort(s string) (int, error) {
 	n, err := strconv.ParseUint(s, 10, 16)
 	if err != nil || n == 0 {
 		return 0, fmt.Errorf("invalid port %q: want a number from 1 to 65535", s)
 	}
 
-	return uint32(n), nil
+	return int(n), nil
 }
 
 // parseMemoryBytes converts a human-readable memory size to bytes.

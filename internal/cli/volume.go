@@ -13,11 +13,10 @@ import (
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableVolume struct {
-	Volumes []*dicerdv1.Volume
+	Volumes []dicer.Volume
 }
 
 func (p *printableVolume) Columns() []string {
@@ -28,10 +27,10 @@ func (p *printableVolume) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Volumes))
 	for _, v := range p.Volumes {
 		rows = append(rows, map[string]any{
-			"ID":      v.GetId(),
-			"Name":    v.GetName(),
-			"Size":    humanize.Bytes(v.GetSizeBytes()),
-			"Created": age(timeOf(v.GetCreateTime())),
+			"ID":      v.ID,
+			"Name":    v.Name,
+			"Size":    humanize.Bytes(v.SizeBytes),
+			"Created": age(v.CreateTime),
 		})
 	}
 	return rows
@@ -73,12 +72,12 @@ func newVolumeCreateCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			v, err := client.CreateVolume(cmd.Context(), &dicerdv1.CreateVolumeRequest{Name: args[0], SizeBytes: sizeBytes})
+			v, err := client.Volumes.Create(cmd.Context(), args[0], sizeBytes)
 			if err != nil {
 				return err
 			}
 
-			succeeded(cmd, "Volume %s created (%s)", v.GetName(), humanize.Bytes(v.GetSizeBytes()))
+			succeeded(cmd, "Volume %s created (%s)", v.Name, humanize.Bytes(v.SizeBytes))
 			return nil
 		},
 	}
@@ -102,12 +101,12 @@ func newVolumeListCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			resp, err := client.ListVolumes(cmd.Context(), &dicerdv1.ListVolumesRequest{})
+			list, err := client.Volumes.List(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableVolume{Volumes: resp.GetVolumes()})
+			return render(cmd, &printableVolume{Volumes: list})
 		},
 	}
 
@@ -117,15 +116,15 @@ func newVolumeListCommand() *cobra.Command {
 }
 
 func newVolumeShowCommand() *cobra.Command {
-	return newShowCommand(showSpec[*dicerdv1.Volume]{
+	return newShowCommand(showSpec[dicer.Volume]{
 		use:   "show NAME",
 		short: "Show a volume",
 		arg:   "a volume name",
 		list:  listVolumes,
-		get: func(ctx context.Context, client *dicer.Client, name string) (*dicerdv1.Volume, error) {
-			return client.GetVolume(ctx, &dicerdv1.GetVolumeRequest{Name: name})
+		get: func(ctx context.Context, client *dicer.Client, name string) (dicer.Volume, error) {
+			return client.Volumes.Get(ctx, name)
 		},
-		printable: func(v *dicerdv1.Volume) printer.Printable { return &printableVolume{Volumes: []*dicerdv1.Volume{v}} },
+		printable: func(v dicer.Volume) printer.Printable { return &printableVolume{Volumes: []dicer.Volume{v}} },
 	})
 }
 
@@ -140,7 +139,7 @@ func newVolumeDeleteCommand() *cobra.Command {
 		ValidArgsFunction: complete(0, listVolumes),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachNameOrAll(cmd, args, listVolumes, "volumes", func(client *dicer.Client, name string) error {
-				if _, err := client.DeleteVolume(cmd.Context(), &dicerdv1.DeleteVolumeRequest{Name: name}); err != nil {
+				if err := client.Volumes.Delete(cmd.Context(), name); err != nil {
 					return err
 				}
 

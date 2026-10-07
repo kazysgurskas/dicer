@@ -14,8 +14,8 @@ import (
 
 	"github.com/docker/go-units"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // writeInstanceDetails writes instances as 'dicer inspect' shows them, a
@@ -31,7 +31,7 @@ import (
 //	    Machine: 1 vCPU, 4 GiB memory, 10 GiB disk
 //	             cloud-hypervisor v49.0.0, pid 102322
 //	    ...
-func writeInstanceDetails(w io.Writer, instances []*dicerdv1.Instance, recent map[string][]*dicerdv1.Event) error {
+func writeInstanceDetails(w io.Writer, instances []dicer.Instance, recent map[string][]dicer.Event) error {
 	p := paletteFor(w)
 	for i, instance := range instances {
 		if i > 0 {
@@ -39,7 +39,7 @@ func writeInstanceDetails(w io.Writer, instances []*dicerdv1.Instance, recent ma
 				return err
 			}
 		}
-		view := instanceView(instance, recent[instance.GetId()], p)
+		view := instanceView(instance, recent[instance.ID], p)
 		if err := view.write(w); err != nil {
 			return err
 		}
@@ -48,10 +48,10 @@ func writeInstanceDetails(w io.Writer, instances []*dicerdv1.Instance, recent ma
 }
 
 // instanceView is how inspect shows one instance.
-func instanceView(instance *dicerdv1.Instance, recent []*dicerdv1.Event, p palette) *statusView {
+func instanceView(instance dicer.Instance, recent []dicer.Event, p palette) *statusView {
 	v := &statusView{
 		headline: fmt.Sprintf("%s %s — %s",
-			p.dot(enumName(instance.GetState())), p.bold(instance.GetName()), instance.GetImageRef()),
+			p.dot(string(instance.State)), p.bold(instance.Name), instance.ImageRef),
 	}
 
 	v.block(
@@ -64,19 +64,19 @@ func instanceView(instance *dicerdv1.Instance, recent []*dicerdv1.Event, p palet
 		field{"Machine", machineLines(instance)},
 		field{"Limits", oneLine(limitsDetail(instance))},
 		field{"Network", networkLines(instance)},
-		field{"Ports", portLines(instance.GetPorts())},
-		field{"Mounts", mountLines(instance.GetMounts())},
-		field{"Env", pairLines(instance.GetEnv())},
-		field{"Labels", pairLines(instance.GetLabels())},
+		field{"Ports", portLines(instance.Ports)},
+		field{"Mounts", mountLines(instance.Mounts)},
+		field{"Env", pairLines(instance.Env)},
+		field{"Labels", pairLines(instance.Labels)},
 		field{"Command", commandLines(instance)},
 	)
 
 	updated := ""
-	if u := timeOf(instance.GetUpdateTime()); !u.IsZero() && !u.Equal(timeOf(instance.GetCreateTime())) {
+	if u := instance.UpdateTime; !u.IsZero() && !u.Equal(instance.CreateTime) {
 		updated = age(u)
 	}
 	v.block(
-		field{"ID", oneLine(instance.GetId())},
+		field{"ID", oneLine(instance.ID)},
 		field{"Created", oneLine(createdDetail(instance))},
 		field{"Updated", oneLine(updated)},
 	)
@@ -87,25 +87,25 @@ func instanceView(instance *dicerdv1.Instance, recent []*dicerdv1.Event, p palet
 
 // activeLines describes an instance's state like systemctl's Active line:
 // "running since 09:53:20, 8 minutes ago", plus the error if any.
-func activeLines(instance *dicerdv1.Instance, p palette) []string {
-	state := instance.GetState()
-	active := p.status(enumName(state))
+func activeLines(instance dicer.Instance, p palette) []string {
+	state := instance.State
+	active := p.status(string(state))
 
-	started, finished, next := timeOf(instance.GetStartTime()), timeOf(instance.GetFinishTime()), timeOf(instance.GetNextRestartTime())
+	started, finished, next := instance.StartTime, instance.FinishTime, instance.NextRestartTime
 	switch {
-	case state == stateRestarting:
-		active += fmt.Sprintf(" (restart %d)", instance.GetRestartCount())
+	case state == dicer.InstanceStateRestarting:
+		active += fmt.Sprintf(" (restart %d)", instance.RestartCount)
 		if wait := time.Until(next); !next.IsZero() && wait >= time.Second {
 			active += ", in " + units.HumanDuration(wait)
 		}
 	case !started.IsZero() && isActive(state):
 		active += " since " + since(started)
 	case instance.ExitCode != nil && !finished.IsZero():
-		active += fmt.Sprintf(", exited (%d) %s", instance.GetExitCode(), age(finished))
+		active += fmt.Sprintf(", exited (%d) %s", *instance.ExitCode, age(finished))
 	}
 
 	out := []string{active}
-	if e := strings.TrimSpace(instance.GetStateError()); e != "" {
+	if e := strings.TrimSpace(instance.StateError); e != "" {
 		out = append(out, strings.ReplaceAll(e, "\n", " "))
 	}
 
@@ -125,9 +125,9 @@ func since(t time.Time) string {
 
 // restartDetail describes an instance's restart policy, and how many
 // restarts in a row it has had: "on-failure:5, restarted 2 times in a row".
-func restartDetail(instance *dicerdv1.Instance) string {
-	policy := restartPolicyName(instance.GetRestartPolicy())
-	if n := instance.GetRestartCount(); n > 0 {
+func restartDetail(instance dicer.Instance) string {
+	policy := restartPolicyName(instance.RestartPolicy)
+	if n := instance.RestartCount; n > 0 {
 		policy += ", restarted " + humanize.Count(n, "time") + " in a row"
 	}
 
@@ -136,27 +136,27 @@ func restartDetail(instance *dicerdv1.Instance) string {
 
 // machineLines describes the virtual machine: what it is given, the
 // hypervisor that runs it, and the kernel it boots.
-func machineLines(instance *dicerdv1.Instance) []string {
-	vcpus := humanize.Count(instance.GetVcpus(), "vCPU")
-	if n := instance.GetMaxVcpus(); n > 0 {
+func machineLines(instance dicer.Instance) []string {
+	vcpus := humanize.Count(instance.VCPUs, "vCPU")
+	if n := instance.MaxVCPUs; n > 0 {
 		vcpus += fmt.Sprintf(" (up to %d)", n)
 	}
-	memory := humanize.Bytes(instance.GetMemoryBytes()) + " memory"
-	if n := instance.GetMaxMemoryBytes(); n > 0 {
+	memory := humanize.Bytes(instance.MemoryBytes) + " memory"
+	if n := instance.MaxMemoryBytes; n > 0 {
 		memory += " (up to " + humanize.Bytes(n) + ")"
 	}
-	resources := vcpus + ", " + memory + ", " + humanize.Bytes(instance.GetDiskBytes()) + " disk"
+	resources := vcpus + ", " + memory + ", " + humanize.Bytes(instance.DiskBytes) + " disk"
 
-	hypervisor := enumName(instance.GetHypervisorType())
-	if v := instance.GetHypervisorVersion(); v != "" {
+	hypervisor := string(instance.HypervisorType)
+	if v := instance.HypervisorVersion; v != "" {
 		hypervisor += " " + v
 	}
-	if pid := instance.GetHypervisorPid(); pid > 0 {
+	if pid := instance.HypervisorPID; pid > 0 {
 		hypervisor += fmt.Sprintf(", pid %d", pid)
 	}
 
-	kernel := "kernel " + cmp.Or(instance.GetKernelName(), "(the default)")
-	if args := instance.GetKernelArgs(); args != "" {
+	kernel := "kernel " + cmp.Or(instance.KernelName, "(the default)")
+	if args := instance.KernelArgs; args != "" {
 		kernel += ", args " + args
 	}
 
@@ -165,8 +165,8 @@ func machineLines(instance *dicerdv1.Instance) []string {
 
 // standbyDetail describes when an instance is put on standby, if ever:
 // "after 15m idle".
-func standbyDetail(instance *dicerdv1.Instance) string {
-	if d := instance.GetStandbyAfter().AsDuration(); d > 0 {
+func standbyDetail(instance dicer.Instance) string {
+	if d := instance.StandbyAfter; d > 0 {
 		return "after " + humanize.Duration(d) + " idle"
 	}
 	return ""
@@ -174,21 +174,21 @@ func standbyDetail(instance *dicerdv1.Instance) string {
 
 // limitsDetail describes the rate limits an instance has, if any: "disk
 // 50 MiB/s and 1000 IOPS each, upload 10 MiB/s".
-func limitsDetail(instance *dicerdv1.Instance) string {
+func limitsDetail(instance dicer.Instance) string {
 	var disk, limits []string
-	if n := instance.GetDiskBytesPerSecond(); n > 0 {
+	if n := instance.DiskBytesPerSecond; n > 0 {
 		disk = append(disk, humanize.Bytes(n)+"/s")
 	}
-	if n := instance.GetDiskIops(); n > 0 {
+	if n := instance.DiskIOPS; n > 0 {
 		disk = append(disk, fmt.Sprintf("%d IOPS", n))
 	}
 	if len(disk) > 0 {
 		limits = append(limits, "disk "+strings.Join(disk, " and ")+" each")
 	}
-	if n := instance.GetUploadBytesPerSecond(); n > 0 {
+	if n := instance.UploadBytesPerSecond; n > 0 {
 		limits = append(limits, "upload "+humanize.Bytes(n)+"/s")
 	}
-	if n := instance.GetDownloadBytesPerSecond(); n > 0 {
+	if n := instance.DownloadBytesPerSecond; n > 0 {
 		limits = append(limits, "download "+humanize.Bytes(n)+"/s")
 	}
 	return strings.Join(limits, ", ")
@@ -196,12 +196,12 @@ func limitsDetail(instance *dicerdv1.Instance) string {
 
 // networkLines describes an instance's place on its network: its address,
 // if it has one, the network and its hostname, and its MAC address.
-func networkLines(instance *dicerdv1.Instance) []string {
-	hostname := cmp.Or(instance.GetHostname(), instance.GetName())
-	where := fmt.Sprintf("%s (%s)", orDash(instance.GetNetworkName()), hostname)
+func networkLines(instance dicer.Instance) []string {
+	hostname := cmp.Or(instance.Hostname, instance.Name)
+	where := fmt.Sprintf("%s (%s)", orDash(instance.NetworkName), hostname)
 
 	var address string
-	switch ip, static := instance.GetIp(), instance.GetStaticIp(); {
+	switch ip, static := instance.IP, instance.StaticIP; {
 	case ip != "" && static != "":
 		address = ip + " (static) on " + where
 	case ip != "":
@@ -213,7 +213,7 @@ func networkLines(instance *dicerdv1.Instance) []string {
 	}
 
 	out := []string{address}
-	if mac := instance.GetMac(); mac != "" {
+	if mac := instance.MAC; mac != "" {
 		out = append(out, "MAC "+mac)
 	}
 
@@ -222,15 +222,15 @@ func networkLines(instance *dicerdv1.Instance) []string {
 
 // commandLines is what the instance runs -- its own command, or the
 // image's -- and how, if it is not left to the guest to decide.
-func commandLines(instance *dicerdv1.Instance) []string {
+func commandLines(instance dicer.Instance) []string {
 	command := "the image's"
-	if len(instance.GetCmd()) > 0 {
-		command = shellJoin(instance.GetCmd())
+	if len(instance.Cmd) > 0 {
+		command = shellJoin(instance.Cmd)
 	}
 
 	out := []string{command}
-	if mode := instance.GetInitMode(); mode != dicerdv1.InitMode_INIT_MODE_UNSPECIFIED && mode != dicerdv1.InitMode_INIT_MODE_AUTO {
-		out = append(out, "in "+enumName(mode)+" mode")
+	if mode := instance.InitMode; mode != "" && mode != dicer.InitModeAuto {
+		out = append(out, "in "+string(mode)+" mode")
 	}
 
 	return out
@@ -238,8 +238,8 @@ func commandLines(instance *dicerdv1.Instance) []string {
 
 // createdDetail is when the instance was defined: "2026-09-21 20:18:17, 14
 // hours ago".
-func createdDetail(instance *dicerdv1.Instance) string {
-	created := timeOf(instance.GetCreateTime())
+func createdDetail(instance dicer.Instance) string {
+	created := instance.CreateTime
 	if created.IsZero() {
 		return ""
 	}
@@ -248,10 +248,10 @@ func createdDetail(instance *dicerdv1.Instance) string {
 }
 
 // portLines are an instance's published ports, one a line.
-func portLines(ports []*dicerdv1.PortMapping) []string {
+func portLines(ports []dicer.PortMapping) []string {
 	lines := make([]string, 0, len(ports))
 	for _, p := range ports {
-		lines = append(lines, formatPorts([]*dicerdv1.PortMapping{p}))
+		lines = append(lines, formatPorts([]dicer.PortMapping{p}))
 	}
 
 	return lines
@@ -259,15 +259,15 @@ func portLines(ports []*dicerdv1.PortMapping) []string {
 
 // mountLines describe an instance's mounts, one a line: "volume data on
 // /var/lib/data (read-only)".
-func mountLines(mounts []*dicerdv1.Mount) []string {
+func mountLines(mounts []dicer.Mount) []string {
 	lines := make([]string, 0, len(mounts))
 	for _, m := range mounts {
-		line := enumName(m.GetType())
-		if m.GetSource() != "" {
-			line += " " + m.GetSource()
+		line := string(m.Type)
+		if m.Source != "" {
+			line += " " + m.Source
 		}
-		line += " on " + m.GetTarget()
-		if m.GetReadOnly() {
+		line += " on " + m.Target
+		if m.ReadOnly {
 			line += " (read-only)"
 		}
 		lines = append(lines, line)

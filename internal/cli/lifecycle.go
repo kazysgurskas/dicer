@@ -7,10 +7,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
 
 	"github.com/konradasb/dicer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // eachName runs do for each name, reporting failures as they happen and
@@ -37,7 +35,7 @@ func eachName(
 	for _, name := range names {
 		if err := run(name); err != nil {
 			failed = true
-			cmd.PrintErrf("Error: %s\n", errorMessage(err))
+			cmd.PrintErrf("Error: %s\n", err.Error())
 		}
 	}
 	if failed {
@@ -51,14 +49,13 @@ func newInstanceStartCommand() *cobra.Command {
 		Use:               "start NAME...",
 		Short:             "Start one or more defined instances, or resume them from standby",
 		Args:              oneOrMore("instance name"),
-		ValidArgsFunction: complete(0, instancesIn(stateStopped, stateFailed, stateRestarting, stateStandby)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateStopped, dicer.InstanceStateFailed, dicer.InstanceStateRestarting, dicer.InstanceStateStandby)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				return runTask(cmd, "Starting "+name, func() (*dicerdv1.Instance, error) {
-					return client.StartInstance(cmd.Context(), &dicerdv1.StartInstanceRequest{Name: name})
-				}, func(instance *dicerdv1.Instance, took string) string {
-					return fmt.Sprintf("Instance %s started in %s (%s)",
-						instance.GetName(), took, orDash(instance.GetIp()))
+				return runTask(cmd, "Starting "+name, func() (dicer.Instance, error) {
+					return client.Instances.Start(cmd.Context(), name)
+				}, func(instance dicer.Instance, took string) string {
+					return fmt.Sprintf("Instance %s started in %s (%s)", instance.Name, took, orDash(instance.IP))
 				})
 			})
 		},
@@ -72,13 +69,13 @@ func newInstanceStopCommand() *cobra.Command {
 		Long: "Stops each instance, keeping its definition, disk and address. An instance on\n" +
 			"standby is stopped by discarding what it froze, so that it boots afresh.",
 		Args:              oneOrMore("instance name"),
-		ValidArgsFunction: complete(0, instancesIn(stateRunning, statePaused, stateStarting, stateRestarting, stateStandby)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateRunning, dicer.InstanceStatePaused, dicer.InstanceStateStarting, dicer.InstanceStateRestarting, dicer.InstanceStateStandby)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				return runTask(cmd, "Stopping "+name, func() (*dicerdv1.Instance, error) {
-					return client.StopInstance(cmd.Context(), &dicerdv1.StopInstanceRequest{Name: name})
-				}, func(instance *dicerdv1.Instance, took string) string {
-					return fmt.Sprintf("Instance %s stopped in %s", instance.GetName(), took)
+				return runTask(cmd, "Stopping "+name, func() (dicer.Instance, error) {
+					return client.Instances.Stop(cmd.Context(), name)
+				}, func(instance dicer.Instance, took string) string {
+					return fmt.Sprintf("Instance %s stopped in %s", instance.Name, took)
 				})
 			})
 		},
@@ -96,23 +93,22 @@ func newInstanceRestartCommand() *cobra.Command {
 		ValidArgsFunction: complete(0, instancesIn()),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				return runTask(cmd, "Restarting "+name, func() (*dicerdv1.Instance, error) {
-					instance, err := client.GetInstance(cmd.Context(), &dicerdv1.GetInstanceRequest{Name: name})
+				return runTask(cmd, "Restarting "+name, func() (dicer.Instance, error) {
+					instance, err := client.Instances.Get(cmd.Context(), name)
 					if err != nil {
-						return nil, err
+						return dicer.Instance{}, err
 					}
 
-					switch instance.GetState() {
-					case stateRunning, statePaused, stateStarting, stateStandby:
-						if _, err := client.StopInstance(cmd.Context(), &dicerdv1.StopInstanceRequest{Name: name}); err != nil {
-							return nil, err
+					switch instance.State {
+					case dicer.InstanceStateRunning, dicer.InstanceStatePaused, dicer.InstanceStateStarting, dicer.InstanceStateStandby:
+						if _, err := client.Instances.Stop(cmd.Context(), name); err != nil {
+							return dicer.Instance{}, err
 						}
 					}
 
-					return client.StartInstance(cmd.Context(), &dicerdv1.StartInstanceRequest{Name: name})
-				}, func(instance *dicerdv1.Instance, took string) string {
-					return fmt.Sprintf("Instance %s restarted in %s (%s)",
-						instance.GetName(), took, orDash(instance.GetIp()))
+					return client.Instances.Start(cmd.Context(), name)
+				}, func(instance dicer.Instance, took string) string {
+					return fmt.Sprintf("Instance %s restarted in %s (%s)", instance.Name, took, orDash(instance.IP))
 				})
 			})
 		},
@@ -124,15 +120,15 @@ func newInstancePauseCommand() *cobra.Command {
 		Use:               "pause NAME...",
 		Short:             "Pause one or more running instances",
 		Args:              oneOrMore("instance name"),
-		ValidArgsFunction: complete(0, instancesIn(stateRunning)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateRunning)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				instance, err := client.PauseInstance(cmd.Context(), &dicerdv1.PauseInstanceRequest{Name: name})
+				instance, err := client.Instances.Pause(cmd.Context(), name)
 				if err != nil {
 					return err
 				}
 
-				succeeded(cmd, "Instance %s paused", instance.GetName())
+				succeeded(cmd, "Instance %s paused", instance.Name)
 
 				return nil
 			})
@@ -149,13 +145,13 @@ func newInstanceStandbyCommand() *cobra.Command {
 			"published ports and writable volumes. Starting it resumes it where it was;\n" +
 			"stopping it discards what it froze.",
 		Args:              oneOrMore("instance name"),
-		ValidArgsFunction: complete(0, instancesIn(stateRunning, statePaused)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateRunning, dicer.InstanceStatePaused)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				return runTask(cmd, "Putting "+name+" on standby", func() (*dicerdv1.Instance, error) {
-					return client.StandbyInstance(cmd.Context(), &dicerdv1.StandbyInstanceRequest{Name: name})
-				}, func(instance *dicerdv1.Instance, took string) string {
-					return fmt.Sprintf("Instance %s put on standby in %s", instance.GetName(), took)
+				return runTask(cmd, "Putting "+name+" on standby", func() (dicer.Instance, error) {
+					return client.Instances.Standby(cmd.Context(), name)
+				}, func(instance dicer.Instance, took string) string {
+					return fmt.Sprintf("Instance %s put on standby in %s", instance.Name, took)
 				})
 			})
 		},
@@ -168,15 +164,15 @@ func newInstanceResumeCommand() *cobra.Command {
 		Short:             "Resume one or more paused instances",
 		Aliases:           []string{"unpause"},
 		Args:              oneOrMore("instance name"),
-		ValidArgsFunction: complete(0, instancesIn(statePaused)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStatePaused)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachName(cmd, args, instancesIn(), func(client *dicer.Client, name string) error {
-				instance, err := client.ResumeInstance(cmd.Context(), &dicerdv1.ResumeInstanceRequest{Name: name})
+				instance, err := client.Instances.Resume(cmd.Context(), name)
 				if err != nil {
 					return err
 				}
 
-				succeeded(cmd, "Instance %s resumed", instance.GetName())
+				succeeded(cmd, "Instance %s resumed", instance.Name)
 
 				return nil
 			})
@@ -200,9 +196,9 @@ func newInstanceDeleteCommand() *cobra.Command {
 			force, _ := cmd.Flags().GetBool("force")
 
 			return eachNameOrAll(cmd, args, instancesIn(), "instances", func(client *dicer.Client, name string) error {
-				_, err := client.DeleteInstance(cmd.Context(), &dicerdv1.DeleteInstanceRequest{Name: name, Force: force})
+				err := client.Instances.Delete(cmd.Context(), name, dicer.DeleteOptions{Force: force})
 				if err != nil {
-					return withHint(err, codes.FailedPrecondition, "stop it first or use -f")
+					return withHint(err, dicer.ErrFailedPrecondition, "stop it first or use -f")
 				}
 
 				succeeded(cmd, "Instance %s deleted", name)

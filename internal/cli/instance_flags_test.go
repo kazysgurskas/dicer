@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func TestParseEnv(t *testing.T) {
@@ -76,13 +76,13 @@ func TestParseLabels(t *testing.T) {
 func TestBuildCreateRequestEnvAndLabels(t *testing.T) {
 	got, err := runBuild(t, "web", "-e", "A=1,2", "--env", "B=3", "-l", "team=web")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
-	if want := map[string]string{"A": "1,2", "B": "3"}; !maps.Equal(got.GetEnv(), want) {
-		t.Errorf("env = %v, want %v", got.GetEnv(), want)
+	if want := map[string]string{"A": "1,2", "B": "3"}; !maps.Equal(got.spec.Env, want) {
+		t.Errorf("env = %v, want %v", got.spec.Env, want)
 	}
-	if want := map[string]string{"team": "web"}; !maps.Equal(got.GetLabels(), want) {
-		t.Errorf("labels = %v, want %v", got.GetLabels(), want)
+	if want := map[string]string{"team": "web"}; !maps.Equal(got.spec.Labels, want) {
+		t.Errorf("labels = %v, want %v", got.spec.Labels, want)
 	}
 }
 
@@ -130,10 +130,12 @@ func TestShellJoin(t *testing.T) {
 }
 
 func TestInstanceFilters(t *testing.T) {
-	instance := &dicerdv1.Instance{
-		Name: "web-1", ImageRef: "nginx:1.27", NetworkName: "default",
-		Labels: map[string]string{"team": "web"},
-		State:  stateRunning,
+	instance := dicer.Instance{
+		InstanceSpec: dicer.InstanceSpec{
+			Name: "web-1", ImageRef: "nginx:1.27", NetworkName: "default",
+			Labels: map[string]string{"team": "web"},
+		},
+		State: dicer.InstanceStateRunning,
 	}
 
 	for _, tc := range []struct {
@@ -154,7 +156,7 @@ func TestInstanceFilters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parseInstanceFilters(%q): %v", tc.filters, err)
 		}
-		if got := len(f.apply([]*dicerdv1.Instance{instance})) == 1; got != tc.want {
+		if got := len(f.apply([]dicer.Instance{instance})) == 1; got != tc.want {
 			t.Errorf("filters %q match = %v, want %v", tc.filters, got, tc.want)
 		}
 	}

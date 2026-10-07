@@ -9,9 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func TestStatusView(t *testing.T) {
@@ -72,28 +70,30 @@ func TestPalette(t *testing.T) {
 }
 
 func TestInstanceView(t *testing.T) {
-	ago := func(d time.Duration) *timestamppb.Timestamp { return timestamppb.New(time.Now().Add(-d)) }
-	code := func(c int32) *int32 { return &c }
+	ago := func(d time.Duration) time.Time { return time.Now().Add(-d) }
 
 	tests := []struct {
 		name     string
-		instance *dicerdv1.Instance
+		instance dicer.Instance
 		want     []string
 	}{
 		{
 			name: "running",
-			instance: &dicerdv1.Instance{
-				Id: "cjp4tifq1l2wvu9ny0b78xsb", Name: "grafana",
-				ImageRef: "docker.io/grafana/grafana:latest",
-				Vcpus:    1, MemoryBytes: 4 << 30, DiskBytes: 10 << 30,
-				HypervisorType: dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR,
-				KernelName:     "k", NetworkName: "default",
-				RestartPolicy: &dicerdv1.RestartPolicy{Mode: dicerdv1.RestartMode_RESTART_MODE_ALWAYS},
-				CreateTime:    ago(14 * time.Hour),
+			instance: dicer.Instance{
+				ID: "cjp4tifq1l2wvu9ny0b78xsb",
+				InstanceSpec: dicer.InstanceSpec{
+					Name:     "grafana",
+					ImageRef: "docker.io/grafana/grafana:latest",
+					VCPUs:    1, MemoryBytes: 4 << 30, DiskBytes: 10 << 30,
+					HypervisorType: dicer.HypervisorTypeCloudHypervisor, HypervisorVersion: "v49.0.0",
+					KernelName: "k", NetworkName: "default",
+					RestartPolicy: dicer.RestartPolicy{Mode: dicer.RestartModeAlways},
+				},
+				CreateTime: ago(14 * time.Hour),
 
-				State: stateRunning, StartTime: ago(8 * time.Minute),
-				HypervisorVersion: "v49.0.0", HypervisorPid: 102322,
-				Ip: "172.20.225.60", Mac: "92:23:2f:b1:d6:de",
+				State: dicer.InstanceStateRunning, StartTime: ago(8 * time.Minute),
+				HypervisorPID: 102322,
+				IP:            "172.20.225.60", MAC: "92:23:2f:b1:d6:de",
 			},
 			want: []string{
 				"● grafana — docker.io/grafana/grafana:latest\n",
@@ -112,9 +112,9 @@ func TestInstanceView(t *testing.T) {
 		},
 		{
 			name: "failed, with why",
-			instance: &dicerdv1.Instance{
-				Name: "job", ImageRef: "app",
-				State: stateFailed, ExitCode: code(1), FinishTime: ago(5 * time.Minute),
+			instance: dicer.Instance{
+				InstanceSpec: dicer.InstanceSpec{Name: "job", ImageRef: "app"},
+				State:        dicer.InstanceStateFailed, ExitCode: dicer.Ptr(1), FinishTime: ago(5 * time.Minute),
 				StateError: "gave up after 3 restarts: exit code 1",
 			},
 			want: []string{
@@ -125,16 +125,16 @@ func TestInstanceView(t *testing.T) {
 		},
 		{
 			name: "restarting",
-			instance: &dicerdv1.Instance{
-				Name: "worker", ImageRef: "app",
-				State: stateRestarting, RestartCount: 3,
-				NextRestartTime: timestamppb.New(time.Now().Add(time.Minute)),
+			instance: dicer.Instance{
+				InstanceSpec: dicer.InstanceSpec{Name: "worker", ImageRef: "app"},
+				State:        dicer.InstanceStateRestarting, RestartCount: 3,
+				NextRestartTime: time.Now().Add(time.Minute),
 			},
 			want: []string{"● worker — app\n", "     Active: restarting (restart 3), in "},
 		},
 		{
 			name:     "stopped",
-			instance: &dicerdv1.Instance{Name: "db", ImageRef: "postgres", State: stateStopped},
+			instance: dicer.Instance{InstanceSpec: dicer.InstanceSpec{Name: "db", ImageRef: "postgres"}, State: dicer.InstanceStateStopped},
 			want:     []string{"○ db — postgres\n", "     Active: stopped\n"},
 		},
 	}

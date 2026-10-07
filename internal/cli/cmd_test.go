@@ -6,20 +6,36 @@ package cli
 import (
 	"bytes"
 	"errors"
-	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/remote"
 	"github.com/konradasb/dicer/internal/grpcapi"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+)
+
+// The API's values the fake daemons in these tests report, named as the CLI
+// shows them.
+const (
+	stateStopped    = dicerdv1.InstanceState_INSTANCE_STATE_STOPPED
+	stateStarting   = dicerdv1.InstanceState_INSTANCE_STATE_STARTING
+	stateRunning    = dicerdv1.InstanceState_INSTANCE_STATE_RUNNING
+	statePaused     = dicerdv1.InstanceState_INSTANCE_STATE_PAUSED
+	stateStandby    = dicerdv1.InstanceState_INSTANCE_STATE_STANDBY
+	stateRestarting = dicerdv1.InstanceState_INSTANCE_STATE_RESTARTING
+	stateFailed     = dicerdv1.InstanceState_INSTANCE_STATE_FAILED
+
+	healthStarting  = dicerdv1.HealthStatus_HEALTH_STATUS_STARTING
+	healthHealthy   = dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY
+	healthUnhealthy = dicerdv1.HealthStatus_HEALTH_STATUS_UNHEALTHY
 )
 
 func TestExecute(t *testing.T) {
@@ -31,16 +47,6 @@ func TestExecute(t *testing.T) {
 	}{
 		{"success", nil, 0, ""},
 		{"plain error", errors.New("boom"), 1, "Error: boom\n"},
-		{
-			"a daemon's error is printed as its message alone",
-			status.Error(codes.NotFound, `no instance "web"`),
-			1, "Error: no instance \"web\"\n",
-		},
-		{
-			"however it is wrapped",
-			fmt.Errorf("%w (did you mean web?)", status.Error(codes.NotFound, `no instance "wbe"`)),
-			1, "Error: no instance \"wbe\" (did you mean web?)\n",
-		},
 		{"exit status passes through silently", &exitError{code: 42}, 42, ""},
 	}
 
@@ -62,6 +68,26 @@ func TestExecute(t *testing.T) {
 				t.Errorf("stderr = %q, want %q", got, tt.wantOut)
 			}
 		})
+	}
+}
+
+// TestADaemonsErrorIsPrintedAsItsMessage checks that a failure the daemon
+// reports is printed as its message alone, with what the CLI adds to it.
+func TestADaemonsErrorIsPrintedAsItsMessage(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"inspect", "wbe"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
+	var stderr bytes.Buffer
+	if code := exitStatus(cmd, &stderr); code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if got := stderr.String(); !strings.HasPrefix(got, "Error: no instance") ||
+		!strings.HasSuffix(got, " (did you mean web?)\n") {
+		t.Errorf("stderr = %q, want the daemon's message and a suggestion", got)
 	}
 }
 
@@ -120,6 +146,25 @@ func serveFakeDaemon(t *testing.T, srv dicerdv1.DaemonServiceServer) string {
 	address := "unix://" + socket
 	t.Setenv(remoteEnv, address)
 	return address
+}
+
+// clientOf serves srv as serveFakeDaemon does, and returns a client of it.
+func clientOf(t *testing.T, srv dicerdv1.DaemonServiceServer) *dicer.Client {
+	t.Helper()
+
+	c, err := dicer.NewClient(dicer.WithAddress(serveFakeDaemon(t, srv)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	return c
+}
+
+// stateWord is an instance state as the daemon names it in a message:
+// "running".
+func stateWord(s dicerdv1.InstanceState) string {
+	return strings.ToLower(strings.TrimPrefix(s.String(), "INSTANCE_STATE_"))
 }
 
 // newTestServer returns a gRPC server that sends errors as dicerd does.

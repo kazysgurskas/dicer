@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 // instanceFilterKeys are what 'dicer ps --filter' can match on.
@@ -39,12 +39,12 @@ func parseInstanceFilters(specs []string) (instanceFilters, error) {
 }
 
 // apply returns the instances that match.
-func (f instanceFilters) apply(instances []*dicerdv1.Instance) []*dicerdv1.Instance {
+func (f instanceFilters) apply(instances []dicer.Instance) []dicer.Instance {
 	if len(f) == 0 {
 		return instances
 	}
 
-	matched := make([]*dicerdv1.Instance, 0, len(instances))
+	matched := make([]dicer.Instance, 0, len(instances))
 	for _, instance := range instances {
 		if f.matches(instance) {
 			matched = append(matched, instance)
@@ -54,7 +54,7 @@ func (f instanceFilters) apply(instances []*dicerdv1.Instance) []*dicerdv1.Insta
 }
 
 // matches reports whether an instance matches every key of f.
-func (f instanceFilters) matches(instance *dicerdv1.Instance) bool {
+func (f instanceFilters) matches(instance dicer.Instance) bool {
 	for key, values := range f {
 		if !slices.ContainsFunc(values, func(v string) bool { return matchInstance(instance, key, v) }) {
 			return false
@@ -66,19 +66,19 @@ func (f instanceFilters) matches(instance *dicerdv1.Instance) bool {
 // matchInstance reports whether instance matches one filter. Names and images
 // match on a part, "state=running" regardless of case, a network exactly,
 // and a label by key alone or by key and value.
-func matchInstance(instance *dicerdv1.Instance, key, value string) bool {
+func matchInstance(instance dicer.Instance, key, value string) bool {
 	switch key {
 	case "name":
-		return strings.Contains(instance.GetName(), value)
+		return strings.Contains(instance.Name, value)
 	case "state":
-		return strings.EqualFold(enumName(instance.GetState()), value)
+		return strings.EqualFold(string(instance.State), value)
 	case "image":
-		return strings.Contains(instance.GetImageRef(), value)
+		return strings.Contains(instance.ImageRef, value)
 	case "network":
-		return instance.GetNetworkName() == value
+		return instance.NetworkName == value
 	case "label":
 		k, v, hasValue := strings.Cut(value, "=")
-		got, ok := instance.GetLabels()[k]
+		got, ok := instance.Labels[k]
 
 		return ok && (!hasValue || got == v)
 	default:
@@ -90,10 +90,9 @@ func matchInstance(instance *dicerdv1.Instance, key, value string) bool {
 // states.
 func completeInstanceFilters(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if strings.HasPrefix(toComplete, "state=") {
-		states := enumNames[dicerdv1.InstanceState]()
-		out := make([]string, 0, len(states))
-		for _, s := range states {
-			out = append(out, "state="+s)
+		out := make([]string, 0, len(instanceStates))
+		for _, s := range instanceStates {
+			out = append(out, "state="+string(s))
 		}
 		return out, cobra.ShellCompDirectiveNoFileComp
 	}

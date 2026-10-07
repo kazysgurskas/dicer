@@ -177,7 +177,7 @@ section of the configuration.
 told when an instance dies:
 
 ```console
-$ dicer events -f --format json | jq -r 'select(.action == "EVENT_ACTION_DIED") | .name'
+$ dicer events -f --format json | jq -r 'select(.action == "died") | .name'
 ```
 
 ## The daemon's log

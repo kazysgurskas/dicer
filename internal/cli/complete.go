@@ -13,7 +13,6 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // completionTimeout bounds how long a completion waits on the daemon. A
@@ -69,19 +68,19 @@ func completionValue(s string) string {
 }
 
 // instancesIn completes instance names, limited to the given states if any.
-func instancesIn(states ...dicerdv1.InstanceState) completer {
+func instancesIn(states ...dicer.InstanceState) completer {
 	return func(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-		resp, err := client.ListInstances(ctx, &dicerdv1.ListInstancesRequest{})
+		instances, err := client.Instances.List(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		var names []string
-		for _, instance := range resp.GetInstances() {
-			if len(states) > 0 && !slices.Contains(states, instance.GetState()) {
+		for _, instance := range instances {
+			if len(states) > 0 && !slices.Contains(states, instance.State) {
 				continue
 			}
-			names = append(names, instance.GetName()+"\t"+stateName(instance.GetState())+", "+instance.GetImageRef())
+			names = append(names, instance.Name+"\t"+stateName(instance.State)+", "+instance.ImageRef)
 		}
 
 		return names, nil
@@ -90,14 +89,14 @@ func instancesIn(states ...dicerdv1.InstanceState) completer {
 
 // listImages completes image names, each described by its size.
 func listImages(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-	resp, err := client.ListImages(ctx, &dicerdv1.ListImagesRequest{})
+	images, err := client.Images.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(resp.GetImages()))
-	for _, image := range resp.GetImages() {
-		names = append(names, image.GetName()+"\t"+humanize.Bytes(image.GetSizeBytes()))
+	names := make([]string, 0, len(images))
+	for _, image := range images {
+		names = append(names, image.Name+"\t"+humanize.Bytes(image.SizeBytes))
 	}
 
 	return names, nil
@@ -105,14 +104,14 @@ func listImages(ctx context.Context, client *dicer.Client, _ []string) ([]string
 
 // listNetworks completes network names, each described by its subnet.
 func listNetworks(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-	resp, err := client.ListNetworks(ctx, &dicerdv1.ListNetworksRequest{})
+	networks, err := client.Networks.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(resp.GetNetworks()))
-	for _, n := range resp.GetNetworks() {
-		names = append(names, n.GetName()+"\t"+n.GetSubnet())
+	names := make([]string, 0, len(networks))
+	for _, n := range networks {
+		names = append(names, n.Name+"\t"+n.Subnet)
 	}
 
 	return names, nil
@@ -120,14 +119,14 @@ func listNetworks(ctx context.Context, client *dicer.Client, _ []string) ([]stri
 
 // listVolumes completes volume names, each described by its size.
 func listVolumes(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-	resp, err := client.ListVolumes(ctx, &dicerdv1.ListVolumesRequest{})
+	volumes, err := client.Volumes.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(resp.GetVolumes()))
-	for _, v := range resp.GetVolumes() {
-		names = append(names, v.GetName()+"\t"+humanize.Bytes(v.GetSizeBytes()))
+	names := make([]string, 0, len(volumes))
+	for _, v := range volumes {
+		names = append(names, v.Name+"\t"+humanize.Bytes(v.SizeBytes))
 	}
 
 	return names, nil
@@ -135,14 +134,14 @@ func listVolumes(ctx context.Context, client *dicer.Client, _ []string) ([]strin
 
 // listKernels completes kernel names, each described by its architecture.
 func listKernels(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-	resp, err := client.ListKernels(ctx, &dicerdv1.ListKernelsRequest{})
+	kernels, err := client.Kernels.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(resp.GetKernels()))
-	for _, k := range resp.GetKernels() {
-		names = append(names, k.GetName()+"\t"+archName(k.GetArch()))
+	names := make([]string, 0, len(kernels))
+	for _, k := range kernels {
+		names = append(names, k.Name+"\t"+string(k.Architecture))
 	}
 
 	return names, nil
@@ -164,14 +163,14 @@ func withoutDefault(list completer) completer {
 // listSnapshots completes snapshot names, each described by its instance
 // and age.
 func listSnapshots(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
-	resp, err := client.ListSnapshots(ctx, &dicerdv1.ListSnapshotsRequest{})
+	snapshots, err := client.Snapshots.List(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(resp.GetSnapshots()))
-	for _, s := range resp.GetSnapshots() {
-		names = append(names, s.GetName()+"\t"+s.GetInstanceName()+", "+age(timeOf(s.GetCreateTime())))
+	names := make([]string, 0, len(snapshots))
+	for _, s := range snapshots {
+		names = append(names, s.Name+"\t"+s.InstanceName+", "+age(s.CreateTime))
 	}
 
 	return names, nil

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func newInstanceForkCommand() *cobra.Command {
@@ -28,9 +28,8 @@ func newInstanceForkCommand() *cobra.Command {
 		Args:              needs([]string{"an instance name", "a name for the new instance"}),
 		ValidArgsFunction: complete(1, instancesIn()),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &dicerdv1.ForkInstanceRequest{Name: args[0], ForkName: args[1]}
-			var err error
-			if req.NetworkName, req.StaticIp, req.Ports, err = forkFlags(cmd); err != nil {
+			opts, err := forkFlags(cmd, args[1])
+			if err != nil {
 				return err
 			}
 
@@ -40,8 +39,8 @@ func newInstanceForkCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			return runTask(cmd, "Forking "+args[0], func() (*dicerdv1.Instance, error) {
-				return client.ForkInstance(cmd.Context(), req)
+			return runTask(cmd, "Forking "+args[0], func() (dicer.Instance, error) {
+				return client.Instances.Fork(cmd.Context(), args[0], opts)
 			}, forkedMessage("instance "+args[0]))
 		},
 	}
@@ -63,20 +62,23 @@ func addForkFlags(cmd *cobra.Command) {
 
 // forkFlags returns the network, address and published ports that the
 // flags from addForkFlags give.
-func forkFlags(cmd *cobra.Command) (network, ip string, ports []*dicerdv1.PortMapping, err error) {
-	network, _ = cmd.Flags().GetString("network")
-	ip, _ = cmd.Flags().GetString("ip")
+func forkFlags(cmd *cobra.Command, name string) (dicer.ForkOptions, error) {
+	opts := dicer.ForkOptions{Name: name}
+	opts.NetworkName, _ = cmd.Flags().GetString("network")
+	opts.StaticIP, _ = cmd.Flags().GetString("ip")
 	specs, _ := cmd.Flags().GetStringArray("publish")
-	ports, err = parseEach(specs, parsePortMapping)
-	return network, ip, ports, err
+
+	var err error
+	opts.Ports, err = parseEach(specs, parsePortMapping)
+	return opts, err
 }
 
 // forkedMessage returns what a fork from source reports once it is done.
-func forkedMessage(source string) func(*dicerdv1.Instance, string) string {
-	return func(instance *dicerdv1.Instance, took string) string {
-		if instance.GetState() != dicerdv1.InstanceState_INSTANCE_STATE_RUNNING {
-			return fmt.Sprintf("Instance %s forked from %s in %s; start it to boot it", instance.GetName(), source, took)
+func forkedMessage(source string) func(dicer.Instance, string) string {
+	return func(instance dicer.Instance, took string) string {
+		if instance.State != dicer.InstanceStateRunning {
+			return fmt.Sprintf("Instance %s forked from %s in %s; start it to boot it", instance.Name, source, took)
 		}
-		return fmt.Sprintf("Instance %s forked from %s in %s (%s)", instance.GetName(), source, took, orDash(instance.GetIp()))
+		return fmt.Sprintf("Instance %s forked from %s in %s (%s)", instance.Name, source, took, orDash(instance.IP))
 	}
 }

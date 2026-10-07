@@ -15,8 +15,6 @@ import (
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/konradasb/dicer/internal/cli/printer"
 )
@@ -134,12 +132,12 @@ func orDash(s string) string {
 	return s
 }
 
-// writeRecords writes messages as a JSON or YAML array, each as record
+// writeRecords writes values as a JSON or YAML array, each as record
 // renders it.
-func writeRecords[M proto.Message](w io.Writer, format string, messages []M) error {
-	records := make([]any, 0, len(messages))
-	for _, m := range messages {
-		r, err := record(m)
+func writeRecords[T any](w io.Writer, format string, values []T) error {
+	records := make([]any, 0, len(values))
+	for _, v := range values {
+		r, err := record(v)
 		if err != nil {
 			return err
 		}
@@ -149,10 +147,10 @@ func writeRecords[M proto.Message](w io.Writer, format string, messages []M) err
 	return writeStructured(w, format, records)
 }
 
-// record returns a message as JSON and YAML output show it: its fields as
-// the API names them, and its enums by name.
-func record(m proto.Message) (any, error) {
-	data, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(m)
+// record returns one of the client's values as JSON and YAML output show
+// it: its fields as its JSON names them, which YAML takes too.
+func record(v any) (any, error) {
+	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}

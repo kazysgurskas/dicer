@@ -5,12 +5,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer"
 )
@@ -27,7 +25,7 @@ const maxSuggestions = 3
 func suggest(
 	ctx context.Context, client *dicer.Client, list completer, name string, err error,
 ) error {
-	if status.Code(err) != codes.NotFound || name == "" {
+	if !errors.Is(err, dicer.ErrNotFound) || name == "" {
 		return err
 	}
 
@@ -120,10 +118,10 @@ func orList(names []string) string {
 	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
 }
 
-// withHint appends hint to a daemon's error with the given code: `instance
+// withHint appends hint to a daemon's error of the given kind: `instance
 // "web" is running: stop it first or use -f`.
-func withHint(err error, code codes.Code, hint string) error {
-	if status.Code(err) != code {
+func withHint(err, kind error, hint string) error {
+	if !errors.Is(err, kind) {
 		return err
 	}
 	return fmt.Errorf("%w: %s", err, hint)

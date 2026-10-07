@@ -27,7 +27,7 @@ $ dicer events
 $ dicer events -f
 $ dicer events --name web --since 1h
 $ dicer events --kind image -n 20
-$ dicer events -f --format json | jq -r 'select(.action == "EVENT_ACTION_DIED") | .name'
+$ dicer events -f --format json | jq -r 'select(.action == "died") | .name'
 ```
 
 ## Flags
@@ -39,7 +39,7 @@ $ dicer events -f --format json | jq -r 'select(.action == "EVENT_ACTION_DIED") 
 | `--kind string` | Show only events about one kind of resource: instance, snapshot, image, network, volume or kernel. |
 | `--name string` | Show only events about the resource with this name. |
 | `--since string` | Show only events since a time, or for a duration: 2026-09-22, 10:30, 1h. |
-| `-n`, `--tail int32` | Show only the last events (default: all kept). |
+| `-n`, `--tail int` | Show only the last events (default: all kept). |
 
 ## Global flags
 

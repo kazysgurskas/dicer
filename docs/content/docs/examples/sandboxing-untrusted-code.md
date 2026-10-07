@@ -141,6 +141,7 @@ streams the script's output back, and deletes the sandbox:
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -150,7 +151,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func main() {
@@ -176,62 +176,39 @@ func main() {
 // runJob forks a sandbox called name, runs script in it with python3, and
 // deletes the sandbox, whatever happens.
 func runJob(ctx context.Context, client *dicer.Client, name string, script []byte) (int, error) {
-	_, err := client.ForkSnapshot(ctx, &dicerdv1.ForkSnapshotRequest{
-		Name:        "python-base",
-		ForkName:    name,
+	_, err := client.Snapshots.Fork(ctx, "python-base", dicer.ForkOptions{
+		Name:        name,
 		NetworkName: "sandbox",
 	})
 	if err != nil {
 		return 0, fmt.Errorf("fork a sandbox: %w", err)
 	}
 	defer func() {
-		_, _ = client.DeleteInstance(context.WithoutCancel(ctx),
-			&dicerdv1.DeleteInstanceRequest{Name: name, Force: true})
+		_ = client.Instances.Delete(context.WithoutCancel(ctx), name, dicer.DeleteOptions{Force: true})
 	}()
 
-	stream, err := client.ExecInstance(ctx)
-	if err != nil {
-		return 0, err
-	}
-	err = stream.Send(&dicerdv1.ExecInstanceRequest{
-		Payload: &dicerdv1.ExecInstanceRequest_Start{Start: &dicerdv1.ExecInstanceStart{
-			Name:           name,
-			Command:        []string{"python3", "-"},
-			TimeoutSeconds: 30,
-		}},
-	})
-	if err != nil {
-		return 0, err
-	}
-	err = stream.Send(&dicerdv1.ExecInstanceRequest{
-		Payload: &dicerdv1.ExecInstanceRequest_Stdin{Stdin: script},
-	})
-	if err != nil {
-		return 0, err
-	}
-	// Closing our side ends the script's standard input.
-	if err := stream.CloseSend(); err != nil {
-		return 0, err
-	}
+	cmd := client.Instances.Command(name, "python3", "-")
+	cmd.Stdin = bytes.NewReader(script)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	cmd.Timeout = 30 * time.Second
 
-	for {
-		resp, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			return 0, errors.New("the stream ended without an exit code")
-		}
-		if err != nil {
-			return 0, err
-		}
-		switch p := resp.GetPayload().(type) {
-		case *dicerdv1.ExecInstanceResponse_Stdout:
-			_, _ = os.Stdout.Write(p.Stdout)
-		case *dicerdv1.ExecInstanceResponse_Stderr:
-			_, _ = os.Stderr.Write(p.Stderr)
-		case *dicerdv1.ExecInstanceResponse_ExitCode:
-			return int(p.ExitCode), nil
-		}
+	var exitErr *dicer.ExitError
+	switch err := cmd.Run(ctx); {
+	case errors.As(err, &exitErr):
+		return exitErr.Code, nil
+	case err != nil:
+		return 0, err
+	default:
+		return 0, nil
 	}
 }
+```
+
+To collect a file the script writes, such as `/tmp/result.json`, read it
+before the sandbox is deleted:
+
+```go
+result, err := client.Instances.ReadFile(ctx, name, "/tmp/result.json")
 ```
 
 ```console
@@ -273,8 +250,8 @@ A sandbox's use of the host is bounded by what the base was given:
   Limit how fast it can be read and written with `--disk-rate` and
   `--disk-iops` on the base. See
   [Rate limits](../../guides/running-workloads#rate-limits).
-- **Time:** the `--timeout` of each `dicer exec`, or `timeout_seconds` in
-  the API.
+- **Time:** the `--timeout` of each `dicer exec`, `Timeout` on a Go
+  client's command, or `timeout_seconds` in the API.
 
 ## Keeping the base current
 

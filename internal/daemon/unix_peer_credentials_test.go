@@ -46,7 +46,7 @@ func TestUnixPeerCredentialsNameTheCaller(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
-	if _, err := c.GetHostInfo(t.Context(), &dicerdv1.GetHostInfoRequest{}); err != nil {
+	if _, err := c.HostInfo(t.Context()); err != nil {
 		t.Fatalf("GetHostInfo: %v", err)
 	}
 

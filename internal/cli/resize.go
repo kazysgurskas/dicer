@@ -6,8 +6,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func newInstanceResizeCommand() *cobra.Command {
@@ -25,13 +25,12 @@ func newInstanceResizeCommand() *cobra.Command {
 		Example: "  dicer resize web --memory 4GiB\n" +
 			"  dicer resize web --vcpus 4 --memory 2GiB",
 		Args:              one("an instance name"),
-		ValidArgsFunction: complete(0, instancesIn(stateRunning)),
+		ValidArgsFunction: complete(0, instancesIn(dicer.InstanceStateRunning)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &dicerdv1.ResizeInstanceRequest{Name: args[0]}
+			var opts dicer.ResizeOptions
 			flags := cmd.Flags()
 			if flags.Changed("vcpus") {
-				v, _ := flags.GetInt32("vcpus")
-				req.Vcpus = &v
+				opts.VCPUs, _ = flags.GetInt("vcpus")
 			}
 			if flags.Changed("memory") {
 				v, _ := flags.GetString("memory")
@@ -39,9 +38,9 @@ func newInstanceResizeCommand() *cobra.Command {
 				if err != nil {
 					return usagef(cmd, "%s", err)
 				}
-				req.MemoryBytes = &bytes
+				opts.MemoryBytes = bytes
 			}
-			if req.Vcpus == nil && req.MemoryBytes == nil {
+			if opts == (dicer.ResizeOptions{}) {
 				return usagef(cmd, "%s needs --vcpus, --memory or both", cmd.CommandPath())
 			}
 
@@ -51,20 +50,20 @@ func newInstanceResizeCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			instance, err := client.ResizeInstance(cmd.Context(), req)
+			instance, err := client.Instances.Resize(cmd.Context(), args[0], opts)
 			if err != nil {
-				return suggest(cmd.Context(), client, instancesIn(), req.GetName(), err)
+				return suggest(cmd.Context(), client, instancesIn(), args[0], err)
 			}
 
-			succeeded(cmd, "Instance %s resized to %s, %s memory", instance.GetName(),
-				humanize.Count(instance.GetVcpus(), "vCPU"), humanize.Bytes(instance.GetMemoryBytes()))
+			succeeded(cmd, "Instance %s resized to %s, %s memory", instance.Name,
+				humanize.Count(instance.VCPUs, "vCPU"), humanize.Bytes(instance.MemoryBytes))
 
 			return nil
 		},
 	}
 
 	cmd.Flags().SortFlags = false
-	cmd.Flags().Int32("vcpus", 0, "Number of virtual CPUs")
+	cmd.Flags().Int("vcpus", 0, "Number of virtual CPUs")
 	cmd.Flags().StringP("memory", "m", "", "Memory, e.g. 512MiB or 2GiB")
 
 	return cmd

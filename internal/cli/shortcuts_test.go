@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/errdefs"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -119,7 +120,7 @@ func (d *fakeInstanceDaemon) setState(
 		return nil, err
 	}
 	if !slices.Contains(from, instance.GetState()) {
-		return nil, errdefs.InvalidState("instance %q is %s", name, enumName(instance.GetState()))
+		return nil, errdefs.InvalidState("instance %q is %s", name, stateWord(instance.GetState()))
 	}
 
 	d.record(call + " " + name)
@@ -266,7 +267,7 @@ func (d *fakeInstanceDaemon) RenameInstance(
 	}
 	if instance.GetState() != stateStopped {
 		return nil, errdefs.InvalidState(
-			"instance %q is %s", req.GetName(), enumName(instance.GetState()))
+			"instance %q is %s", req.GetName(), stateWord(instance.GetState()))
 	}
 	if _, taken := d.instances[req.GetNewName()]; taken {
 		return nil, errdefs.Exists("instance %q already exists", req.GetNewName())
@@ -473,7 +474,21 @@ func (d *fakeInstanceDaemon) ListNetworks(
 func (d *fakeInstanceDaemon) GetResources(
 	context.Context, *dicerdv1.GetResourcesRequest,
 ) (*dicerdv1.GetResourcesResponse, error) {
-	return testResources(), nil
+	r := testResources()
+	capacity := func(c dicer.ResourceCapacity) *dicerdv1.ResourceCapacity {
+		return &dicerdv1.ResourceCapacity{
+			Host: c.Host, Reserved: c.Reserved, Overcommit: c.Overcommit,
+			Allocatable: c.Allocatable, Allocated: c.Allocated, Available: c.Available,
+		}
+	}
+	return &dicerdv1.GetResourcesResponse{
+		Cpu:    capacity(r.CPU),
+		Memory: capacity(r.Memory),
+		Disk: &dicerdv1.DiskUsage{
+			Path: r.Disk.Path, TotalBytes: r.Disk.TotalBytes, FreeBytes: r.Disk.FreeBytes,
+			ProvisionedBytes: r.Disk.ProvisionedBytes,
+		},
+	}, nil
 }
 
 // fakeInstances are what the tests start from: one of each state that
@@ -891,13 +906,13 @@ func TestInspect(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &records); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, out)
 	}
-	// The whole record, as the API has it: its field names, its enums'
-	// names, and 64-bit numbers as strings, as protobuf's JSON writes them.
+	// The whole record, as the client has it: its field names, and its
+	// enumerations as the CLI writes them.
 	if len(records) != 2 {
 		t.Fatalf("records = %v, want one per instance", records)
 	}
-	if r := records[0]; r["image_ref"] != "docker.io/library/nginx:1.27" || r["memory_bytes"] != "1073741824" ||
-		r["state"] != "INSTANCE_STATE_RUNNING" || r["ip"] != "10.0.0.5" {
+	if r := records[0]; r["image_ref"] != "docker.io/library/nginx:1.27" || r["memory_bytes"] != float64(1<<30) ||
+		r["state"] != "running" || r["ip"] != "10.0.0.5" {
 		t.Errorf("record = %v", r)
 	}
 	if records[1]["name"] != "db" {

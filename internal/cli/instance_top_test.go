@@ -41,7 +41,11 @@ func (d *fakeInstanceDaemon) ListInstanceProcesses(
 }
 
 func TestProcessRowsShowTheGuestsProcesses(t *testing.T) {
-	p := &printableProcess{Processes: fakeProcesses()}
+	processes, err := clientOf(t, newFakeInstanceDaemon()).Instances.Processes(t.Context(), "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &printableProcess{Processes: processes}
 
 	rows := p.Rows()
 	if len(rows) != 3 {

@@ -6,14 +6,12 @@ package compose
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 // load loads the compose file given, in a directory named dir, with an
@@ -115,44 +113,42 @@ volumes:
 	}
 
 	got := p.Services["web"].Instance
-	want := &dicerdv1.CreateInstanceRequest{
+	want := dicer.InstanceSpec{
 		Name:              "shop-web",
 		ImageRef:          "nginx:1.27",
 		Hostname:          "www",
 		Cmd:               []string{"/docker-entrypoint.sh", "nginx", "-g", "daemon off;"},
 		Env:               map[string]string{"MODE": "production", "FROM_SHELL": "shell", "FROM_FILE": "1"},
-		HypervisorType:    dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER,
+		HypervisorType:    dicer.HypervisorTypeFirecracker,
 		HypervisorVersion: "v1.17.0",
 		KernelName:        "linux-6.18",
 		KernelArgs:        "quiet",
-		InitMode:          dicerdv1.InitMode_INIT_MODE_EXEC,
-		Vcpus:             2,
+		InitMode:          dicer.InitModeExec,
+		VCPUs:             2,
 		MemoryBytes:       1 << 30,
 		DiskBytes:         20 << 30,
 		NetworkName:       "shop-backend",
-		StaticIp:          "172.30.0.10",
-		Ports: []*dicerdv1.PortMapping{
+		StaticIP:          "172.30.0.10",
+		Ports: []dicer.PortMapping{
 			{HostPort: 8080, GuestPort: 80},
-			{HostIp: "127.0.0.1", HostPort: 5353, GuestPort: 53, Protocol: dicerdv1.Protocol_PROTOCOL_UDP},
-			{HostPort: 8443, GuestPort: 443, Protocol: dicerdv1.Protocol_PROTOCOL_TCP},
+			{HostIP: "127.0.0.1", HostPort: 5353, GuestPort: 53, Protocol: dicer.ProtocolUDP},
+			{HostPort: 8443, GuestPort: 443, Protocol: dicer.ProtocolTCP},
 		},
-		Mounts: []*dicerdv1.Mount{
-			{Type: dicerdv1.MountType_MOUNT_TYPE_VOLUME, Source: "shop-data", Target: "/srv/data"},
+		Mounts: []dicer.Mount{
+			{Type: dicer.MountTypeVolume, Source: "shop-data", Target: "/srv/data"},
 			{
-				Type: dicerdv1.MountType_MOUNT_TYPE_FILE, Source: filepath.Join(root, "nginx.conf"),
+				Type: dicer.MountTypeFile, Source: filepath.Join(root, "nginx.conf"),
 				Target: "/etc/nginx/nginx.conf", ReadOnly: true,
 			},
-			{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS, Target: "/cache"},
-			{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS, Target: "/run"},
+			{Type: dicer.MountTypeTmpfs, Target: "/cache"},
+			{Type: dicer.MountTypeTmpfs, Target: "/run"},
 		},
-		RestartPolicy: &dicerdv1.RestartPolicy{Mode: dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE, MaxRetries: 5},
-		HealthCheck: &dicerdv1.HealthCheck{
-			Probe: &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{
-				Command: []string{"curl", "-f", "http://localhost/"},
-			}},
-			Interval:    durationpb.New(30 * time.Second),
-			Timeout:     durationpb.New(2 * time.Second),
-			StartPeriod: durationpb.New(time.Minute),
+		RestartPolicy: dicer.RestartPolicy{Mode: dicer.RestartModeOnFailure, MaxRetries: 5},
+		HealthCheck: &dicer.HealthCheck{
+			Exec:        []string{"curl", "-f", "http://localhost/"},
+			Interval:    30 * time.Second,
+			Timeout:     2 * time.Second,
+			StartPeriod: time.Minute,
 			Retries:     4,
 		},
 		Labels: map[string]string{
@@ -162,18 +158,16 @@ volumes:
 	}
 	want.Labels[LabelConfigHash] = ConfigHash(want)
 
-	if !proto.Equal(got, want) {
-		t.Errorf("instance =\n%v\nwant\n%v", got, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("instance =\n%+v\nwant\n%+v", got, want)
 	}
 
-	if n := p.Networks["backend"]; n.Name != "shop-backend" || !proto.Equal(n.Request, &dicerdv1.CreateNetworkRequest{
+	if n := p.Networks["backend"]; n.Name != "shop-backend" || !reflect.DeepEqual(n.Spec, &dicer.NetworkSpec{
 		Name: "shop-backend", Subnet: "172.30.0.0/24",
 	}) {
 		t.Errorf("network = %+v", n)
 	}
-	if v := p.Volumes["data"]; !proto.Equal(v.Request, &dicerdv1.CreateVolumeRequest{
-		Name: "shop-data", SizeBytes: 5 << 30,
-	}) {
+	if v := p.Volumes["data"]; v.Name != "shop-data" || v.SizeBytes != 5<<30 {
 		t.Errorf("volume = %+v", v)
 	}
 }
@@ -190,8 +184,8 @@ services:
 `, nil)
 
 	got := p.Services["db"].Instance
-	if got.GetDiskBytesPerSecond() != 50<<20 || got.GetDiskIops() != 1000 ||
-		got.GetUploadBytesPerSecond() != 1<<20 || got.GetDownloadBytesPerSecond() != 2<<20 {
+	if got.DiskBytesPerSecond != 50<<20 || got.DiskIOPS != 1000 ||
+		got.UploadBytesPerSecond != 1<<20 || got.DownloadBytesPerSecond != 2<<20 {
 		t.Errorf("instance = %v, want the limits the service gives", got)
 	}
 }
@@ -206,21 +200,21 @@ volumes:
 `, nil)
 
 	got := p.Services["cache"].Instance
-	if got.GetVcpus() != 1 || got.GetMemoryBytes() != 512<<20 || got.GetDiskBytes() != 10<<30 {
-		t.Errorf("sizes = %d vCPU, %d, %d; want dicer run's defaults", got.GetVcpus(), got.GetMemoryBytes(), got.GetDiskBytes())
+	if got.VCPUs != 1 || got.MemoryBytes != 512<<20 || got.DiskBytes != 10<<30 {
+		t.Errorf("sizes = %d vCPU, %d, %d; want dicer run's defaults", got.VCPUs, got.MemoryBytes, got.DiskBytes)
 	}
-	if got.GetNetworkName() != "shop-default" || got.GetHostname() != "cache" {
+	if got.NetworkName != "shop-default" || got.Hostname != "cache" {
 		t.Errorf("network and hostname = %q and %q, want the project's own network, and the service's name",
-			got.GetNetworkName(), got.GetHostname())
+			got.NetworkName, got.Hostname)
 	}
-	if n := p.Networks["default"]; n == nil || n.Request.GetName() != "shop-default" || n.Request.GetSubnet() != "" {
+	if n := p.Networks["default"]; n == nil || n.Spec.Name != "shop-default" || n.Spec.Subnet != "" {
 		t.Errorf("default network = %+v, want shop-default, its subnet left to up", n)
 	}
 	if got.Cmd != nil {
-		t.Errorf("cmd = %q, want the image's", got.GetCmd())
+		t.Errorf("cmd = %q, want the image's", got.Cmd)
 	}
-	if p.Volumes["unsized"].Request.GetSizeBytes() != 10<<30 {
-		t.Errorf("volume size = %d, want 10GiB", p.Volumes["unsized"].Request.GetSizeBytes())
+	if p.Volumes["unsized"].SizeBytes != 10<<30 {
+		t.Errorf("volume size = %d, want 10GiB", p.Volumes["unsized"].SizeBytes)
 	}
 }
 
@@ -234,8 +228,8 @@ func TestLoadNamesTheProject(t *testing.T) {
 	}
 
 	p = mustLoad(t, "name: store\nservices: {web: {image: nginx}}", nil)
-	if p.Name != "store" || p.Services["web"].Instance.GetName() != "store-web" {
-		t.Errorf("name from file = %q, instance %q", p.Name, p.Services["web"].Instance.GetName())
+	if p.Name != "store" || p.Services["web"].Instance.Name != "store-web" {
+		t.Errorf("name from file = %q, instance %q", p.Name, p.Services["web"].Instance.Name)
 	}
 
 	root := writeProjectFiles(t, "shop", map[string]string{"compose.yaml": "name: store\nservices: {web: {image: nginx}}"})
@@ -269,12 +263,12 @@ services:
 `, nil)
 
 	a, b := p.Services["a"].Instance, p.Services["b"].Instance
-	if a.GetImageRef() != "alpine:3.21" || a.GetEnv()["SHARED"] != "1" ||
-		a.GetRestartPolicy().GetMode() != dicerdv1.RestartMode_RESTART_MODE_ALWAYS {
+	if a.ImageRef != "alpine:3.21" || a.Env["SHARED"] != "1" ||
+		a.RestartPolicy.Mode != dicer.RestartModeAlways {
 		t.Errorf("a = %v, want what the anchor gives", a)
 	}
-	if b.GetImageRef() != "busybox" {
-		t.Errorf("b's image = %q, want its own to win over the anchor's", b.GetImageRef())
+	if b.ImageRef != "busybox" {
+		t.Errorf("b's image = %q, want its own to win over the anchor's", b.ImageRef)
 	}
 	if strings.Contains(string(p.Resolved), "x-") {
 		t.Errorf("resolved file keeps extensions:\n%s", p.Resolved)
@@ -292,11 +286,11 @@ func TestLoadEnvFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	web := p.Services["web"].Instance
-	if web.GetImageRef() != "nginx:from-dotenv" {
-		t.Errorf("image = %q, want .env's tag", web.GetImageRef())
+	if web.ImageRef != "nginx:from-dotenv" {
+		t.Errorf("image = %q, want .env's tag", web.ImageRef)
 	}
-	if web.GetEnv()["PORT"] != "80" {
-		t.Errorf("PORT = %q, want it taken from .env", web.GetEnv()["PORT"])
+	if web.Env["PORT"] != "80" {
+		t.Errorf("PORT = %q, want it taken from .env", web.Env["PORT"])
 	}
 
 	// The environment wins over .env.
@@ -304,7 +298,7 @@ func TestLoadEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Services["web"].Instance.GetImageRef(); got != "nginx:from-shell" {
+	if got := p.Services["web"].Instance.ImageRef; got != "nginx:from-shell" {
 		t.Errorf("image = %q, want the environment's tag", got)
 	}
 
@@ -349,16 +343,16 @@ networks:
   private: {name: shared-private, external: true}
 `, nil)
 
-	if got := p.Services["web"].Instance.GetNetworkName(); got != "shop-default" {
+	if got := p.Services["web"].Instance.NetworkName; got != "shop-default" {
 		t.Errorf("web's network = %q, want the file's default network", got)
 	}
-	if got := p.Services["db"].Instance.GetNetworkName(); got != "shared-private" {
+	if got := p.Services["db"].Instance.NetworkName; got != "shared-private" {
 		t.Errorf("db's network = %q, want the external network's own name", got)
 	}
-	if req := p.Networks["default"].Request; req.GetGateway() != "172.31.0.254" {
-		t.Errorf("default network = %v, want ipam's subnet and gateway", req)
+	if spec := p.Networks["default"].Spec; spec.Gateway != "172.31.0.254" {
+		t.Errorf("default network = %v, want ipam's subnet and gateway", spec)
 	}
-	if p.Networks["private"].Request != nil {
+	if p.Networks["private"].Spec != nil {
 		t.Error("an external network has a create request")
 	}
 }
@@ -399,23 +393,23 @@ volumes:
 `, map[string]string{"RETRIES": "5"})
 
 	web, job := p.Services["web"].Instance, p.Services["job"].Instance
-	if web.GetVcpus() != 2 || job.GetVcpus() != 3 {
-		t.Errorf("vcpus = %d and %d, want 2 and 3", web.GetVcpus(), job.GetVcpus())
+	if web.VCPUs != 2 || job.VCPUs != 3 {
+		t.Errorf("vcpus = %d and %d, want 2 and 3", web.VCPUs, job.VCPUs)
 	}
-	if port := web.GetPorts()[0]; port.GetGuestPort() != 80 || port.GetHostPort() != 8080 {
+	if port := web.Ports[0]; port.GuestPort != 80 || port.HostPort != 8080 {
 		t.Errorf("port = %v, want 8080:80", port)
 	}
-	if !web.GetMounts()[0].GetReadOnly() {
+	if !web.Mounts[0].ReadOnly {
 		t.Error("read_only from a variable was not taken")
 	}
-	if hc := web.GetHealthCheck(); hc.GetTcp().GetPort() != 80 || hc.GetRetries() != 5 {
+	if hc := web.HealthCheck; hc.TCP == nil || hc.TCP.Port != 80 || hc.Retries != 5 {
 		t.Errorf("health check = %v, want tcp 80 and 5 retries", hc)
 	}
-	if !job.GetHealthCheck().GetDisabled() {
+	if !job.HealthCheck.Disabled {
 		t.Error("disable from a variable was not taken")
 	}
-	if req := p.Networks["lan"].Request; req.GetMtu() != 1400 || req.GetIsolated() || !req.GetInternal() {
-		t.Errorf("lan = %v, want mtu 1400, not isolated, internal", req)
+	if spec := p.Networks["lan"].Spec; spec.MTU != 1400 || spec.Isolated || !spec.Internal {
+		t.Errorf("lan = %v, want mtu 1400, not isolated, internal", spec)
 	}
 	if !p.Networks["shared"].External {
 		t.Error("external from a variable was not taken")
@@ -423,7 +417,7 @@ volumes:
 
 	// A quoted value is a string, whatever it holds.
 	p = mustLoad(t, `services: {web: {image: nginx, environment: {N: "${N:-2}", B: '${B:-true}'}}}`, nil)
-	if env := p.Services["web"].Instance.GetEnv(); env["N"] != "2" || env["B"] != "true" {
+	if env := p.Services["web"].Instance.Env; env["N"] != "2" || env["B"] != "true" {
 		t.Errorf("env = %v, want the quoted values as strings", env)
 	}
 }
@@ -440,10 +434,10 @@ networks:
 		t.Error("a project whose services all name a network got a default one too")
 	}
 	db := p.Services["db"].Instance
-	if db.GetHostname() != "primary" || db.GetNetworkName() != "shop-lan" {
-		t.Errorf("db = hostname %q on %q, want its own hostname on shop-lan", db.GetHostname(), db.GetNetworkName())
+	if db.Hostname != "primary" || db.NetworkName != "shop-lan" {
+		t.Errorf("db = hostname %q on %q, want its own hostname on shop-lan", db.Hostname, db.NetworkName)
 	}
-	if p.Networks["lan"].Request.GetSubnet() != "" {
+	if p.Networks["lan"].Spec.Subnet != "" {
 		t.Error("a network given no subnet was given one before up")
 	}
 
@@ -454,7 +448,7 @@ services:
 networks:
   default: {name: default, external: true}
 `, nil)
-	if got := p.Services["web"].Instance.GetNetworkName(); got != "default" {
+	if got := p.Services["web"].Instance.NetworkName; got != "default" {
 		t.Errorf("web's network = %q, want the daemon's network the file names", got)
 	}
 }
@@ -462,32 +456,14 @@ networks:
 func TestLoadHealthChecks(t *testing.T) {
 	tests := []struct {
 		check string
-		want  *dicerdv1.HealthCheck
+		want  *dicer.HealthCheck
 	}{
-		{
-			"{test: pg_isready -U postgres}",
-			&dicerdv1.HealthCheck{Probe: &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{
-				Command: []string{"/bin/sh", "-c", "pg_isready -U postgres"},
-			}}},
-		},
-		{
-			`{test: ["CMD-SHELL", "exit 0"]}`,
-			&dicerdv1.HealthCheck{Probe: &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{
-				Command: []string{"/bin/sh", "-c", "exit 0"},
-			}}},
-		},
-		{
-			"{http: 3000/healthz}",
-			&dicerdv1.HealthCheck{Probe: &dicerdv1.HealthCheck_Http{Http: &dicerdv1.HealthCheckHTTP{
-				Port: 3000, Path: "/healthz",
-			}}},
-		},
-		{
-			"{tcp: 6379}",
-			&dicerdv1.HealthCheck{Probe: &dicerdv1.HealthCheck_Tcp{Tcp: &dicerdv1.HealthCheckTCP{Port: 6379}}},
-		},
-		{`{test: ["NONE"]}`, &dicerdv1.HealthCheck{Disabled: true}},
-		{"{disable: true}", &dicerdv1.HealthCheck{Disabled: true}},
+		{"{test: pg_isready -U postgres}", &dicer.HealthCheck{Exec: []string{"/bin/sh", "-c", "pg_isready -U postgres"}}},
+		{`{test: ["CMD-SHELL", "exit 0"]}`, &dicer.HealthCheck{Exec: []string{"/bin/sh", "-c", "exit 0"}}},
+		{"{http: 3000/healthz}", &dicer.HealthCheck{HTTP: &dicer.HTTPProbe{Port: 3000, Path: "/healthz"}}},
+		{"{tcp: 6379}", &dicer.HealthCheck{TCP: &dicer.TCPProbe{Port: 6379}}},
+		{`{test: ["NONE"]}`, &dicer.HealthCheck{Disabled: true}},
+		{"{disable: true}", &dicer.HealthCheck{Disabled: true}},
 	}
 
 	for _, tt := range tests {
@@ -496,7 +472,7 @@ func TestLoadHealthChecks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if got := p.Services["db"].Instance.GetHealthCheck(); !proto.Equal(got, tt.want) {
+			if got := p.Services["db"].Instance.HealthCheck; !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("health check = %v, want %v", got, tt.want)
 			}
 		})

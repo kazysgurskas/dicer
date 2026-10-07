@@ -6,6 +6,7 @@ package dicer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"net"
 	"path/filepath"
@@ -15,11 +16,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
 
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -130,7 +129,7 @@ func TestKeepaliveGivesUpOnADaemonThatStopsAnswering(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.GetHostInfo(ctx, &dicerdv1.GetHostInfoRequest{})
+		_, err := c.HostInfo(ctx)
 		done <- err
 	}()
 
@@ -139,8 +138,8 @@ func TestKeepaliveGivesUpOnADaemonThatStopsAnswering(t *testing.T) {
 
 	select {
 	case err := <-done:
-		if status.Code(err) != codes.Unavailable {
-			t.Errorf("call = %v, want Unavailable", err)
+		if !errors.Is(err, ErrUnavailable) {
+			t.Errorf("call = %v, want ErrUnavailable", err)
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("the call still waits 30s after the daemon stopped answering")

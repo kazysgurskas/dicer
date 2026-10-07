@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/konradasb/dicer"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -38,7 +39,15 @@ func (d *fakeInstanceDaemon) GetInstanceStats(
 }
 
 func TestInstanceStatsRowsShowWhatIsUsedOfTheHost(t *testing.T) {
-	p := &printableInstanceStats{Instances: fakeInstanceStats()}
+	stream, err := clientOf(t, newFakeInstanceDaemon()).Instances.Stats(t.Context(), dicer.InstanceStatsOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err := stream.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &printableInstanceStats{Instances: batch.Instances}
 
 	rows := p.Rows()
 	if len(rows) != 2 {

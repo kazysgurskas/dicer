@@ -5,8 +5,6 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func newInstanceRenameCommand() *cobra.Command {
@@ -30,12 +28,12 @@ func newInstanceRenameCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			instance, err := client.RenameInstance(cmd.Context(), &dicerdv1.RenameInstanceRequest{Name: from, NewName: to})
+			instance, err := client.Instances.Rename(cmd.Context(), from, to)
 			if err != nil {
 				return suggest(cmd.Context(), client, instancesIn(), from, err)
 			}
 
-			succeeded(cmd, "Instance %s renamed to %s", from, instance.GetName())
+			succeeded(cmd, "Instance %s renamed to %s", from, instance.Name)
 
 			return nil
 		},

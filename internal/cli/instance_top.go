@@ -10,14 +10,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // printableProcess lists the processes in an instance's guest, a row each.
 // Its column names are also a --format template's fields and JSON's keys.
 type printableProcess struct {
-	Processes []*dicerdv1.Process
+	Processes []dicer.Process
 }
 
 func (p *printableProcess) Columns() []string {
@@ -29,18 +29,18 @@ func (p *printableProcess) Rows() []map[string]any {
 	for _, process := range p.Processes {
 		// A process without a command line, such as a zombie, is shown by
 		// its name in brackets.
-		command := strings.Join(process.GetCommand(), " ")
+		command := strings.Join(process.Command, " ")
 		if command == "" {
-			command = "[" + process.GetName() + "]"
+			command = "[" + process.Name + "]"
 		}
 		rows = append(rows, map[string]any{
-			"PID":     strconv.Itoa(int(process.GetPid())),
-			"PPID":    strconv.Itoa(int(process.GetPpid())),
-			"User":    process.GetUser(),
-			"State":   process.GetState(),
-			"Started": age(process.GetStartTime().AsTime()),
-			"CPUTime": process.GetCpuTime().AsDuration().Round(10 * time.Millisecond).String(),
-			"RSS":     humanize.Bytes(process.GetResidentMemoryBytes()),
+			"PID":     strconv.Itoa(process.PID),
+			"PPID":    strconv.Itoa(process.PPID),
+			"User":    process.User,
+			"State":   process.State,
+			"Started": age(process.StartTime),
+			"CPUTime": process.CPUTime.Round(10 * time.Millisecond).String(),
+			"RSS":     humanize.Bytes(process.ResidentMemoryBytes),
 			"Command": command,
 		})
 	}
@@ -64,7 +64,7 @@ func newInstanceTopCommand() *cobra.Command {
 			"  dicer top web --format '{{.PID}}\\t{{.Command}}'\n" +
 			"  dicer top web --format json",
 		Args:              one("an instance name"),
-		ValidArgsFunction: complete(1, instancesIn(stateRunning)),
+		ValidArgsFunction: complete(1, instancesIn(dicer.InstanceStateRunning)),
 		RunE:              runInstanceTopCommand,
 	}
 
@@ -80,9 +80,9 @@ func runInstanceTopCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer cleanup()
 
-	resp, err := client.ListInstanceProcesses(contextOf(cmd), &dicerdv1.ListInstanceProcessesRequest{Name: args[0]})
+	processes, err := client.Instances.Processes(contextOf(cmd), args[0])
 	if err != nil {
 		return err
 	}
-	return render(cmd, &printableProcess{Processes: resp.GetProcesses()})
+	return render(cmd, &printableProcess{Processes: processes})
 }

@@ -27,7 +27,7 @@ $ dicer compose logs -n 20 db
 |---|---|
 | `-f`, `--follow` | Keep writing new output until the instances stop. |
 | `--no-prefix` | Do not mark each line with its instance's name. |
-| `-n`, `--tail int32` | Show only the last lines of each (default: all). |
+| `-n`, `--tail int` | Show only the last lines of each (default: all). |
 
 ## Global flags
 

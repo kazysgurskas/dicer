@@ -4,10 +4,7 @@
 package cli
 
 import (
-	"context"
 	"errors"
-	"io"
-	"math"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func newInstanceExecCommand() *cobra.Command {
@@ -40,7 +37,7 @@ func newInstanceExecCommand() *cobra.Command {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveDefault
 			}
-			return complete(1, instancesIn(stateRunning))(cmd, args, toComplete)
+			return complete(1, instancesIn(dicer.InstanceStateRunning))(cmd, args, toComplete)
 		},
 	}
 
@@ -75,7 +72,7 @@ func wantTTY(force, never, stdinTTY, stdoutTTY bool) bool {
 }
 
 func runInstanceExecCommand(cmd *cobra.Command, args []string) error {
-	start, err := buildExecStart(cmd, args)
+	opts, err := parseExecOptions(cmd)
 	if err != nil {
 		return err
 	}
@@ -86,86 +83,91 @@ func runInstanceExecCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer cleanup()
 
+	command := client.Instances.Command(args[0], execArgs(args)...)
+	command.TTY, command.Dir, command.Timeout, command.Env = opts.tty, opts.dir, opts.timeout, opts.env
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if command.TTY {
+		if w, h, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
+			command.Rows, command.Columns = h, w
+		}
+	}
+
 	// Cancel on SIGINT/SIGTERM. In TTY mode Ctrl+C is a byte forwarded to
 	// the guest instead.
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	stream, err := startExec(ctx, client, start)
-	if err != nil {
-		return err
-	}
-
-	if start.GetTty() {
+	if command.TTY {
 		stdin := int(os.Stdin.Fd())
 		if oldState, err := term.MakeRaw(stdin); err == nil {
 			defer func() { _ = term.Restore(stdin, oldState) }()
 		}
-		go forwardResizes(stream, stdin)
 	}
-	go forwardStdin(stream)
+	if err := command.Start(ctx); err != nil {
+		return suggest(cmd.Context(), client, instancesIn(), command.Instance, err)
+	}
+	if command.TTY {
+		go forwardResizes(command, int(os.Stdin.Fd()))
+	}
 
-	exitCode, err := receiveOutput(ctx, stream)
-	if err != nil {
-		return suggest(cmd.Context(), client, instancesIn(), start.GetName(), err)
-	}
-	if exitCode != 0 {
+	var exitErr *dicer.ExitError
+	switch err := command.Wait(); {
+	case errors.As(err, &exitErr):
 		// The guest command's own output already explains the failure; pass
 		// its status through without adding a message of ours.
-		return &exitError{code: exitCode}
+		return &exitError{code: exitErr.Code}
+	case err != nil && ctx.Err() != nil:
+		// Interrupted by a signal, which is a clean exit.
+		return nil
+	case err != nil:
+		return suggest(cmd.Context(), client, instancesIn(), command.Instance, err)
+	default:
+		return nil
 	}
-
-	return nil
 }
 
-// buildExecStart describes the command args name, from the command line's
-// flags and this terminal.
-func buildExecStart(cmd *cobra.Command, args []string) (*dicerdv1.ExecInstanceStart, error) {
-	command := trimDash(args[1:])
-	if len(command) == 0 {
-		command = []string{"/bin/sh"}
-	}
+// execOptions are how exec runs its command.
+type execOptions struct {
+	tty     bool
+	dir     string
+	timeout time.Duration
+	env     map[string]string
+}
 
+// parseExecOptions reads exec's flags, and this terminal.
+func parseExecOptions(cmd *cobra.Command) (execOptions, error) {
 	ttyFlag, _ := cmd.Flags().GetBool("tty")
 	noTTY, _ := cmd.Flags().GetBool("no-tty")
 	envSpecs, _ := cmd.Flags().GetStringArray("env")
-	workdir, _ := cmd.Flags().GetString("workdir")
-	timeout, _ := cmd.Flags().GetDuration("timeout")
-	if timeout < 0 {
-		return nil, usagef(cmd, "invalid --timeout %s: it cannot be negative", timeout)
-	}
-	// The guest counts whole seconds. A part of one is rounded up, so that
-	// a short timeout never becomes no limit at all.
-	seconds := int64((timeout + time.Second - 1) / time.Second)
-	if seconds > math.MaxInt32 {
-		return nil, usagef(cmd, "invalid --timeout %s: it is too long", timeout)
+
+	var opts execOptions
+	opts.dir, _ = cmd.Flags().GetString("workdir")
+	opts.timeout, _ = cmd.Flags().GetDuration("timeout")
+	if opts.timeout < 0 {
+		return opts, usagef(cmd, "invalid --timeout %s: it cannot be negative", opts.timeout)
 	}
 
-	env, err := parseEnv(envSpecs, nil)
-	if err != nil {
-		return nil, usagef(cmd, "%s", err)
+	var err error
+	if opts.env, err = parseEnv(envSpecs, nil); err != nil {
+		return opts, usagef(cmd, "%s", err)
 	}
+	opts.tty = wantTTY(ttyFlag, noTTY, term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd())))
 
-	start := &dicerdv1.ExecInstanceStart{
-		Name:           args[0],
-		Command:        command,
-		Tty:            wantTTY(ttyFlag, noTTY, term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd()))),
-		Cwd:            workdir,
-		TimeoutSeconds: int32(seconds),
-		Env:            env,
-	}
-	if start.GetTty() {
-		if w, h, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
-			start.Rows, start.Cols = uint32(h), uint32(w)
-		}
-	}
+	return opts, nil
+}
 
-	return start, nil
+// execArgs returns the command exec's arguments give after the instance's
+// name, or /bin/sh if they give none.
+func execArgs(args []string) []string {
+	if command := trimDash(args[1:]); len(command) > 0 {
+		return command
+	}
+	return []string{"/bin/sh"}
 }
 
 // forwardResizes tells the guest the terminal's new size each time it
 // changes.
-func forwardResizes(stream *execStream, tty int) {
+func forwardResizes(command *dicer.Cmd, tty int) {
 	winch := make(chan os.Signal, 1)
 	signal.Notify(winch, syscall.SIGWINCH)
 
@@ -174,54 +176,6 @@ func forwardResizes(stream *execStream, tty int) {
 		if err != nil {
 			continue
 		}
-		_ = stream.resize(uint16(h), uint16(w))
+		_ = command.Resize(h, w)
 	}
-}
-
-// forwardStdin sends stdin to the guest command until either ends.
-func forwardStdin(stream *execStream) {
-	buf := make([]byte, 4096)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if n > 0 {
-			if sendErr := stream.sendStdin(buf[:n]); sendErr != nil {
-				return
-			}
-		}
-		if err != nil {
-			_ = stream.closeSend()
-
-			return
-		}
-	}
-}
-
-// receiveOutput writes the guest command's output to stdout and stderr until
-// the stream ends, and returns its exit code.
-func receiveOutput(ctx context.Context, stream *execStream) (int, error) {
-	exitCode := 0
-	for {
-		out, err := stream.Recv()
-		if err != nil {
-			return exitCode, ignoreStreamEnd(ctx, err)
-		}
-
-		switch p := out.GetPayload().(type) {
-		case *dicerdv1.ExecInstanceResponse_Stdout:
-			_, _ = os.Stdout.Write(p.Stdout)
-		case *dicerdv1.ExecInstanceResponse_Stderr:
-			_, _ = os.Stderr.Write(p.Stderr)
-		case *dicerdv1.ExecInstanceResponse_ExitCode:
-			exitCode = int(p.ExitCode)
-		}
-	}
-}
-
-// ignoreStreamEnd returns nil for the end of the stream, or its cancellation
-// by a signal, which are a clean exit, and err otherwise.
-func ignoreStreamEnd(ctx context.Context, err error) error {
-	if !errors.Is(err, io.EOF) && ctx.Err() == nil {
-		return err
-	}
-	return nil
 }

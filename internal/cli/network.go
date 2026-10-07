@@ -13,11 +13,10 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableNetwork struct {
-	Networks []*dicerdv1.Network
+	Networks []dicer.Network
 }
 
 func (p *printableNetwork) Columns() []string {
@@ -28,17 +27,17 @@ func (p *printableNetwork) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Networks))
 	for _, n := range p.Networks {
 		rows = append(rows, map[string]any{
-			"ID":          n.GetId(),
-			"Name":        n.GetName(),
-			"Subnet":      n.GetSubnet(),
-			"Gateway":     n.GetGateway(),
-			"Bridge":      n.GetBridge(),
-			"Nameservers": strings.Join(n.GetNameservers(), ","),
-			"MTU":         n.GetMtu(),
-			"Isolated":    n.GetIsolated(),
-			"Internal":    n.GetInternal(),
-			"Usage":       formatIPUsage(n.GetTotalIps(), n.GetFreeIps()),
-			"Created":     age(timeOf(n.GetCreateTime())),
+			"ID":          n.ID,
+			"Name":        n.Name,
+			"Subnet":      n.Subnet,
+			"Gateway":     n.Gateway,
+			"Bridge":      n.Bridge,
+			"Nameservers": strings.Join(n.Nameservers, ","),
+			"MTU":         n.MTU,
+			"Isolated":    n.Isolated,
+			"Internal":    n.Internal,
+			"Usage":       formatIPUsage(n.TotalIPs, n.FreeIPs),
+			"Created":     age(n.CreateTime),
 		})
 	}
 	return rows
@@ -81,7 +80,7 @@ func newNetworkCreateCommand() *cobra.Command {
 			subnet, _ := cmd.Flags().GetString("subnet")
 			gateway, _ := cmd.Flags().GetString("gateway")
 			nameservers, _ := cmd.Flags().GetStringSlice("nameservers")
-			mtu, _ := cmd.Flags().GetInt32("mtu")
+			mtu, _ := cmd.Flags().GetInt("mtu")
 			isolated, _ := cmd.Flags().GetBool("isolated")
 			internal, _ := cmd.Flags().GetBool("internal")
 
@@ -91,12 +90,12 @@ func newNetworkCreateCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			n, err := client.CreateNetwork(cmd.Context(), &dicerdv1.CreateNetworkRequest{
+			n, err := client.Networks.Create(cmd.Context(), dicer.NetworkSpec{
 				Name:        args[0],
 				Subnet:      subnet,
 				Gateway:     gateway,
 				Nameservers: nameservers,
-				Mtu:         mtu,
+				MTU:         mtu,
 				Isolated:    isolated,
 				Internal:    internal,
 			})
@@ -105,7 +104,7 @@ func newNetworkCreateCommand() *cobra.Command {
 			}
 
 			succeeded(cmd, "Network %s created (%s, gateway %s, bridge %s)",
-				n.GetName(), n.GetSubnet(), n.GetGateway(), n.GetBridge())
+				n.Name, n.Subnet, n.Gateway, n.Bridge)
 			return nil
 		},
 	}
@@ -114,7 +113,7 @@ func newNetworkCreateCommand() *cobra.Command {
 	cmd.Flags().String("gateway", "", "Gateway address (default: the first address in the subnet)")
 	cmd.Flags().StringSlice("nameservers", nil,
 		"Upstream DNS servers, asked about names other than the network's instances', comma-separated (default: the daemon's)")
-	cmd.Flags().Int32("mtu", 0, "MTU (default: the daemon's)")
+	cmd.Flags().Int("mtu", 0, "MTU (default: the daemon's)")
 	cmd.Flags().Bool("isolated", false, "Stop instances on the network reaching each other")
 	cmd.Flags().Bool("internal", false,
 		"Stop instances on the network reaching anything beyond it: the outside, other networks, the host and upstream DNS")
@@ -136,12 +135,12 @@ func newNetworkListCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			resp, err := client.ListNetworks(cmd.Context(), &dicerdv1.ListNetworksRequest{})
+			list, err := client.Networks.List(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableNetwork{Networks: resp.GetNetworks()})
+			return render(cmd, &printableNetwork{Networks: list})
 		},
 	}
 
@@ -151,16 +150,16 @@ func newNetworkListCommand() *cobra.Command {
 }
 
 func newNetworkShowCommand() *cobra.Command {
-	return newShowCommand(showSpec[*dicerdv1.Network]{
+	return newShowCommand(showSpec[dicer.Network]{
 		use:   "show NAME",
 		short: "Show a network",
 		arg:   "a network name",
 		list:  listNetworks,
-		get: func(ctx context.Context, client *dicer.Client, name string) (*dicerdv1.Network, error) {
-			return client.GetNetwork(ctx, &dicerdv1.GetNetworkRequest{Name: name})
+		get: func(ctx context.Context, client *dicer.Client, name string) (dicer.Network, error) {
+			return client.Networks.Get(ctx, name)
 		},
-		printable: func(v *dicerdv1.Network) printer.Printable {
-			return &printableNetwork{Networks: []*dicerdv1.Network{v}}
+		printable: func(v dicer.Network) printer.Printable {
+			return &printableNetwork{Networks: []dicer.Network{v}}
 		},
 	})
 }
@@ -177,7 +176,7 @@ func newNetworkDeleteCommand() *cobra.Command {
 		ValidArgsFunction: complete(0, withoutDefault(listNetworks)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachNameOrAll(cmd, args, withoutDefault(listNetworks), "networks", func(client *dicer.Client, name string) error {
-				if _, err := client.DeleteNetwork(cmd.Context(), &dicerdv1.DeleteNetworkRequest{Name: name}); err != nil {
+				if err := client.Networks.Delete(cmd.Context(), name); err != nil {
 					return err
 				}
 
@@ -192,7 +191,7 @@ func newNetworkDeleteCommand() *cobra.Command {
 }
 
 type printableNetworkAllocation struct {
-	Allocations []*dicerdv1.NetworkAllocation
+	Allocations []dicer.NetworkAllocation
 }
 
 func (p *printableNetworkAllocation) Columns() []string {
@@ -205,10 +204,10 @@ func (p *printableNetworkAllocation) Rows() []map[string]any {
 		rows = append(rows, map[string]any{
 			// The daemon resolves instance names; an allocation whose
 			// instance has since been deleted shows its ID.
-			"Instance": cmp.Or(a.GetInstanceName(), a.GetInstanceId()),
-			"IP":       a.GetIp(),
-			"MAC":      a.GetMac(),
-			"TAP":      a.GetTapDevice(),
+			"Instance": cmp.Or(a.InstanceName, a.InstanceID),
+			"IP":       a.IP,
+			"MAC":      a.MAC,
+			"TAP":      a.TapDevice,
 		})
 	}
 	return rows
@@ -240,13 +239,12 @@ func newNetworkAllocationListCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			resp, err := client.ListNetworkAllocations(cmd.Context(),
-				&dicerdv1.ListNetworkAllocationsRequest{Name: args[0]})
+			allocations, err := client.Networks.Allocations(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableNetworkAllocation{Allocations: resp.GetAllocations()})
+			return render(cmd, &printableNetworkAllocation{Allocations: allocations})
 		},
 	}
 

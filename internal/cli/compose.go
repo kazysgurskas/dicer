@@ -20,7 +20,6 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/compose"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // The environment variables the compose command's flags default to.
@@ -116,16 +115,16 @@ func loadProject(cmd *cobra.Command) (*compose.Project, error) {
 
 // projectInstances returns the instances the daemon has of project p,
 // services and orphans alike, keyed by name.
-func projectInstances(ctx context.Context, client *dicer.Client, p *compose.Project) (map[string]*dicerdv1.Instance, error) {
-	resp, err := client.ListInstances(ctx, &dicerdv1.ListInstancesRequest{})
+func projectInstances(ctx context.Context, client *dicer.Client, p *compose.Project) (map[string]dicer.Instance, error) {
+	instances, err := client.Instances.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make(map[string]*dicerdv1.Instance)
-	for _, instance := range resp.GetInstances() {
-		if instance.GetLabels()[compose.LabelProject] == p.Name {
-			out[instance.GetName()] = instance
+	out := make(map[string]dicer.Instance)
+	for _, instance := range instances {
+		if instance.Labels[compose.LabelProject] == p.Name {
+			out[instance.Name] = instance
 		}
 	}
 	return out, nil
@@ -133,7 +132,7 @@ func projectInstances(ctx context.Context, client *dicer.Client, p *compose.Proj
 
 // orphanNames returns the names of the project's instances whose service is
 // no longer in the file, sorted.
-func orphanNames(p *compose.Project, instances map[string]*dicerdv1.Instance) []string {
+func orphanNames(p *compose.Project, instances map[string]dicer.Instance) []string {
 	var names []string
 	for name, instance := range instances {
 		if _, ok := p.ServiceFor(instance); !ok {
@@ -148,12 +147,12 @@ func orphanNames(p *compose.Project, instances map[string]*dicerdv1.Instance) []
 // project's, found by their label: the one named as the file names it now,
 // and any it had under another name before its container_name changed,
 // which up has yet to replace. Sorted, the current name first.
-func serviceInstanceNames(s *compose.Service, instances map[string]*dicerdv1.Instance) []string {
+func serviceInstanceNames(s *compose.Service, instances map[string]dicer.Instance) []string {
 	var current, renamed []string
 	for name, instance := range instances {
 		switch {
-		case instance.GetLabels()[compose.LabelService] != s.Name:
-		case name == s.Instance.GetName():
+		case instance.Labels[compose.LabelService] != s.Name:
+		case name == s.Instance.Name:
 			current = append(current, name)
 		default:
 			renamed = append(renamed, name)
@@ -166,10 +165,10 @@ func serviceInstanceNames(s *compose.Service, instances map[string]*dicerdv1.Ins
 // serviceInstance returns the instance of a service, or an error saying it
 // has none yet: the one named as the file names it, or else the one it had
 // under an earlier name.
-func serviceInstance(s *compose.Service, instances map[string]*dicerdv1.Instance) (*dicerdv1.Instance, error) {
+func serviceInstance(s *compose.Service, instances map[string]dicer.Instance) (dicer.Instance, error) {
 	names := serviceInstanceNames(s, instances)
 	if len(names) == 0 {
-		return nil, fmt.Errorf("service %s has no instance: create it with dicer compose up", s.Name)
+		return dicer.Instance{}, fmt.Errorf("service %s has no instance: create it with dicer compose up", s.Name)
 	}
 	return instances[names[0]], nil
 }

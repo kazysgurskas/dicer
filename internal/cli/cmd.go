@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer/internal/version"
 )
@@ -54,23 +53,8 @@ func exitStatus(cmd *cobra.Command, stderr io.Writer) int {
 		return 1
 	}
 
-	_, _ = fmt.Fprintf(stderr, "Error: %s\n", errorMessage(err))
+	_, _ = fmt.Fprintf(stderr, "Error: %s\n", err.Error())
 	return 1
-}
-
-// errorMessage is err as the CLI prints it. A daemon's error is a gRPC
-// status, whose text names its code for a program: a person is shown its
-// message alone, wherever in err it is wrapped.
-func errorMessage(err error) string {
-	var s interface {
-		error
-		GRPCStatus() *status.Status
-	}
-	if !errors.As(err, &s) {
-		return err.Error()
-	}
-
-	return strings.Replace(err.Error(), s.Error(), s.GRPCStatus().Message(), 1)
 }
 
 // Command groups, as the root command's help lists them.

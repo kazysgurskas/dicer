@@ -4,62 +4,42 @@
 package cli
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
-
-// execProbe, httpProbe and tcpProbe are health check probes, as the API takes them.
-func execProbe(command ...string) *dicerdv1.HealthCheck_Exec {
-	return &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{Command: command}}
-}
-
-func httpProbe(port uint32, path string) *dicerdv1.HealthCheck_Http {
-	return &dicerdv1.HealthCheck_Http{Http: &dicerdv1.HealthCheckHTTP{Port: port, Path: path}}
-}
-
-func tcpProbe(port uint32) *dicerdv1.HealthCheck_Tcp {
-	return &dicerdv1.HealthCheck_Tcp{Tcp: &dicerdv1.HealthCheckTCP{Port: port}}
-}
 
 func TestHealthCheckFlags(t *testing.T) {
 	tests := []struct {
 		name string
 		argv []string
-		want *dicerdv1.HealthCheck
+		want *dicer.HealthCheck
 	}{
 		{name: "none", argv: nil, want: nil},
 		{
 			name: "command, run by a shell",
 			argv: []string{"--health-cmd", "curl -f localhost || exit 1", "--health-retries", "5"},
-			want: &dicerdv1.HealthCheck{Probe: execProbe("/bin/sh", "-c", "curl -f localhost || exit 1"), Retries: 5},
+			want: &dicer.HealthCheck{Exec: []string{"/bin/sh", "-c", "curl -f localhost || exit 1"}, Retries: 5},
 		},
 		{
 			name: "http",
 			argv: []string{"--health-http", "3000/api/health", "--health-interval", "30s"},
-			want: &dicerdv1.HealthCheck{Probe: httpProbe(3000, "/api/health"), Interval: durationpb.New(30 * time.Second)},
+			want: &dicer.HealthCheck{HTTP: &dicer.HTTPProbe{Port: 3000, Path: "/api/health"}, Interval: 30 * time.Second},
 		},
 		{
 			name: "http, on /",
 			argv: []string{"--health-http", "8080"},
-			want: &dicerdv1.HealthCheck{Probe: httpProbe(8080, "")},
+			want: &dicer.HealthCheck{HTTP: &dicer.HTTPProbe{Port: 8080}},
 		},
 		{
 			name: "tcp",
 			argv: []string{"--health-tcp", "5432", "--health-start-period", "1m", "--health-timeout", "2s"},
-			want: &dicerdv1.HealthCheck{
-				Probe:       tcpProbe(5432),
-				StartPeriod: durationpb.New(time.Minute),
-				Timeout:     durationpb.New(2 * time.Second),
-			},
+			want: &dicer.HealthCheck{TCP: &dicer.TCPProbe{Port: 5432}, StartPeriod: time.Minute, Timeout: 2 * time.Second},
 		},
-		{name: "disabled", argv: []string{"--no-healthcheck"}, want: &dicerdv1.HealthCheck{Disabled: true}},
+		{name: "disabled", argv: []string{"--no-healthcheck"}, want: &dicer.HealthCheck{Disabled: true}},
 	}
 
 	for _, tt := range tests {
@@ -68,8 +48,8 @@ func TestHealthCheckFlags(t *testing.T) {
 			if err != nil {
 				t.Fatalf("build: %v", err)
 			}
-			if !proto.Equal(got.GetHealthCheck(), tt.want) {
-				t.Errorf("health check = %v, want %v", got.GetHealthCheck(), tt.want)
+			if !reflect.DeepEqual(got.spec.HealthCheck, tt.want) {
+				t.Errorf("health check = %+v, want %+v", got.spec.HealthCheck, tt.want)
 			}
 		})
 	}
@@ -89,32 +69,32 @@ func TestHealthCheckFlagsRejected(t *testing.T) {
 }
 
 func TestHealthRendering(t *testing.T) {
-	started := timestamppb.New(time.Now().Add(-3 * time.Minute))
-	check := &dicerdv1.HealthCheck{
-		Probe:    httpProbe(3000, "/api/health"),
-		Interval: durationpb.New(10 * time.Second),
-		Timeout:  durationpb.New(5 * time.Second),
+	started := time.Now().Add(-3 * time.Minute)
+	check := dicer.HealthCheck{
+		HTTP:     &dicer.HTTPProbe{Port: 3000, Path: "/api/health"},
+		Interval: 10 * time.Second,
+		Timeout:  5 * time.Second,
 		Retries:  3,
 	}
 
 	tests := []struct {
-		health *dicerdv1.Health
+		health *dicer.Health
 		status string
 		lines  []string
 	}{
 		{nil, "Up 3 minutes", nil},
 		{
-			&dicerdv1.Health{Status: healthStarting},
+			&dicer.Health{Status: dicer.HealthStatusStarting},
 			"Up 3 minutes (health: starting)",
 			[]string{"starting", "http :3000/api/health every 10s", "timeout 5s, 3 retries"},
 		},
 		{
-			&dicerdv1.Health{Status: healthHealthy, LastOutput: "200 OK"},
+			&dicer.Health{Status: dicer.HealthStatusHealthy, LastOutput: "200 OK"},
 			"Up 3 minutes (healthy)",
 			[]string{"healthy", "http :3000/api/health every 10s", "timeout 5s, 3 retries"},
 		},
 		{
-			&dicerdv1.Health{Status: healthUnhealthy, FailingStreak: 3, LastOutput: "503 Service Unavailable\nmore"},
+			&dicer.Health{Status: dicer.HealthStatusUnhealthy, FailingStreak: 3, LastOutput: "503 Service Unavailable\nmore"},
 			"Up 3 minutes (unhealthy)",
 			[]string{
 				"unhealthy, 3 checks failed in a row", "last probe: 503 Service Unavailable",
@@ -123,7 +103,7 @@ func TestHealthRendering(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		instance := &dicerdv1.Instance{State: stateRunning, StartTime: started, Health: tt.health}
+		instance := dicer.Instance{State: dicer.InstanceStateRunning, StartTime: started, Health: tt.health}
 		if tt.health != nil {
 			instance.Health.Check = check
 		}
@@ -136,7 +116,10 @@ func TestHealthRendering(t *testing.T) {
 	}
 
 	// A stopped instance shows the check it is configured with.
-	stopped := &dicerdv1.Instance{HealthCheck: &dicerdv1.HealthCheck{Disabled: true}, State: stateStopped}
+	stopped := dicer.Instance{
+		InstanceSpec: dicer.InstanceSpec{HealthCheck: &dicer.HealthCheck{Disabled: true}},
+		State:        dicer.InstanceStateStopped,
+	}
 	if got := healthLines(stopped, palette{}); !slices.Equal(got, []string{"disabled"}) {
 		t.Errorf("health of a stopped instance = %q, want its configured check", got)
 	}

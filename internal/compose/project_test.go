@@ -7,9 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func TestOrder(t *testing.T) {
@@ -79,7 +77,7 @@ func TestConfigHash(t *testing.T) {
 	compose := "services: {web: {image: 'nginx:${TAG}', environment: {A: '1', B: '2'}}}"
 	hash := func(tag string) string {
 		p := mustLoad(t, compose, map[string]string{"TAG": tag})
-		return p.Services["web"].Instance.GetLabels()[LabelConfigHash]
+		return p.Services["web"].Instance.Labels[LabelConfigHash]
 	}
 
 	if first, again := hash("1"), hash("1"); first != again {
@@ -90,21 +88,16 @@ func TestConfigHash(t *testing.T) {
 	}
 
 	p := mustLoad(t, compose, map[string]string{"TAG": "1"})
-	req := p.Services["web"].Instance
-	started, ok := proto.Clone(req).(*dicerdv1.CreateInstanceRequest)
-	if !ok {
-		t.Fatal("clone of a CreateInstanceRequest is not one")
-	}
-	started.Start = true
-	if ConfigHash(started) != req.GetLabels()[LabelConfigHash] {
-		t.Error("starting the instance changes its hash")
+	spec := p.Services["web"].Instance
+	if ConfigHash(spec) != spec.Labels[LabelConfigHash] {
+		t.Error("the hash label changes the hash it holds")
 	}
 }
 
 func TestServiceFor(t *testing.T) {
 	p := mustLoad(t, "services: {web: {image: nginx}}", nil)
 
-	ours := &dicerdv1.Instance{Labels: map[string]string{LabelProject: "shop", LabelService: "web"}}
+	ours := dicer.Instance{InstanceSpec: dicer.InstanceSpec{Labels: map[string]string{LabelProject: "shop", LabelService: "web"}}}
 	if s, ok := p.ServiceFor(ours); !ok || s.Name != "web" {
 		t.Errorf("ServiceFor(ours) = %v, %v", s, ok)
 	}
@@ -114,7 +107,7 @@ func TestServiceFor(t *testing.T) {
 		{LabelProject: "shop", LabelService: "gone"},
 		nil,
 	} {
-		if _, ok := p.ServiceFor(&dicerdv1.Instance{Labels: labels}); ok {
+		if _, ok := p.ServiceFor(dicer.Instance{InstanceSpec: dicer.InstanceSpec{Labels: labels}}); ok {
 			t.Errorf("ServiceFor(%v) found a service", labels)
 		}
 	}

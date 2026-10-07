@@ -135,7 +135,7 @@ func TestKeepaliveLetsClientsPing(t *testing.T) {
 
 	call := func() {
 		t.Helper()
-		if _, err := c.GetHostInfo(t.Context(), &dicerdv1.GetHostInfoRequest{}); err != nil {
+		if _, err := c.HostInfo(t.Context()); err != nil {
 			t.Fatalf("GetHostInfo: %v", err)
 		}
 	}

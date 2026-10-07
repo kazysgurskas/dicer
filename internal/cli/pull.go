@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // progressInterval is how often a terminal's progress line is redrawn. Any
@@ -23,7 +23,7 @@ type pullReporter struct {
 	out      io.Writer
 	terminal bool
 
-	stage      dicerdv1.PullStage
+	stage      dicer.PullStage
 	stageStart time.Time
 	lastDraw   time.Time
 
@@ -39,23 +39,23 @@ func newPullReporter(out io.Writer) *pullReporter {
 }
 
 // report shows one progress message.
-func (r *pullReporter) report(p *dicerdv1.PullImageProgress) {
-	stageChanged := p.GetStage() != r.stage
-	r.stage = p.GetStage()
+func (r *pullReporter) report(p dicer.PullProgress) {
+	stageChanged := p.Stage != r.stage
+	r.stage = p.Stage
 	if stageChanged {
 		r.stageStart = time.Now()
 	}
-	if r.stage != dicerdv1.PullStage_PULL_STAGE_UNSPECIFIED && r.stage != dicerdv1.PullStage_PULL_STAGE_RESOLVING {
+	if r.stage != "" && r.stage != dicer.PullStageResolving {
 		r.fetched = true
 	}
-	if r.stage == dicerdv1.PullStage_PULL_STAGE_DOWNLOADING {
-		r.total = max(r.total, p.GetTotalBytes())
+	if r.stage == dicer.PullStageDownloading {
+		r.total = max(r.total, p.TotalBytes)
 	}
 
 	if !r.terminal {
 		// Only the stages are worth a line; bytes would be a flood.
 		if stageChanged {
-			_, _ = fmt.Fprintf(r.out, "%s\n", stageLabel(p.GetStage()))
+			_, _ = fmt.Fprintf(r.out, "%s\n", stageLabel(p.Stage))
 		}
 
 		return
@@ -67,8 +67,8 @@ func (r *pullReporter) report(p *dicerdv1.PullImageProgress) {
 	}
 	r.lastDraw = time.Now()
 
-	line := fmt.Sprintf("%-11s", stageLabel(p.GetStage()))
-	if done, total := p.GetDownloadedBytes(), p.GetTotalBytes(); total > 0 {
+	line := fmt.Sprintf("%-11s", stageLabel(p.Stage))
+	if done, total := p.DownloadedBytes, p.TotalBytes; total > 0 {
 		line += " " + progressBar(done, total) + " " +
 			fmt.Sprintf("%4s  %s", percent(done, total), humanize.BytesOf(done, total))
 		if rate := r.rate(done); rate > 0 {
@@ -123,9 +123,9 @@ func (r *pullReporter) done() {
 }
 
 // stageLabel is what a progress line calls a stage: "Downloading".
-func stageLabel(stage dicerdv1.PullStage) string {
-	if stage == dicerdv1.PullStage_PULL_STAGE_UNSPECIFIED {
+func stageLabel(stage dicer.PullStage) string {
+	if stage == "" {
 		return "Pulling"
 	}
-	return capitalize(enumName(stage))
+	return capitalize(string(stage))
 }

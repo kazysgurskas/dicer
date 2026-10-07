@@ -8,8 +8,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // barWidth is how many cells a usage bar spans.
@@ -21,9 +21,9 @@ const barWidth = 20
 //
 //	vCPU: ████░░░░░░░░░░░░░░░░  4 of 16          25%
 //	      4 CPUs, 4× overcommit
-func resourceFields(r *dicerdv1.GetResourcesResponse, p palette) []field {
-	cpu, memory, disk := r.GetCpu(), r.GetMemory(), r.GetDisk()
-	diskUsed := disk.GetTotalBytes() - disk.GetFreeBytes()
+func resourceFields(r dicer.Resources, p palette) []field {
+	cpu, memory, disk := r.CPU, r.Memory, r.Disk
+	diskUsed := disk.TotalBytes - disk.FreeBytes
 
 	type row struct {
 		label       string
@@ -32,12 +32,12 @@ func resourceFields(r *dicerdv1.GetResourcesResponse, p palette) []field {
 		note        string
 	}
 	rows := []row{
-		{"vCPU", cpu.GetAllocated(), cpu.GetAllocatable(),
-			fmt.Sprintf("%d of %d", cpu.GetAllocated(), cpu.GetAllocatable()), cpuLimit(cpu)},
-		{"Memory", memory.GetAllocated(), memory.GetAllocatable(),
-			humanize.BytesOf(memory.GetAllocated(), memory.GetAllocatable()), memoryLimit(memory)},
-		{"Disk", diskUsed, disk.GetTotalBytes(),
-			humanize.BytesOf(diskUsed, disk.GetTotalBytes()), humanize.Bytes(disk.GetProvisionedBytes()) + " provisioned"},
+		{"vCPU", cpu.Allocated, cpu.Allocatable,
+			fmt.Sprintf("%d of %d", cpu.Allocated, cpu.Allocatable), cpuLimit(cpu)},
+		{"Memory", memory.Allocated, memory.Allocatable,
+			humanize.BytesOf(memory.Allocated, memory.Allocatable), memoryLimit(memory)},
+		{"Disk", diskUsed, disk.TotalBytes,
+			humanize.BytesOf(diskUsed, disk.TotalBytes), humanize.Bytes(disk.ProvisionedBytes) + " provisioned"},
 	}
 
 	// The amounts are padded to one width, so the percentages line up.
@@ -66,23 +66,23 @@ func fraction(used, limit int64) float64 {
 }
 
 // cpuLimit explains the vCPU limit: "4 CPUs, 4× overcommit".
-func cpuLimit(cpu *dicerdv1.ResourceCapacity) string {
-	limit := humanize.Count(cpu.GetHost(), "CPU")
-	if cpu.GetOvercommit() != 1 {
-		limit += ", " + humanize.Number(cpu.GetOvercommit()) + "× overcommit"
+func cpuLimit(cpu dicer.ResourceCapacity) string {
+	limit := humanize.Count(cpu.Host, "CPU")
+	if cpu.Overcommit != 1 {
+		limit += ", " + humanize.Number(cpu.Overcommit) + "× overcommit"
 	}
 
 	return limit
 }
 
 // memoryLimit explains the memory limit: "31.3 GiB, 1 GiB reserved".
-func memoryLimit(memory *dicerdv1.ResourceCapacity) string {
-	limit := humanize.Bytes(memory.GetHost())
-	if memory.GetReserved() > 0 {
-		limit += ", " + humanize.Bytes(memory.GetReserved()) + " reserved"
+func memoryLimit(memory dicer.ResourceCapacity) string {
+	limit := humanize.Bytes(memory.Host)
+	if memory.Reserved > 0 {
+		limit += ", " + humanize.Bytes(memory.Reserved) + " reserved"
 	}
-	if memory.GetOvercommit() != 1 {
-		limit += ", " + humanize.Number(memory.GetOvercommit()) + "× overcommit"
+	if memory.Overcommit != 1 {
+		limit += ", " + humanize.Number(memory.Overcommit) + "× overcommit"
 	}
 
 	return limit

@@ -11,14 +11,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // stateOrder is the order instance states are summarised in: what is using
 // the host first, what is not last.
-var stateOrder = []dicerdv1.InstanceState{
-	stateRunning, statePaused, stateStarting, stateStopping, stateRestarting, stateStandby, stateFailed, stateStopped,
+var stateOrder = []dicer.InstanceState{
+	dicer.InstanceStateRunning, dicer.InstanceStatePaused, dicer.InstanceStateStarting, dicer.InstanceStateStopping,
+	dicer.InstanceStateRestarting, dicer.InstanceStateStandby, dicer.InstanceStateFailed, dicer.InstanceStateStopped,
 }
 
 func newInfoCommand() *cobra.Command {
@@ -48,11 +49,11 @@ func newInfoCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			host, err := client.GetHostInfo(cmd.Context(), &dicerdv1.GetHostInfoRequest{})
+			host, err := client.HostInfo(cmd.Context())
 			if err != nil {
 				return err
 			}
-			resources, err := client.GetResources(cmd.Context(), &dicerdv1.GetResourcesRequest{})
+			resources, err := client.Resources(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -68,12 +69,12 @@ func newInfoCommand() *cobra.Command {
 				return writeStructured(cmd.OutOrStdout(), format,
 					map[string]any{"host": hostRecord, "resources": resourcesRecord})
 			}
-			instances, err := client.ListInstances(cmd.Context(), &dicerdv1.ListInstancesRequest{})
+			instances, err := client.Instances.List(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			return writeInfo(cmd.OutOrStdout(), t, host, resources, instances.GetInstances())
+			return writeInfo(cmd.OutOrStdout(), t, host, resources, instances)
 		},
 	}
 
@@ -101,8 +102,7 @@ func newInfoCommand() *cobra.Command {
 //	           vCPU: ████░░░░░░░░░░░░░░░░  4 of 16         25%
 //	                 4 CPUs, 4× overcommit
 func writeInfo(
-	w io.Writer, t target, host *dicerdv1.GetHostInfoResponse, resources *dicerdv1.GetResourcesResponse,
-	instances []*dicerdv1.Instance,
+	w io.Writer, t target, host dicer.HostInfo, resources dicer.Resources, instances []dicer.Instance,
 ) error {
 	p := paletteFor(w)
 
@@ -112,7 +112,7 @@ func writeInfo(
 		field{"Network API", networkAPILines(host)},
 	)
 	v.block(
-		field{"Hypervisors", hypervisorLines(host.GetHypervisors())},
+		field{"Hypervisors", hypervisorLines(host.Hypervisors)},
 	)
 	v.block(resourceFields(resources, p)...)
 
@@ -136,10 +136,10 @@ const logoPip = "●"
 
 // infoHeadline is the logo, with what the daemon is beside the die's face:
 // its version, its host, and what its instances are doing.
-func infoHeadline(host *dicerdv1.GetHostInfoResponse, instances []*dicerdv1.Instance, p palette) string {
+func infoHeadline(host dicer.HostInfo, instances []dicer.Instance, p palette) string {
 	beside := map[int]string{
-		3: p.bold("dicer") + " " + host.GetVersion(),
-		4: host.GetHostname(),
+		3: p.bold("dicer") + " " + host.Version,
+		4: host.Hostname,
 		5: instanceSummary(instances, p) + healthSummary(instances, p),
 	}
 
@@ -170,30 +170,30 @@ func paintLogoRow(row string, p palette) string {
 }
 
 // networkAPILines describe whether the API is served over TCP, and where.
-func networkAPILines(host *dicerdv1.GetHostInfoResponse) []string {
-	if len(host.GetApiAddresses()) == 0 {
+func networkAPILines(host dicer.HostInfo) []string {
+	if len(host.APIAddresses) == 0 {
 		return []string{"off (set api.tcp.listen to serve it over the network)"}
 	}
 
-	return []string{strings.Join(host.GetApiAddresses(), ", ")}
+	return []string{strings.Join(host.APIAddresses, ", ")}
 }
 
 // hypervisorLines describe what an instance may be started with, one
 // hypervisor to a line: "cloud-hypervisor v53.0.0 (default), v49.0.0".
-func hypervisorLines(hypervisors []*dicerdv1.HypervisorInfo) []string {
+func hypervisorLines(hypervisors []dicer.HypervisorInfo) []string {
 	if len(hypervisors) == 0 {
 		return []string{"none"}
 	}
 
 	lines := make([]string, 0, len(hypervisors))
 	for _, hypervisor := range hypervisors {
-		versions := hypervisor.GetVersions()
-		if len(versions) > 0 && hypervisor.GetIsDefault() {
+		versions := hypervisor.Versions
+		if len(versions) > 0 && hypervisor.IsDefault {
 			// The first version is the one an instance gets by default, and
 			// the default hypervisor is listed first.
 			versions = append([]string{versions[0] + " (default)"}, versions[1:]...)
 		}
-		lines = append(lines, enumName(hypervisor.GetType())+" "+strings.Join(versions, ", "))
+		lines = append(lines, string(hypervisor.Type)+" "+strings.Join(versions, ", "))
 	}
 
 	return lines
@@ -201,20 +201,20 @@ func hypervisorLines(hypervisors []*dicerdv1.HypervisorInfo) []string {
 
 // instanceSummary counts instances by state, busiest first: "2 running, 1
 // stopped (3 defined)".
-func instanceSummary(instances []*dicerdv1.Instance, p palette) string {
+func instanceSummary(instances []dicer.Instance, p palette) string {
 	if len(instances) == 0 {
 		return "no instances defined"
 	}
 
-	counts := make(map[dicerdv1.InstanceState]int, len(stateOrder))
+	counts := make(map[dicer.InstanceState]int, len(stateOrder))
 	for _, instance := range instances {
-		counts[instance.GetState()]++
+		counts[instance.State]++
 	}
 
 	parts := make([]string, 0, len(stateOrder))
 	for _, state := range stateOrder {
 		if n := counts[state]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, p.status(enumName(state))))
+			parts = append(parts, fmt.Sprintf("%d %s", n, p.status(string(state))))
 		}
 	}
 
@@ -223,18 +223,18 @@ func instanceSummary(instances []*dicerdv1.Instance, p palette) string {
 
 // healthSummary counts the instances whose health is checked, by verdict:
 // " · 2 healthy, 1 unhealthy". Nothing if none is checked.
-func healthSummary(instances []*dicerdv1.Instance, p palette) string {
-	counts := make(map[dicerdv1.HealthStatus]int)
+func healthSummary(instances []dicer.Instance, p palette) string {
+	counts := make(map[dicer.HealthStatus]int)
 	for _, instance := range instances {
-		if status := instance.GetHealth().GetStatus(); status != 0 {
-			counts[status]++
+		if instance.Health != nil && instance.Health.Status != "" {
+			counts[instance.Health.Status]++
 		}
 	}
 
 	var parts []string
-	for _, status := range []dicerdv1.HealthStatus{healthUnhealthy, healthStarting, healthHealthy} {
+	for _, status := range []dicer.HealthStatus{dicer.HealthStatusUnhealthy, dicer.HealthStatusStarting, dicer.HealthStatusHealthy} {
 		if n := counts[status]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, p.status(enumName(status))))
+			parts = append(parts, fmt.Sprintf("%d %s", n, p.status(string(status))))
 		}
 	}
 	if len(parts) == 0 {

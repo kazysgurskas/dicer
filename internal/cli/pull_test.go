@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 // TestPullReporterOffTerminal checks what ends up in a log or a pipe: one
@@ -17,13 +17,13 @@ func TestPullReporterOffTerminal(t *testing.T) {
 	var out bytes.Buffer
 	r := newPullReporter(&out)
 
-	progress := []*dicerdv1.PullImageProgress{
-		{Stage: dicerdv1.PullStage_PULL_STAGE_RESOLVING},
-		{Stage: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING, TotalBytes: 100},
-		{Stage: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING, DownloadedBytes: 50, TotalBytes: 100},
-		{Stage: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING, DownloadedBytes: 100, TotalBytes: 100},
-		{Stage: dicerdv1.PullStage_PULL_STAGE_UNPACKING},
-		{Stage: dicerdv1.PullStage_PULL_STAGE_CONVERTING},
+	progress := []dicer.PullProgress{
+		{Stage: dicer.PullStageResolving},
+		{Stage: dicer.PullStageDownloading, TotalBytes: 100},
+		{Stage: dicer.PullStageDownloading, DownloadedBytes: 50, TotalBytes: 100},
+		{Stage: dicer.PullStageDownloading, DownloadedBytes: 100, TotalBytes: 100},
+		{Stage: dicer.PullStageUnpacking},
+		{Stage: dicer.PullStageConverting},
 	}
 	for _, p := range progress {
 		r.report(p)
@@ -49,7 +49,7 @@ func TestPullReporterOffTerminal(t *testing.T) {
 
 func TestStageLabel(t *testing.T) {
 	// An unknown stage still has to read as something.
-	if got := stageLabel(dicerdv1.PullStage_PULL_STAGE_UNSPECIFIED); got == "" {
+	if got := stageLabel(""); got == "" {
 		t.Error("an unspecified stage has no label")
 	}
 }

@@ -10,11 +10,10 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableKernel struct {
-	Kernels []*dicerdv1.Kernel
+	Kernels []dicer.Kernel
 }
 
 func (p *printableKernel) Columns() []string {
@@ -25,12 +24,12 @@ func (p *printableKernel) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Kernels))
 	for _, k := range p.Kernels {
 		rows = append(rows, map[string]any{
-			"ID":      k.GetId(),
-			"Name":    k.GetName(),
-			"Arch":    archName(k.GetArch()),
-			"URL":     k.GetUrl(),
-			"SHA256":  orDash(k.GetSha256()),
-			"Created": age(timeOf(k.GetCreateTime())),
+			"ID":      k.ID,
+			"Name":    k.Name,
+			"Arch":    string(k.Architecture),
+			"URL":     k.URL,
+			"SHA256":  orDash(k.SHA256),
+			"Created": age(k.CreateTime),
 		})
 	}
 	return rows
@@ -66,7 +65,7 @@ func newKernelImportCommand() *cobra.Command {
 			archFlag, _ := cmd.Flags().GetString("arch")
 			sha256, _ := cmd.Flags().GetString("sha256")
 
-			arch, err := parseEnum[dicerdv1.Architecture]("--arch", archFlag)
+			arch, err := parseChoice("--arch", archFlag, architectures)
 			if err != nil {
 				return usagef(cmd, "%s", err)
 			}
@@ -77,17 +76,17 @@ func newKernelImportCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			k, err := client.ImportKernel(cmd.Context(), &dicerdv1.ImportKernelRequest{
-				Name:   args[0],
-				Url:    url,
-				Arch:   arch,
-				Sha256: sha256,
+			k, err := client.Kernels.Import(cmd.Context(), dicer.KernelSpec{
+				Name:         args[0],
+				URL:          url,
+				Architecture: arch,
+				SHA256:       sha256,
 			})
 			if err != nil {
 				return err
 			}
 
-			succeeded(cmd, "Kernel %s imported", k.GetName())
+			succeeded(cmd, "Kernel %s imported", k.Name)
 			return nil
 		},
 	}
@@ -114,12 +113,12 @@ func newKernelListCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			resp, err := client.ListKernels(cmd.Context(), &dicerdv1.ListKernelsRequest{})
+			list, err := client.Kernels.List(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableKernel{Kernels: resp.GetKernels()})
+			return render(cmd, &printableKernel{Kernels: list})
 		},
 	}
 
@@ -129,15 +128,15 @@ func newKernelListCommand() *cobra.Command {
 }
 
 func newKernelShowCommand() *cobra.Command {
-	return newShowCommand(showSpec[*dicerdv1.Kernel]{
+	return newShowCommand(showSpec[dicer.Kernel]{
 		use:   "show NAME",
 		short: "Show a kernel",
 		arg:   "a kernel name",
 		list:  listKernels,
-		get: func(ctx context.Context, client *dicer.Client, name string) (*dicerdv1.Kernel, error) {
-			return client.GetKernel(ctx, &dicerdv1.GetKernelRequest{Name: name})
+		get: func(ctx context.Context, client *dicer.Client, name string) (dicer.Kernel, error) {
+			return client.Kernels.Get(ctx, name)
 		},
-		printable: func(v *dicerdv1.Kernel) printer.Printable { return &printableKernel{Kernels: []*dicerdv1.Kernel{v}} },
+		printable: func(v dicer.Kernel) printer.Printable { return &printableKernel{Kernels: []dicer.Kernel{v}} },
 	})
 }
 
@@ -153,7 +152,7 @@ func newKernelDeleteCommand() *cobra.Command {
 		ValidArgsFunction: complete(0, withoutDefault(listKernels)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachNameOrAll(cmd, args, withoutDefault(listKernels), "kernels", func(client *dicer.Client, name string) error {
-				if _, err := client.DeleteKernel(cmd.Context(), &dicerdv1.DeleteKernelRequest{Name: name}); err != nil {
+				if err := client.Kernels.Delete(cmd.Context(), name); err != nil {
 					return err
 				}
 

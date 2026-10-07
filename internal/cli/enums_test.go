@@ -4,45 +4,45 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
-func TestEnumNamesRoundTrip(t *testing.T) {
+// TestParseChoiceIgnoresCaseAndSeparators checks that a value is read
+// however it is cased, with underscores or hyphens.
+func TestParseChoiceIgnoresCaseAndSeparators(t *testing.T) {
 	for _, tc := range []struct {
-		value dicerdv1.RestartMode
-		name  string
+		in   string
+		want dicer.RestartMode
 	}{
-		{dicerdv1.RestartMode_RESTART_MODE_NO, "no"},
-		{dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE, "on-failure"},
-		{dicerdv1.RestartMode_RESTART_MODE_UNLESS_STOPPED, "unless-stopped"},
-		{dicerdv1.RestartMode_RESTART_MODE_UNSPECIFIED, ""},
+		{"no", dicer.RestartModeNo},
+		{"on-failure", dicer.RestartModeOnFailure},
+		{"ON_FAILURE", dicer.RestartModeOnFailure},
+		{"Unless-Stopped", dicer.RestartModeUnlessStopped},
 	} {
-		if got := enumName(tc.value); got != tc.name {
-			t.Errorf("enumName(%v) = %q, want %q", tc.value, got, tc.name)
-		}
-		if tc.name == "" {
-			continue
-		}
-		if got, err := parseEnum[dicerdv1.RestartMode]("restart policy", tc.name); err != nil || got != tc.value {
-			t.Errorf("parseEnum(%q) = %v, %v; want %v", tc.name, got, err, tc.value)
+		if got, err := parseChoice("restart policy", tc.in, restartModes); err != nil || got != tc.want {
+			t.Errorf("parseChoice(%q) = %v, %v; want %v", tc.in, got, err, tc.want)
 		}
 	}
 
-	if got := enumName(dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR); got != "cloud-hypervisor" {
-		t.Errorf("enumName = %q, want cloud-hypervisor", got)
+	if got, err := parseChoice("--arch", "x86_64", architectures); err != nil || got != dicer.ArchitectureX86_64 {
+		t.Errorf("parseChoice(x86_64) = %v, %v", got, err)
 	}
 }
 
-func TestParseEnumRejects(t *testing.T) {
+// TestParseChoiceRejectsWhatIsNotAChoice checks that anything else fails,
+// naming the choices.
+func TestParseChoiceRejectsWhatIsNotAChoice(t *testing.T) {
 	for _, s := range []string{"", "unspecified", "sometimes"} {
-		if _, err := parseEnum[dicerdv1.RestartMode]("restart policy", s); err == nil {
-			t.Errorf("parseEnum(%q) should fail", s)
+		_, err := parseChoice("restart policy", s, restartModes)
+		if err == nil {
+			t.Errorf("parseChoice(%q) should fail", s)
+			continue
 		}
-	}
-	want := []string{"no", "on-failure", "unless-stopped", "always"}
-	if got := enumNames[dicerdv1.RestartMode](); len(got) != len(want) {
-		t.Errorf("enumNames = %v, want %v", got, want)
+		if want := "want no, on-failure, unless-stopped or always"; !strings.Contains(err.Error(), want) {
+			t.Errorf("parseChoice(%q) = %v, want it to say %q", s, err, want)
+		}
 	}
 }

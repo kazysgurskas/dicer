@@ -13,7 +13,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/cli/printer"
 	"github.com/konradasb/dicer/internal/version"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // versionInfo is what 'dicer version' reports of the client, and of the
@@ -92,12 +91,12 @@ func daemonVersion(cmd *cobra.Command) (*serverVersion, error) {
 	}
 	defer cleanup()
 
-	host, err := client.GetHostInfo(cmd.Context(), &dicerdv1.GetHostInfoRequest{})
+	host, err := client.HostInfo(cmd.Context())
 	if err != nil {
 		return nil, err
 	}
 
-	return &serverVersion{Version: host.GetVersion(), Host: host.GetHostname(), Remote: t.String()}, nil
+	return &serverVersion{Version: host.Version, Host: host.Hostname, Remote: t.String()}, nil
 }
 
 // writeVersion writes the versions for a person to read.

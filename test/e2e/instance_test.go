@@ -575,10 +575,9 @@ func (e *environment) waitForHealth(t *testing.T, name, want string) instanceVie
 	})
 }
 
-// instanceView is what `dicer instance show --format json` prints: the API's
-// Instance message, as protobuf's JSON mapping writes it, with its field
-// names. Its enums are named as the CLI shows them, though: its state as
-// "Running", and its health as "healthy".
+// instanceView is what `dicer instance show --format json` prints: the
+// client's Instance, with its JSON names. Its state is capitalised as the
+// CLI shows it, "Running".
 //
 // Only the fields the tests assert on are named.
 type instanceView struct {
@@ -591,7 +590,7 @@ type instanceView struct {
 	RestartCount int               `json:"restart_count"`
 	Labels       map[string]string `json:"labels"`
 	VCPUs        int               `json:"vcpus"`
-	MemoryBytes  int64             `json:"memory_bytes,string"`
+	MemoryBytes  int64             `json:"memory_bytes"`
 
 	// Health is a value rather than a pointer so that an instance with no
 	// check reads as the zero health instead of panicking.
@@ -600,12 +599,6 @@ type instanceView struct {
 		FailingStreak int    `json:"failing_streak"`
 		LastOutput    string `json:"last_output"`
 	} `json:"health"`
-}
-
-// enumValue is an enum's value without its prefix, in lower case:
-// INSTANCE_STATE_RUNNING is "running".
-func enumValue(name, prefix string) string {
-	return strings.ToLower(strings.TrimPrefix(name, prefix))
 }
 
 // instanceName returns a name unique to this test, so that a run which fails
@@ -634,11 +627,9 @@ func (e *environment) instance(t *testing.T, name string) instanceView {
 	}
 
 	v := views[0]
-	v.State = enumValue(v.State, "INSTANCE_STATE_")
 	if state := []rune(v.State); len(state) > 0 {
 		v.State = strings.ToUpper(string(state[0])) + string(state[1:])
 	}
-	v.Health.Status = enumValue(v.Health.Status, "HEALTH_STATUS_")
 
 	return v
 }

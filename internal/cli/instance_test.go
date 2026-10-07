@@ -8,14 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
-// runBuild parses argv through a real create command and returns the request
-// it would send, exercising the flag plumbing rather than bypassing it.
-func runBuild(t *testing.T, argv ...string) (*dicerdv1.CreateInstanceRequest, error) {
+// runBuild parses argv through a real create command and returns the create
+// it would make, exercising the flag plumbing rather than bypassing it.
+func runBuild(t *testing.T, argv ...string) (instanceCreate, error) {
 	t.Helper()
 
 	cmd := newInstanceCreateCommand()
@@ -26,18 +24,18 @@ func runBuild(t *testing.T, argv ...string) (*dicerdv1.CreateInstanceRequest, er
 		t.Fatalf("parse flags %v: %v", argv, err)
 	}
 
-	return buildCreateRequest(cmd, cmd.Flags().Args())
+	return buildCreate(cmd, cmd.Flags().Args())
 }
 
 func TestBuildCreateRequestRateLimits(t *testing.T) {
 	got, err := runBuild(t, "web", "--disk-rate", "50MiB", "--disk-iops", "1000",
 		"--upload-rate", "1MiB/s", "--download-rate", "2MiB")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
-	if got.GetDiskBytesPerSecond() != 50<<20 || got.GetDiskIops() != 1000 ||
-		got.GetUploadBytesPerSecond() != 1<<20 || got.GetDownloadBytesPerSecond() != 2<<20 {
-		t.Errorf("request = %v, want the limits given", got)
+	if got.spec.DiskBytesPerSecond != 50<<20 || got.spec.DiskIOPS != 1000 ||
+		got.spec.UploadBytesPerSecond != 1<<20 || got.spec.DownloadBytesPerSecond != 2<<20 {
+		t.Errorf("spec = %+v, want the limits given", got.spec)
 	}
 }
 
@@ -46,20 +44,20 @@ func TestBuildCreateRequestFromFlagsOnly(t *testing.T) {
 		"web", "--image", "alpine:3.21", "--kernel", "k1",
 		"--network", "default", "--vcpus", "2", "--memory", "1GiB", "--disk", "5GiB")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
 
-	if got.GetName() != "web" {
-		t.Errorf("name = %q, want web", got.GetName())
+	if got.spec.Name != "web" {
+		t.Errorf("name = %q, want web", got.spec.Name)
 	}
-	if got.GetVcpus() != 2 {
-		t.Errorf("vcpus = %d, want 2", got.GetVcpus())
+	if got.spec.VCPUs != 2 {
+		t.Errorf("vcpus = %d, want 2", got.spec.VCPUs)
 	}
-	if got.GetMemoryBytes() != 1<<30 {
-		t.Errorf("memory = %d, want %d", got.GetMemoryBytes(), 1<<30)
+	if got.spec.MemoryBytes != 1<<30 {
+		t.Errorf("memory = %d, want %d", got.spec.MemoryBytes, 1<<30)
 	}
-	if got.GetDiskBytes() != 5<<30 {
-		t.Errorf("disk = %d, want %d", got.GetDiskBytes(), 5<<30)
+	if got.spec.DiskBytes != 5<<30 {
+		t.Errorf("disk = %d, want %d", got.spec.DiskBytes, 5<<30)
 	}
 }
 
@@ -92,17 +90,17 @@ func TestBuildCreateRequestRejectsBadSizes(t *testing.T) {
 func TestBuildCreateRequestStartFlag(t *testing.T) {
 	got, err := runBuild(t, "web", "--image", "alpine", "--kernel", "k", "--network", "default", "--start")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
-	if !got.GetStart() {
+	if !got.opts.Start {
 		t.Error("--start was not carried into the request")
 	}
 
 	got, err = runBuild(t, "web", "--image", "alpine", "--kernel", "k", "--network", "default")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
-	if got.GetStart() {
+	if got.opts.Start {
 		t.Error("start should default to false: create records, it does not boot")
 	}
 }
@@ -113,16 +111,16 @@ func TestBuildCreateRequestMountFlags(t *testing.T) {
 		"--mount", "source=data,target=/var/lib/data,readonly",
 		"--mount", "type=file,source=/etc/app.conf,target=/etc/app.conf")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
 
-	want := []*dicerdv1.Mount{
-		{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS, Target: "/scratch"},
-		{Type: dicerdv1.MountType_MOUNT_TYPE_VOLUME, Source: "data", Target: "/var/lib/data", ReadOnly: true},
-		{Type: dicerdv1.MountType_MOUNT_TYPE_FILE, Source: "/etc/app.conf", Target: "/etc/app.conf"},
+	want := []dicer.Mount{
+		{Type: dicer.MountTypeTmpfs, Target: "/scratch"},
+		{Type: dicer.MountTypeVolume, Source: "data", Target: "/var/lib/data", ReadOnly: true},
+		{Type: dicer.MountTypeFile, Source: "/etc/app.conf", Target: "/etc/app.conf"},
 	}
-	if !slices.EqualFunc(got.GetMounts(), want, equalMessages) {
-		t.Errorf("mounts = %+v, want %+v", got.GetMounts(), want)
+	if !slices.Equal(got.spec.Mounts, want) {
+		t.Errorf("mounts = %+v, want %+v", got.spec.Mounts, want)
 	}
 }
 
@@ -140,28 +138,28 @@ func TestBuildCreateRequestRejectsBadMounts(t *testing.T) {
 func TestBuildCreateRequestCommandAfterDash(t *testing.T) {
 	got, err := runBuild(t, "web", "--image", "alpine", "--", "sh", "-c", "echo 'hello world'")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
 
 	want := []string{"sh", "-c", "echo 'hello world'"}
-	if !slices.Equal(got.GetCmd(), want) {
-		t.Errorf("cmd = %q, want %q: arguments must pass through unsplit", got.GetCmd(), want)
+	if !slices.Equal(got.spec.Cmd, want) {
+		t.Errorf("cmd = %q, want %q: arguments must pass through unsplit", got.spec.Cmd, want)
 	}
-	if got.GetName() != "web" {
-		t.Errorf("name = %q, want web", got.GetName())
+	if got.spec.Name != "web" {
+		t.Errorf("name = %q, want web", got.spec.Name)
 	}
 }
 
 func TestBuildCreateRequestPublish(t *testing.T) {
 	req, err := runBuild(t, "web", "-p", "8080:80", "--publish", "10.0.0.1:53:53/udp")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
 
-	got := req.GetPorts()
+	got := req.spec.Ports
 	if len(got) != 2 ||
-		got[0].GetHostPort() != 8080 || got[0].GetGuestPort() != 80 || got[0].GetProtocol() != 0 ||
-		got[1].GetHostIp() != "10.0.0.1" || got[1].GetProtocol() != dicerdv1.Protocol_PROTOCOL_UDP {
+		got[0].HostPort != 8080 || got[0].GuestPort != 80 || got[0].Protocol != "" ||
+		got[1].HostIP != "10.0.0.1" || got[1].Protocol != dicer.ProtocolUDP {
 		t.Errorf("ports = %v, want 8080:80 and 10.0.0.1:53:53/udp", got)
 	}
 }
@@ -175,9 +173,9 @@ func TestBuildCreateRequestRejectsBadPorts(t *testing.T) {
 }
 
 func TestFormatPorts(t *testing.T) {
-	got := formatPorts([]*dicerdv1.PortMapping{
+	got := formatPorts([]dicer.PortMapping{
 		{HostPort: 8080, GuestPort: 80},
-		{HostIp: "10.0.0.1", HostPort: 53, GuestPort: 53, Protocol: dicerdv1.Protocol_PROTOCOL_UDP},
+		{HostIP: "10.0.0.1", HostPort: 53, GuestPort: 53, Protocol: dicer.ProtocolUDP},
 	})
 	if want := "8080->80/tcp, 10.0.0.1:53->53/udp"; got != want {
 		t.Errorf("formatPorts = %q, want %q", got, want)
@@ -189,23 +187,23 @@ func TestInitModeFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.GetInitMode() != dicerdv1.InitMode_INIT_MODE_SYSTEMD {
-		t.Errorf("--init-mode: init mode = %q, want systemd", got.GetInitMode())
+	if got.spec.InitMode != dicer.InitModeSystemd {
+		t.Errorf("--init-mode: init mode = %q, want systemd", got.spec.InitMode)
 	}
 
 	// Left out, it is the daemon's to default.
-	if got, _ := runBuild(t, "web", "--image", "debian"); got.GetInitMode() != dicerdv1.InitMode_INIT_MODE_UNSPECIFIED {
-		t.Errorf("no --init-mode: init mode = %q, want it unset", got.GetInitMode())
+	if got, _ := runBuild(t, "web", "--image", "debian"); got.spec.InitMode != "" {
+		t.Errorf("no --init-mode: init mode = %q, want it unset", got.spec.InitMode)
 	}
 }
 
 func TestCommandLinesShowTheInitModeOnlyWhenChosen(t *testing.T) {
-	for mode, want := range map[dicerdv1.InitMode][]string{
-		dicerdv1.InitMode_INIT_MODE_UNSPECIFIED: {"the image's"},
-		dicerdv1.InitMode_INIT_MODE_AUTO:        {"the image's"},
-		dicerdv1.InitMode_INIT_MODE_SYSTEMD:     {"the image's", "in systemd mode"},
+	for mode, want := range map[dicer.InitMode][]string{
+		"":                    {"the image's"},
+		dicer.InitModeAuto:    {"the image's"},
+		dicer.InitModeSystemd: {"the image's", "in systemd mode"},
 	} {
-		got := commandLines(&dicerdv1.Instance{InitMode: mode})
+		got := commandLines(dicer.Instance{InstanceSpec: dicer.InstanceSpec{InitMode: mode}})
 		if strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("init mode %q: %q, want %q", mode, got, want)
 		}
@@ -217,16 +215,13 @@ func TestCommandLinesShowTheInitModeOnlyWhenChosen(t *testing.T) {
 func TestBuildCreateRequestRemoveOnExit(t *testing.T) {
 	got, err := runBuild(t, "web", "--image", "alpine", "--rm")
 	if err != nil {
-		t.Fatalf("buildCreateRequest: %v", err)
+		t.Fatalf("buildCreate: %v", err)
 	}
-	if !got.GetRemoveOnExit() {
+	if !got.spec.RemoveOnExit {
 		t.Error("--rm was not carried into the definition")
 	}
 
-	if got, _ := runBuild(t, "web", "--image", "alpine"); got.GetRemoveOnExit() {
+	if got, _ := runBuild(t, "web", "--image", "alpine"); got.spec.RemoveOnExit {
 		t.Error("an instance that did not ask to be deleted says it did")
 	}
 }
-
-// equalMessages reports whether two messages are equal, for slices.EqualFunc.
-func equalMessages[M proto.Message](a, b M) bool { return proto.Equal(a, b) }

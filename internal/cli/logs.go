@@ -6,7 +6,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func newInstanceLogsCommand() *cobra.Command {
@@ -29,7 +29,7 @@ func newInstanceLogsCommand() *cobra.Command {
 
 	cmd.Flags().SortFlags = false
 	cmd.Flags().BoolP("follow", "f", false, "Keep writing new output until the instance stops")
-	cmd.Flags().Int32P("tail", "n", 0, "Show only the last lines (default: all)")
+	cmd.Flags().IntP("tail", "n", 0, "Show only the last lines (default: all)")
 	cmd.Flags().String("source", "guest", "Which log to read: guest or hypervisor")
 	_ = cmd.RegisterFlagCompletionFunc("source", fixedCompletions(
 		"guest\tThe guest's serial console", "hypervisor\tThe hypervisor's own log"))
@@ -39,7 +39,7 @@ func newInstanceLogsCommand() *cobra.Command {
 
 func runInstanceLogsCommand(cmd *cobra.Command, args []string) error {
 	follow, _ := cmd.Flags().GetBool("follow")
-	tail, _ := cmd.Flags().GetInt32("tail")
+	tail, _ := cmd.Flags().GetInt("tail")
 	sourceFlag, _ := cmd.Flags().GetString("source")
 
 	source, err := logSource(sourceFlag)
@@ -53,8 +53,7 @@ func runInstanceLogsCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer cleanup()
 
-	err = streamLogs(cmd.Context(), client, &dicerdv1.GetInstanceLogsRequest{
-		Name:      args[0],
+	err = streamLogs(cmd.Context(), client, args[0], dicer.LogOptions{
 		Source:    source,
 		TailLines: tail,
 		Follow:    follow,
@@ -68,9 +67,9 @@ func runInstanceLogsCommand(cmd *cobra.Command, args []string) error {
 
 // logSource maps the --source flag onto the log it names. vmm is the
 // hypervisor's too.
-func logSource(flag string) (dicerdv1.LogSource, error) {
+func logSource(flag string) (dicer.LogSource, error) {
 	if flag == "vmm" {
-		return dicerdv1.LogSource_LOG_SOURCE_HYPERVISOR, nil
+		return dicer.LogSourceHypervisor, nil
 	}
-	return parseEnum[dicerdv1.LogSource]("--source", flag)
+	return parseChoice("--source", flag, logSources)
 }

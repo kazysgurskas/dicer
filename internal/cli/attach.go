@@ -5,6 +5,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/signal"
@@ -12,11 +13,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 const (
@@ -36,25 +34,25 @@ const (
 // runAttached runs an instance as docker run does without -d: it writes the
 // guest's console until the instance stops, and exits with the status it
 // ended with. Ctrl+C stops the instance; a second one stops waiting for it.
-func runAttached(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error {
+func runAttached(cmd *cobra.Command, create instanceCreate) error {
 	client, cleanup, err := newClient(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if req.PullPolicy, err = pullAsPolicy(cmd, client, req.GetImageRef(), req.GetPullPolicy()); err != nil {
+	if create.opts.PullPolicy, err = pullAsPolicy(cmd, client, create.spec.ImageRef, create.opts.PullPolicy); err != nil {
 		return err
 	}
 
 	// Defined first and started after, so that the console is followed from
 	// its first line: a job --rm deletes as it ends leaves none to read later.
-	req.Start = false
-	instance, err := client.CreateInstance(cmd.Context(), req)
+	create.opts.Start = false
+	instance, err := client.Instances.Create(cmd.Context(), create.spec, create.opts)
 	if err != nil {
 		return err
 	}
-	name := instance.GetName()
+	name := instance.Name
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
@@ -64,13 +62,13 @@ func runAttached(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error 
 	go func() { console <- followConsole(ctx, client, name, started, cmd.OutOrStdout()) }()
 
 	t := startTask(cmd, "Starting "+name)
-	_, err = client.StartInstance(ctx, &dicerdv1.StartInstanceRequest{Name: name})
+	_, err = client.Instances.Start(ctx, name)
 	t.end()
 	if err != nil {
 		cancel()
-		if req.GetRemoveOnExit() {
+		if create.spec.RemoveOnExit {
 			// It never ran, so never ended, and nothing else deletes it.
-			_, _ = client.DeleteInstance(context.WithoutCancel(ctx), &dicerdv1.DeleteInstanceRequest{Name: name, Force: true})
+			_ = client.Instances.Delete(context.WithoutCancel(ctx), name, dicer.DeleteOptions{Force: true})
 		}
 		return err
 	}
@@ -86,7 +84,7 @@ func runAttached(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error 
 	}
 	exited := make(chan result, 1)
 	go func() {
-		code, err := waitForExit(ctx, client, name, instance.GetId())
+		code, err := client.Instances.Wait(ctx, name, dicer.WaitOptions{ID: instance.ID})
 		exited <- result{code, err}
 	}()
 
@@ -111,7 +109,7 @@ func runAttached(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error 
 			stopping = true
 			cmd.PrintErrf("Stopping %s; press Ctrl+C again to stop waiting for it\n", name)
 			go func() {
-				_, _ = client.StopInstance(ctx, &dicerdv1.StopInstanceRequest{Name: name})
+				_, _ = client.Instances.Stop(ctx, name)
 			}()
 		}
 	}
@@ -123,7 +121,7 @@ func drainConsole(cmd *cobra.Command, console <-chan error) {
 	select {
 	case err := <-console:
 		if err != nil {
-			cmd.PrintErrf("Error: cannot read the console: %s\n", errorMessage(err))
+			cmd.PrintErrf("Error: cannot read the console: %s\n", err.Error())
 		}
 	case <-time.After(consoleDrainTimeout):
 	}
@@ -139,9 +137,9 @@ func followConsole(ctx context.Context, client *dicer.Client, name string, start
 	for {
 		wasStarted := isClosed(started)
 
-		err := streamLogs(ctx, client, &dicerdv1.GetInstanceLogsRequest{Name: name, Follow: true}, w)
+		err := streamLogs(ctx, client, name, dicer.LogOptions{Follow: true}, w)
 		switch {
-		case status.Code(err) != codes.NotFound:
+		case !errors.Is(err, dicer.ErrNotFound):
 			return err
 		case wasStarted:
 			return nil

@@ -62,12 +62,12 @@ func TestResourcesStartRefusedWhenTheHostIsFull(t *testing.T) {
 func availableMemory(t *testing.T) int64 {
 	t.Helper()
 
-	// `info --format json` prints the API's GetResourcesResponse, as
-	// protobuf's JSON mapping writes it: 64-bit counts are strings.
+	// `info --format json` prints the host's resources as the client has
+	// them.
 	var info struct {
 		Resources struct {
 			Memory struct {
-				Available int64 `json:"available,string"`
+				Available int64 `json:"available"`
 			} `json:"memory"`
 		} `json:"resources"`
 	}

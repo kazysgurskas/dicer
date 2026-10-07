@@ -33,7 +33,7 @@ $ dicer resize web --vcpus 4 --memory 2GiB
 | Flag | Description |
 |---|---|
 | `-m`, `--memory string` | Memory, e.g. 512MiB or 2GiB. |
-| `--vcpus int32` | Number of virtual CPUs. |
+| `--vcpus int` | Number of virtual CPUs. |
 
 ## Global flags
 

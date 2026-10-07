@@ -16,14 +16,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/compose"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func newComposeUpCommand() *cobra.Command {
@@ -65,7 +61,7 @@ type upOptions struct {
 	forceRecreate bool
 	noRecreate    bool
 	removeOrphans bool
-	pull          dicerdv1.PullPolicy
+	pull          dicer.PullPolicy
 }
 
 func runComposeUp(cmd *cobra.Command, args []string) error {
@@ -127,10 +123,10 @@ type upper struct {
 
 	// pull is the pull policy instances are created with: --pull's, until
 	// ensureImages has pulled as it says.
-	pull dicerdv1.PullPolicy
+	pull dicer.PullPolicy
 
 	// existing are the project's instances before up began, by name.
-	existing map[string]*dicerdv1.Instance
+	existing map[string]dicer.Instance
 
 	// mu guards said, which waits for services in parallel write to.
 	mu sync.Mutex
@@ -155,9 +151,7 @@ func (u *upper) prepare(services []*compose.Service) error {
 				"Delete them with --remove-orphans.", andList(orphaned))
 		} else {
 			for _, name := range orphaned {
-				if _, err := u.client.DeleteInstance(u.ctx(), &dicerdv1.DeleteInstanceRequest{
-					Name: name, Force: true,
-				}); err != nil {
+				if err := u.client.Instances.Delete(u.ctx(), name, dicer.DeleteOptions{Force: true}); err != nil {
 					return fmt.Errorf("delete orphan %s: %w", name, err)
 				}
 				delete(u.existing, name)
@@ -179,27 +173,27 @@ func (u *upper) ensureNetworks(services []*compose.Service) error {
 	for _, key := range slices.Sorted(maps.Keys(u.project.Networks)) {
 		n := u.project.Networks[key]
 		used := slices.ContainsFunc(services, func(s *compose.Service) bool {
-			return s.Instance.GetNetworkName() == n.Name
+			return s.Instance.NetworkName == n.Name
 		})
 		if !used {
 			continue
 		}
 
-		_, err := u.client.GetNetwork(u.ctx(), &dicerdv1.GetNetworkRequest{Name: n.Name})
+		_, err := u.client.Networks.Get(u.ctx(), n.Name)
 		switch {
 		case err == nil:
 			continue
-		case status.Code(err) != codes.NotFound:
+		case !errors.Is(err, dicer.ErrNotFound):
 			return err
 		case n.External:
 			return fmt.Errorf("external network %s does not exist: create it with dicer network create", n.Name)
 		}
 
-		created, err := u.createNetwork(n.Request)
+		created, err := u.createNetwork(*n.Spec)
 		if err != nil {
 			return fmt.Errorf("create network %s: %w", n.Name, err)
 		}
-		u.out.printf("Network %s created (%s)", n.Name, created.GetSubnet())
+		u.out.printf("Network %s created (%s)", n.Name, created.Subnet)
 	}
 	return nil
 }
@@ -212,73 +206,68 @@ const maxSubnetTries = 16
 // free one: the first that overlaps none of the daemon's networks, and the
 // next if the daemon turns it away, as another network has taken it
 // meanwhile or the host is on it.
-func (u *upper) createNetwork(req *dicerdv1.CreateNetworkRequest) (*dicerdv1.Network, error) {
-	if req.GetSubnet() != "" {
-		return u.client.CreateNetwork(u.ctx(), req)
+func (u *upper) createNetwork(spec dicer.NetworkSpec) (dicer.Network, error) {
+	if spec.Subnet != "" {
+		return u.client.Networks.Create(u.ctx(), spec)
 	}
 
 	var refused []string
 	var err error
 	for range maxSubnetTries {
-		var resp *dicerdv1.ListNetworksResponse
-		if resp, err = u.client.ListNetworks(u.ctx(), &dicerdv1.ListNetworksRequest{}); err != nil {
-			return nil, err
+		var networks []dicer.Network
+		if networks, err = u.client.Networks.List(u.ctx()); err != nil {
+			return dicer.Network{}, err
 		}
 		taken := slices.Clone(refused)
-		for _, n := range resp.GetNetworks() {
-			if n.GetName() == req.GetName() {
+		for _, n := range networks {
+			if n.Name == spec.Name {
 				// AlreadyExists was the name's, not the subnet's.
-				return nil, fmt.Errorf("network %s was created meanwhile, by something else: run up again", req.GetName())
+				return dicer.Network{}, fmt.Errorf("network %s was created meanwhile, by something else: run up again", spec.Name)
 			}
-			taken = append(taken, n.GetSubnet())
+			taken = append(taken, n.Subnet)
 		}
 		subnet, freeErr := compose.FreeSubnet(taken)
 		if freeErr != nil {
-			return nil, freeErr
+			return dicer.Network{}, freeErr
 		}
 
-		withSubnet, ok := proto.Clone(req).(*dicerdv1.CreateNetworkRequest)
-		if !ok {
-			return nil, errors.New("clone network definition")
-		}
-		withSubnet.Subnet = subnet
-
-		var created *dicerdv1.Network
-		created, err = u.client.CreateNetwork(u.ctx(), withSubnet)
-		if status.Code(err) != codes.AlreadyExists {
+		spec.Subnet = subnet
+		var created dicer.Network
+		created, err = u.client.Networks.Create(u.ctx(), spec)
+		if !errors.Is(err, dicer.ErrAlreadyExists) {
 			return created, err
 		}
 		refused = append(refused, subnet)
 	}
-	return nil, err
+	return dicer.Network{}, err
 }
 
 func (u *upper) ensureVolumes(services []*compose.Service) error {
 	for _, key := range slices.Sorted(maps.Keys(u.project.Volumes)) {
 		v := u.project.Volumes[key]
 		used := slices.ContainsFunc(services, func(s *compose.Service) bool {
-			return slices.ContainsFunc(s.Instance.GetMounts(), func(m *dicerdv1.Mount) bool {
-				return m.GetType() == dicerdv1.MountType_MOUNT_TYPE_VOLUME && m.GetSource() == v.Name
+			return slices.ContainsFunc(s.Instance.Mounts, func(m dicer.Mount) bool {
+				return m.Type == dicer.MountTypeVolume && m.Source == v.Name
 			})
 		})
 		if !used {
 			continue
 		}
 
-		_, err := u.client.GetVolume(u.ctx(), &dicerdv1.GetVolumeRequest{Name: v.Name})
+		_, err := u.client.Volumes.Get(u.ctx(), v.Name)
 		switch {
 		case err == nil:
 			continue
-		case status.Code(err) != codes.NotFound:
+		case !errors.Is(err, dicer.ErrNotFound):
 			return err
 		case v.External:
 			return fmt.Errorf("external volume %s does not exist: create it with dicer volume create", v.Name)
 		}
 
-		if _, err := u.client.CreateVolume(u.ctx(), v.Request); err != nil {
+		if _, err := u.client.Volumes.Create(u.ctx(), v.Name, v.SizeBytes); err != nil {
 			return fmt.Errorf("create volume %s: %w", v.Name, err)
 		}
-		u.out.printf("Volume %s created (%s)", v.Name, humanize.Bytes(v.Request.GetSizeBytes()))
+		u.out.printf("Volume %s created (%s)", v.Name, humanize.Bytes(v.SizeBytes))
 	}
 	return nil
 }
@@ -288,7 +277,7 @@ func (u *upper) ensureVolumes(services []*compose.Service) error {
 func (u *upper) ensureImages(services []*compose.Service) error {
 	var refs []string
 	for _, s := range services {
-		if ref := s.Instance.GetImageRef(); !slices.Contains(refs, ref) {
+		if ref := s.Instance.ImageRef; !slices.Contains(refs, ref) {
 			refs = append(refs, ref)
 		}
 	}
@@ -355,7 +344,7 @@ func (u *upper) converge(services []*compose.Service) error {
 
 // up brings one service's instance up to date and running.
 func (u *upper) up(s *compose.Service) error {
-	name := s.Instance.GetName()
+	name := s.Instance.Name
 	instance, exists := u.existing[name]
 
 	// The service's instances under other names, from before its
@@ -369,7 +358,7 @@ func (u *upper) up(s *compose.Service) error {
 		name, instance, exists = renamed[0], u.existing[renamed[0]], true
 	case !u.opts.noRecreate:
 		for _, old := range renamed {
-			if _, err := u.client.DeleteInstance(u.ctx(), &dicerdv1.DeleteInstanceRequest{Name: old, Force: true}); err != nil {
+			if err := u.client.Instances.Delete(u.ctx(), old, dicer.DeleteOptions{Force: true}); err != nil {
 				return fmt.Errorf("service %s: delete %s, its instance under its old name: %w", s.Name, old, err)
 			}
 			u.out.printf("Instance %s deleted: service %s is now instance %s", old, s.Name, name)
@@ -378,55 +367,48 @@ func (u *upper) up(s *compose.Service) error {
 
 	if !exists {
 		// Not the project's, but the name may be taken all the same.
-		other, err := u.client.GetInstance(u.ctx(), &dicerdv1.GetInstanceRequest{Name: name})
+		other, err := u.client.Instances.Get(u.ctx(), name)
 		switch {
 		case err == nil:
 			return fmt.Errorf("service %s: instance %s already exists and is not this project's: "+
-				"rename or delete it, or set the service's container_name", s.Name, other.GetName())
-		case status.Code(err) != codes.NotFound:
+				"rename or delete it, or set the service's container_name", s.Name, other.Name)
+		case !errors.Is(err, dicer.ErrNotFound):
 			return err
 		}
 		return u.create(s, "started")
 	}
 
-	changed := instance.GetLabels()[compose.LabelConfigHash] != s.Instance.GetLabels()[compose.LabelConfigHash]
+	changed := instance.Labels[compose.LabelConfigHash] != s.Instance.Labels[compose.LabelConfigHash]
 	if u.opts.forceRecreate || (changed && !u.opts.noRecreate) {
-		if _, err := u.client.DeleteInstance(u.ctx(), &dicerdv1.DeleteInstanceRequest{Name: name, Force: true}); err != nil {
+		if err := u.client.Instances.Delete(u.ctx(), name, dicer.DeleteOptions{Force: true}); err != nil {
 			return fmt.Errorf("service %s: delete %s to recreate it: %w", s.Name, name, err)
 		}
 		return u.create(s, "recreated")
 	}
 
-	switch instance.GetState() {
-	case stateRunning, statePaused, stateStarting, stateRestarting:
+	switch instance.State {
+	case dicer.InstanceStateRunning, dicer.InstanceStatePaused, dicer.InstanceStateStarting, dicer.InstanceStateRestarting:
 		u.out.printf("Instance %s is up to date", name)
 		return nil
 	}
 
 	start := time.Now()
-	started, err := u.client.StartInstance(u.ctx(), &dicerdv1.StartInstanceRequest{Name: name})
+	started, err := u.client.Instances.Start(u.ctx(), name)
 	if err != nil {
 		return fmt.Errorf("service %s: start %s: %w", s.Name, name, err)
 	}
-	u.out.printf("Instance %s started in %s (%s)", name, humanize.Duration(time.Since(start)), orDash(started.GetIp()))
+	u.out.printf("Instance %s started in %s (%s)", name, humanize.Duration(time.Since(start)), orDash(started.IP))
 	return nil
 }
 
 // create defines a service's instance and starts it.
 func (u *upper) create(s *compose.Service, done string) error {
-	req, ok := proto.Clone(s.Instance).(*dicerdv1.CreateInstanceRequest)
-	if !ok {
-		return errors.New("clone instance definition")
-	}
-	req.Start = true
-	req.PullPolicy = u.pull
-
 	start := time.Now()
-	instance, err := u.client.CreateInstance(u.ctx(), req)
+	instance, err := u.client.Instances.Create(u.ctx(), s.Instance, dicer.CreateOptions{Start: true, PullPolicy: u.pull})
 	if err != nil {
-		return fmt.Errorf("service %s: create %s: %w", s.Name, req.GetName(), err)
+		return fmt.Errorf("service %s: create %s: %w", s.Name, s.Instance.Name, err)
 	}
-	u.out.printf("Instance %s %s in %s (%s)", instance.GetName(), done, humanize.Duration(time.Since(start)), orDash(instance.GetIp()))
+	u.out.printf("Instance %s %s in %s (%s)", instance.Name, done, humanize.Duration(time.Since(start)), orDash(instance.IP))
 	return nil
 }
 
@@ -434,7 +416,7 @@ func (u *upper) create(s *compose.Service, done string) error {
 // wait is announced, and its end, once however many services wait on it,
 // and not at all if the condition is already met.
 func (u *upper) waitFor(s *compose.Service, condition compose.Condition) error {
-	name := s.Instance.GetName()
+	name := s.Instance.Name
 	switch condition {
 	case compose.ConditionStarted:
 		return nil
@@ -445,7 +427,7 @@ func (u *upper) waitFor(s *compose.Service, condition compose.Condition) error {
 	}
 
 	waited := false
-	err := pollInstance(u.ctx(), u.client, name, func(instance *dicerdv1.Instance) (bool, error) {
+	err := pollInstance(u.ctx(), u.client, name, func(instance dicer.Instance) (bool, error) {
 		ok, err := meets(instance, condition)
 		if !ok && err == nil && !waited {
 			waited = true
@@ -491,15 +473,15 @@ func (u *upper) once(key string, fn func()) {
 // checkHasHealthCheck fails for a service that has no health check to wait
 // for: none of its own, and none in its image.
 func (u *upper) checkHasHealthCheck(s *compose.Service) error {
-	check := s.Instance.GetHealthCheck()
+	check := s.Instance.HealthCheck
 	if check == nil {
-		image, err := u.client.GetImage(u.ctx(), &dicerdv1.GetImageRequest{Ref: s.Instance.GetImageRef()})
+		image, err := u.client.Images.Get(u.ctx(), s.Instance.ImageRef)
 		if err != nil {
 			return err
 		}
-		check = image.GetHealthCheck()
+		check = image.HealthCheck
 	}
-	if check == nil || check.GetDisabled() {
+	if check == nil || check.Disabled {
 		return fmt.Errorf("service %s has no health check to wait for: give it a healthcheck", s.Name)
 	}
 	return nil
@@ -507,29 +489,29 @@ func (u *upper) checkHasHealthCheck(s *compose.Service) error {
 
 // meets reports whether an instance meets a condition yet, and fails if it
 // never will.
-func meets(instance *dicerdv1.Instance, condition compose.Condition) (bool, error) {
-	name, state := instance.GetName(), instance.GetState()
+func meets(instance dicer.Instance, condition compose.Condition) (bool, error) {
+	name, state := instance.Name, instance.State
 
 	switch condition {
 	case compose.ConditionHealthy:
 		switch {
-		case instance.GetHealth().GetStatus() == healthHealthy:
+		case instance.Health != nil && instance.Health.Status == dicer.HealthStatusHealthy:
 			return true, nil
-		case instance.GetHealth().GetStatus() == healthUnhealthy:
-			return false, fmt.Errorf("instance %s is unhealthy: %s", name, firstLine(instance.GetHealth().GetLastOutput()))
-		case state == stateStopped || state == stateFailed:
+		case instance.Health != nil && instance.Health.Status == dicer.HealthStatusUnhealthy:
+			return false, fmt.Errorf("instance %s is unhealthy: %s", name, firstLine(instance.Health.LastOutput))
+		case state == dicer.InstanceStateStopped || state == dicer.InstanceStateFailed:
 			return false, fmt.Errorf("instance %s stopped before it was healthy", name)
 		}
 		return false, nil
 	case compose.ConditionCompletedSuccessfully:
 		switch {
-		case state == stateFailed:
-			return false, fmt.Errorf("instance %s failed: %s", name, firstLine(instance.GetStateError()))
-		case state == stateStopped && instance.ExitCode != nil && instance.GetExitCode() == 0:
+		case state == dicer.InstanceStateFailed:
+			return false, fmt.Errorf("instance %s failed: %s", name, firstLine(instance.StateError))
+		case state == dicer.InstanceStateStopped && instance.ExitCode != nil && *instance.ExitCode == 0:
 			return true, nil
-		case state == stateStopped && instance.ExitCode != nil:
-			return false, fmt.Errorf("instance %s exited with code %d", name, instance.GetExitCode())
-		case state == stateStopped:
+		case state == dicer.InstanceStateStopped && instance.ExitCode != nil:
+			return false, fmt.Errorf("instance %s exited with code %d", name, *instance.ExitCode)
+		case state == dicer.InstanceStateStopped:
 			return false, fmt.Errorf("instance %s stopped without saying how it ended", name)
 		}
 		return false, nil
@@ -540,10 +522,10 @@ func meets(instance *dicerdv1.Instance, condition compose.Condition) (bool, erro
 
 // pollInstance looks at an instance until done says it is done, or fails.
 func pollInstance(
-	ctx context.Context, client *dicer.Client, name string, done func(*dicerdv1.Instance) (bool, error),
+	ctx context.Context, client *dicer.Client, name string, done func(dicer.Instance) (bool, error),
 ) error {
 	for {
-		instance, err := client.GetInstance(ctx, &dicerdv1.GetInstanceRequest{Name: name})
+		instance, err := client.Instances.Get(ctx, name)
 		if err != nil {
 			return err
 		}
@@ -576,17 +558,17 @@ func (u *upper) waitReady(services []*compose.Service) error {
 		if awaitedToFinish[s.Name] {
 			continue
 		}
-		name := s.Instance.GetName()
+		name := s.Instance.Name
 		checked := u.checkHasHealthCheck(s) == nil
-		err := pollInstance(u.ctx(), u.client, name, func(instance *dicerdv1.Instance) (bool, error) {
+		err := pollInstance(u.ctx(), u.client, name, func(instance dicer.Instance) (bool, error) {
 			if checked {
 				return meets(instance, compose.ConditionHealthy)
 			}
-			switch instance.GetState() {
-			case stateRunning:
+			switch instance.State {
+			case dicer.InstanceStateRunning:
 				return true, nil
-			case stateStopped, stateFailed:
-				return false, fmt.Errorf("instance %s is %s", name, enumName(instance.GetState()))
+			case dicer.InstanceStateStopped, dicer.InstanceStateFailed:
+				return false, fmt.Errorf("instance %s is %s", name, instance.State)
 			}
 			return false, nil
 		})
@@ -608,7 +590,7 @@ func attachServices(cmd *cobra.Command, client *dicer.Client, out *lineWriter, s
 
 	names := make([]string, 0, len(services))
 	for _, s := range services {
-		names = append(names, s.Instance.GetName())
+		names = append(names, s.Instance.Name)
 	}
 	width := prefixWidth(names)
 	console := &lineWriter{out: cmd.OutOrStdout()}
@@ -617,13 +599,13 @@ func attachServices(cmd *cobra.Command, client *dicer.Client, out *lineWriter, s
 	for i, name := range names {
 		wg.Go(func() {
 			w := newPrefixedWriter(console, name, width, i)
-			err := streamLogs(ctx, client, &dicerdv1.GetInstanceLogsRequest{Name: name, Follow: true}, w)
+			err := streamLogs(ctx, client, name, dicer.LogOptions{Follow: true}, w)
 			w.flush()
 			if ctx.Err() != nil {
 				return
 			}
 			if err != nil {
-				out.printf("Error: cannot read the console of %s: %s", name, errorMessage(err))
+				out.printf("Error: cannot read the console of %s: %s", name, err.Error())
 				return
 			}
 			out.printf("%s", endedLine(ctx, client, name))
@@ -654,9 +636,9 @@ func attachServices(cmd *cobra.Command, client *dicer.Client, out *lineWriter, s
 			out.printf("Stopping the instances; press Ctrl+C again to stop waiting for them")
 			go func() {
 				for _, name := range slices.Backward(names) {
-					_, err := client.StopInstance(ctx, &dicerdv1.StopInstanceRequest{Name: name})
-					if err != nil && !errors.Is(err, context.Canceled) && status.Code(err) != codes.FailedPrecondition {
-						out.printf("Error: stop %s: %s", name, errorMessage(err))
+					_, err := client.Instances.Stop(ctx, name)
+					if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dicer.ErrFailedPrecondition) {
+						out.printf("Error: stop %s: %s", name, err.Error())
 					}
 				}
 			}()
@@ -666,14 +648,14 @@ func attachServices(cmd *cobra.Command, client *dicer.Client, out *lineWriter, s
 
 // endedLine says how an instance whose console has ended ended.
 func endedLine(ctx context.Context, client *dicer.Client, name string) string {
-	instance, err := client.GetInstance(ctx, &dicerdv1.GetInstanceRequest{Name: name})
+	instance, err := client.Instances.Get(ctx, name)
 	switch {
 	case err != nil:
 		return fmt.Sprintf("Instance %s stopped", name)
 	case instance.ExitCode != nil:
-		return fmt.Sprintf("Instance %s exited with code %d", name, instance.GetExitCode())
-	case instance.GetState() == stateFailed:
-		return fmt.Sprintf("Instance %s failed: %s", name, firstLine(instance.GetStateError()))
+		return fmt.Sprintf("Instance %s exited with code %d", name, *instance.ExitCode)
+	case instance.State == dicer.InstanceStateFailed:
+		return fmt.Sprintf("Instance %s failed: %s", name, firstLine(instance.StateError))
 	default:
 		return fmt.Sprintf("Instance %s stopped", name)
 	}

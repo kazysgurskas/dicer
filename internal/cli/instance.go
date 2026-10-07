@@ -5,6 +5,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -12,17 +13,14 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableInstance struct {
-	Instances []*dicerdv1.Instance
+	Instances []dicer.Instance
 }
 
 func (p *printableInstance) Columns() []string {
@@ -40,23 +38,23 @@ func (p *printableInstance) DefaultColumns() []string {
 func (p *printableInstance) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Instances))
 	for _, instance := range p.Instances {
-		state := stateName(instance.GetState())
-		if e := instance.GetStateError(); e != "" {
+		state := stateName(instance.State)
+		if e := instance.StateError; e != "" {
 			state += " (" + firstLine(e) + ")"
 		}
 
 		rows = append(rows, map[string]any{
-			"Name":    instance.GetName(),
-			"Image":   instance.GetImageRef(),
+			"Name":    instance.Name,
+			"Image":   instance.ImageRef,
 			"State":   state,
 			"Status":  instanceStatus(instance),
-			"VCPU":    instance.GetVcpus(),
-			"Memory":  humanize.Bytes(instance.GetMemoryBytes()),
-			"Disk":    humanize.Bytes(instance.GetDiskBytes()),
-			"Network": instance.GetNetworkName(),
-			"IP":      orDash(instance.GetIp()),
-			"Ports":   orDash(formatPorts(instance.GetPorts())),
-			"Created": age(timeOf(instance.GetCreateTime())),
+			"VCPU":    instance.VCPUs,
+			"Memory":  humanize.Bytes(instance.MemoryBytes),
+			"Disk":    humanize.Bytes(instance.DiskBytes),
+			"Network": instance.NetworkName,
+			"IP":      orDash(instance.IP),
+			"Ports":   orDash(formatPorts(instance.Ports)),
+			"Created": age(instance.CreateTime),
 		})
 	}
 	return rows
@@ -66,28 +64,28 @@ func (p *printableInstance) Rows() []map[string]any {
 // long it has been up or since it ended, and its health if it is checked:
 // "Up 3 minutes (healthy)", "Exited (1) 2 minutes ago", "Restarting (3) in 8
 // seconds", "Failed: no such kernel".
-func instanceStatus(instance *dicerdv1.Instance) string {
-	switch state := instance.GetState(); state {
-	case stateRunning:
-		if started := timeOf(instance.GetStartTime()); !started.IsZero() {
+func instanceStatus(instance dicer.Instance) string {
+	switch state := instance.State; state {
+	case dicer.InstanceStateRunning:
+		if started := instance.StartTime; !started.IsZero() {
 			return "Up " + units.HumanDuration(time.Since(started)) + healthSuffix(instance)
 		}
 
 		return "Up" + healthSuffix(instance)
-	case stateRestarting:
-		out := fmt.Sprintf("Restarting (%d)", instance.GetRestartCount())
-		if next := timeOf(instance.GetNextRestartTime()); !next.IsZero() && time.Until(next) >= time.Second {
+	case dicer.InstanceStateRestarting:
+		out := fmt.Sprintf("Restarting (%d)", instance.RestartCount)
+		if next := instance.NextRestartTime; !next.IsZero() && time.Until(next) >= time.Second {
 			out += " in " + units.HumanDuration(time.Until(next))
 		}
 
 		return out
-	case stateStopped, stateFailed:
+	case dicer.InstanceStateStopped, dicer.InstanceStateFailed:
 		// An instance whose workload exited says so, and when, as a
 		// container would.
-		if finished := timeOf(instance.GetFinishTime()); instance.ExitCode != nil && !finished.IsZero() {
-			return fmt.Sprintf("Exited (%d) %s", instance.GetExitCode(), age(finished))
+		if finished := instance.FinishTime; instance.ExitCode != nil && !finished.IsZero() {
+			return fmt.Sprintf("Exited (%d) %s", *instance.ExitCode, age(finished))
 		}
-		if e := instance.GetStateError(); e != "" && state == stateFailed {
+		if e := instance.StateError; e != "" && state == dicer.InstanceStateFailed {
 			return "Failed: " + firstLine(e)
 		}
 
@@ -99,12 +97,12 @@ func instanceStatus(instance *dicerdv1.Instance) string {
 
 // formatPorts renders published ports as Docker does, e.g.
 // "8080->80/tcp, 10.0.0.1:53->53/udp".
-func formatPorts(ports []*dicerdv1.PortMapping) string {
+func formatPorts(ports []dicer.PortMapping) string {
 	out := make([]string, 0, len(ports))
 	for _, p := range ports {
-		s := fmt.Sprintf("%d->%d/%s", p.GetHostPort(), p.GetGuestPort(), protocolName(p.GetProtocol()))
-		if p.GetHostIp() != "" {
-			s = p.GetHostIp() + ":" + s
+		s := fmt.Sprintf("%d->%d/%s", p.HostPort, p.GuestPort, protocolName(p.Protocol))
+		if p.HostIP != "" {
+			s = p.HostIP + ":" + s
 		}
 		out = append(out, s)
 	}
@@ -171,12 +169,12 @@ func newInstanceCreateCommand() *cobra.Command {
 		Args:    createArgs,
 		Aliases: []string{"new", "define"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req, err := buildCreateRequest(cmd, args)
+			create, err := buildCreate(cmd, args)
 			if err != nil {
 				return err
 			}
 
-			return createInstance(cmd, req)
+			return createInstance(cmd, create)
 		},
 	}
 
@@ -208,15 +206,15 @@ func newInstanceRunCommand() *cobra.Command {
 			"  dicer run -d --vcpus 2 alpine:3.21 sleep infinity",
 		Args: oneThenCommand("an image"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req, err := buildRunRequest(cmd, args)
+			create, err := buildRun(cmd, args)
 			if err != nil {
 				return err
 			}
 
 			if detach, _ := cmd.Flags().GetBool("detach"); detach {
-				return createInstance(cmd, req)
+				return createInstance(cmd, create)
 			}
-			return runAttached(cmd, req)
+			return runAttached(cmd, create)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
@@ -258,12 +256,13 @@ func newInstanceUpdateCommand() *cobra.Command {
 		Args: func(cmd *cobra.Command, args []string) error {
 			return one("an instance name")(cmd, positionalArgs(cmd, args))
 		},
-		ValidArgsFunction: complete(1, instancesIn(stateStopped, stateFailed)),
+		ValidArgsFunction: complete(1, instancesIn(dicer.InstanceStateStopped, dicer.InstanceStateFailed)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req, err := buildUpdateRequest(cmd, args)
+			update, err := buildUpdate(cmd, args)
 			if err != nil {
 				return err
 			}
+			name := positionalArgs(cmd, args)[0]
 
 			client, cleanup, err := newClient(cmd)
 			if err != nil {
@@ -271,12 +270,12 @@ func newInstanceUpdateCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			instance, err := client.UpdateInstance(cmd.Context(), req)
+			instance, err := client.Instances.Update(cmd.Context(), name, update)
 			if err != nil {
-				return suggest(cmd.Context(), client, instancesIn(), req.GetName(), err)
+				return suggest(cmd.Context(), client, instancesIn(), name, err)
 			}
 
-			succeeded(cmd, "Instance %s updated", instance.GetName())
+			succeeded(cmd, "Instance %s updated", instance.Name)
 
 			return nil
 		},
@@ -290,34 +289,34 @@ func newInstanceUpdateCommand() *cobra.Command {
 	return cmd
 }
 
-// createInstance sends a create request and reports the result. The image
-// is pulled first, as the request's pull policy says, so that its progress
+// createInstance creates an instance and reports the result. The image is
+// pulled first, as the create's pull policy says, so that its progress
 // shows.
-func createInstance(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) error {
+func createInstance(cmd *cobra.Command, create instanceCreate) error {
 	client, cleanup, err := newClient(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if req.PullPolicy, err = pullAsPolicy(cmd, client, req.GetImageRef(), req.GetPullPolicy()); err != nil {
+	if create.opts.PullPolicy, err = pullAsPolicy(cmd, client, create.spec.ImageRef, create.opts.PullPolicy); err != nil {
 		return err
 	}
 
-	if !req.GetStart() {
-		instance, err := client.CreateInstance(cmd.Context(), req)
+	if !create.opts.Start {
+		instance, err := client.Instances.Create(cmd.Context(), create.spec, create.opts)
 		if err != nil {
 			return err
 		}
-		succeeded(cmd, "Instance %s created. Start it with: dicer start %s", instance.GetName(), instance.GetName())
+		succeeded(cmd, "Instance %s created. Start it with: dicer start %s", instance.Name, instance.Name)
 
 		return nil
 	}
 
-	err = runTask(cmd, "Starting "+req.GetName(), func() (*dicerdv1.Instance, error) {
-		return client.CreateInstance(cmd.Context(), req)
-	}, func(instance *dicerdv1.Instance, took string) string {
-		return fmt.Sprintf("Instance %s started in %s (%s)", instance.GetName(), took, orDash(instance.GetIp()))
+	err = runTask(cmd, "Starting "+create.spec.Name, func() (dicer.Instance, error) {
+		return client.Instances.Create(cmd.Context(), create.spec, create.opts)
+	}, func(instance dicer.Instance, took string) string {
+		return fmt.Sprintf("Instance %s started in %s (%s)", instance.Name, took, orDash(instance.IP))
 	})
 	if err != nil {
 		return err
@@ -325,7 +324,7 @@ func createInstance(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) err
 
 	if isTerminal(cmd.ErrOrStderr()) {
 		cmd.PrintErrf("  Shell: dicer exec %[1]s   Logs: dicer logs -f %[1]s   Stop: dicer stop %[1]s\n",
-			req.GetName())
+			create.spec.Name)
 	}
 
 	return nil
@@ -335,13 +334,13 @@ func createInstance(cmd *cobra.Command, req *dicerdv1.CreateInstanceRequest) err
 // the daemon's own pull shows none. It returns the policy to create the
 // instance with: once pulled here, the daemon need only find the image.
 func pullAsPolicy(
-	cmd *cobra.Command, client *dicer.Client, ref string, policy dicerdv1.PullPolicy,
-) (dicerdv1.PullPolicy, error) {
+	cmd *cobra.Command, client *dicer.Client, ref string, policy dicer.PullPolicy,
+) (dicer.PullPolicy, error) {
 	var err error
 	switch policy {
-	case dicerdv1.PullPolicy_PULL_POLICY_NEVER:
+	case dicer.PullPolicyNever:
 		return policy, nil
-	case dicerdv1.PullPolicy_PULL_POLICY_ALWAYS:
+	case dicer.PullPolicyAlways:
 		err = pullShowingProgress(cmd, client, ref)
 	default:
 		err = ensureImage(cmd, client, ref)
@@ -350,16 +349,16 @@ func pullAsPolicy(
 		return policy, err
 	}
 
-	return dicerdv1.PullPolicy_PULL_POLICY_MISSING, nil
+	return dicer.PullPolicyMissing, nil
 }
 
 // ensureImage pulls an image the host does not hold, showing progress.
 func ensureImage(cmd *cobra.Command, client *dicer.Client, ref string) error {
-	_, err := client.GetImage(cmd.Context(), &dicerdv1.GetImageRequest{Ref: ref})
+	_, err := client.Images.Get(cmd.Context(), ref)
 	if err == nil {
 		return nil
 	}
-	if status.Code(err) != codes.NotFound {
+	if !errors.Is(err, dicer.ErrNotFound) {
 		return err
 	}
 
@@ -380,7 +379,7 @@ func pullShowingProgress(cmd *cobra.Command, client *dicer.Client, ref string) e
 	defer reporter.done()
 
 	start := time.Now()
-	image, err := pullImage(cmd.Context(), client, ref, reporter.report)
+	image, err := client.Images.Pull(cmd.Context(), ref, reporter.report)
 	if err != nil {
 		return err
 	}
@@ -388,7 +387,7 @@ func pullShowingProgress(cmd *cobra.Command, client *dicer.Client, ref string) e
 
 	if reporter.fetched {
 		succeeded(cmd, "Image %s pulled in %s (%s)",
-			image.GetName(), humanize.Duration(time.Since(start)), humanize.Bytes(image.GetSizeBytes()))
+			image.Name, humanize.Duration(time.Since(start)), humanize.Bytes(image.SizeBytes))
 	}
 
 	return nil
@@ -420,11 +419,10 @@ func newInstanceListCommand() *cobra.Command {
 			defer cleanup()
 
 			list := func(ctx context.Context, w io.Writer) error {
-				resp, err := client.ListInstances(ctx, &dicerdv1.ListInstancesRequest{})
+				instances, err := client.Instances.List(ctx)
 				if err != nil {
 					return err
 				}
-				instances := resp.GetInstances()
 
 				return renderTo(cmd, w, &printableInstance{Instances: filters.apply(instances)})
 			}
@@ -473,9 +471,9 @@ func newInstanceShowCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			instances := make([]*dicerdv1.Instance, 0, len(args))
+			instances := make([]dicer.Instance, 0, len(args))
 			for _, name := range args {
-				instance, err := client.GetInstance(cmd.Context(), &dicerdv1.GetInstanceRequest{Name: name})
+				instance, err := client.Instances.Get(cmd.Context(), name)
 				if err != nil {
 					return suggest(cmd.Context(), client, instancesIn(), name, err)
 				}
@@ -496,19 +494,19 @@ func newInstanceShowCommand() *cobra.Command {
 // renderInstances shows instances in detail: as inspect lays them out for a
 // table, as full records for JSON or YAML, and as 'dicer ps' rows for
 // columns or a template.
-func renderInstances(cmd *cobra.Command, client *dicer.Client, instances []*dicerdv1.Instance) error {
+func renderInstances(cmd *cobra.Command, client *dicer.Client, instances []dicer.Instance) error {
 	format, _ := cmd.Flags().GetString("format")
 	columns, _ := cmd.Flags().GetStringSlice("columns")
 
 	switch {
 	case len(columns) == 0 && printer.IsTable(format):
-		recent := make(map[string][]*dicerdv1.Event, len(instances))
+		recent := make(map[string][]dicer.Event, len(instances))
 		for _, instance := range instances {
-			events, err := recentEvents(cmd.Context(), client, instance.GetId())
+			events, err := recentEvents(cmd.Context(), client, instance.ID)
 			if err != nil {
 				return err
 			}
-			recent[instance.GetId()] = events
+			recent[instance.ID] = events
 		}
 
 		return writeInstanceDetails(cmd.OutOrStdout(), instances, recent)

@@ -32,7 +32,7 @@ $ dicer logs --source hypervisor web
 |---|---|
 | `-f`, `--follow` | Keep writing new output until the instance stops. |
 | `--source string` | Which log to read: guest or hypervisor. Default: `guest`. |
-| `-n`, `--tail int32` | Show only the last lines (default: all). |
+| `-n`, `--tail int` | Show only the last lines (default: all). |
 
 ## Global flags
 

@@ -12,11 +12,10 @@ import (
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableSnapshot struct {
-	Snapshots []*dicerdv1.Snapshot
+	Snapshots []dicer.Snapshot
 }
 
 func (p *printableSnapshot) Columns() []string {
@@ -27,18 +26,18 @@ func (p *printableSnapshot) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Snapshots))
 	for _, s := range p.Snapshots {
 		hypervisor, memory := "-", "-"
-		if s.GetKind() == dicerdv1.SnapshotKind_SNAPSHOT_KIND_MEMORY {
-			hypervisor = enumName(s.GetHypervisorType()) + " " + s.GetHypervisorVersion()
-			memory = humanize.Bytes(s.GetMemoryBytes())
+		if s.Kind == dicer.SnapshotKindMemory {
+			hypervisor = string(s.HypervisorType) + " " + s.HypervisorVersion
+			memory = humanize.Bytes(s.MemoryBytes)
 		}
 		rows = append(rows, map[string]any{
-			"Name":       s.GetName(),
-			"Kind":       enumName(s.GetKind()),
-			"Instance":   s.GetInstanceName(),
+			"Name":       s.Name,
+			"Kind":       string(s.Kind),
+			"Instance":   s.InstanceName,
 			"Hypervisor": hypervisor,
 			"Memory":     memory,
-			"Size":       humanize.Bytes(s.GetSizeBytes()),
-			"Created":    age(timeOf(s.GetCreateTime())),
+			"Size":       humanize.Bytes(s.SizeBytes),
+			"Created":    age(s.CreateTime),
 		})
 	}
 	return rows
@@ -90,11 +89,11 @@ func newSnapshotCreateCommand() *cobra.Command {
 				name = args[1]
 			}
 
-			return runTask(cmd, "Snapshotting "+args[0], func() (*dicerdv1.Snapshot, error) {
-				return client.CreateSnapshot(cmd.Context(), &dicerdv1.CreateSnapshotRequest{Instance: args[0], Name: name})
-			}, func(snapshot *dicerdv1.Snapshot, took string) string {
-				return fmt.Sprintf("Snapshot %s of instance %s created in %s (%s, %s)", snapshot.GetName(),
-					snapshot.GetInstanceName(), took, enumName(snapshot.GetKind()), humanize.Bytes(snapshot.GetSizeBytes()))
+			return runTask(cmd, "Snapshotting "+args[0], func() (dicer.Snapshot, error) {
+				return client.Snapshots.Create(cmd.Context(), args[0], name)
+			}, func(snapshot dicer.Snapshot, took string) string {
+				return fmt.Sprintf("Snapshot %s of instance %s created in %s (%s, %s)", snapshot.Name,
+					snapshot.InstanceName, took, snapshot.Kind, humanize.Bytes(snapshot.SizeBytes))
 			})
 		},
 	}
@@ -114,12 +113,12 @@ func newSnapshotListCommand() *cobra.Command {
 			defer cleanup()
 
 			instance, _ := cmd.Flags().GetString("instance")
-			resp, err := client.ListSnapshots(cmd.Context(), &dicerdv1.ListSnapshotsRequest{Instance: instance})
+			list, err := client.Snapshots.List(cmd.Context(), instance)
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableSnapshot{Snapshots: resp.GetSnapshots()})
+			return render(cmd, &printableSnapshot{Snapshots: list})
 		},
 	}
 
@@ -131,16 +130,16 @@ func newSnapshotListCommand() *cobra.Command {
 }
 
 func newSnapshotShowCommand() *cobra.Command {
-	return newShowCommand(showSpec[*dicerdv1.Snapshot]{
+	return newShowCommand(showSpec[dicer.Snapshot]{
 		use:   "show NAME",
 		short: "Show a snapshot",
 		arg:   "a snapshot name",
 		list:  listSnapshots,
-		get: func(ctx context.Context, client *dicer.Client, name string) (*dicerdv1.Snapshot, error) {
-			return client.GetSnapshot(ctx, &dicerdv1.GetSnapshotRequest{Name: name})
+		get: func(ctx context.Context, client *dicer.Client, name string) (dicer.Snapshot, error) {
+			return client.Snapshots.Get(ctx, name)
 		},
-		printable: func(s *dicerdv1.Snapshot) printer.Printable {
-			return &printableSnapshot{Snapshots: []*dicerdv1.Snapshot{s}}
+		printable: func(s dicer.Snapshot) printer.Printable {
+			return &printableSnapshot{Snapshots: []dicer.Snapshot{s}}
 		},
 	})
 }
@@ -162,15 +161,15 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			return runTask(cmd, "Restoring "+args[0], func() (*dicerdv1.Instance, error) {
-				return client.RestoreSnapshot(cmd.Context(), &dicerdv1.RestoreSnapshotRequest{Name: args[0]})
-			}, func(instance *dicerdv1.Instance, took string) string {
-				if instance.GetState() != dicerdv1.InstanceState_INSTANCE_STATE_RUNNING {
+			return runTask(cmd, "Restoring "+args[0], func() (dicer.Instance, error) {
+				return client.Snapshots.Restore(cmd.Context(), args[0])
+			}, func(instance dicer.Instance, took string) string {
+				if instance.State != dicer.InstanceStateRunning {
 					return fmt.Sprintf("Disk of instance %s restored from snapshot %s in %s; start it to boot from it",
-						instance.GetName(), args[0], took)
+						instance.Name, args[0], took)
 				}
 				return fmt.Sprintf("Instance %s restored from snapshot %s in %s (%s)",
-					instance.GetName(), args[0], took, orDash(instance.GetIp()))
+					instance.Name, args[0], took, orDash(instance.IP))
 			})
 		},
 	}
@@ -192,9 +191,8 @@ func newSnapshotForkCommand() *cobra.Command {
 		Args:              needs([]string{"a snapshot name", "a name for the new instance"}),
 		ValidArgsFunction: complete(1, listSnapshots),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := &dicerdv1.ForkSnapshotRequest{Name: args[0], ForkName: args[1]}
-			var err error
-			if req.NetworkName, req.StaticIp, req.Ports, err = forkFlags(cmd); err != nil {
+			opts, err := forkFlags(cmd, args[1])
+			if err != nil {
 				return err
 			}
 
@@ -204,8 +202,8 @@ func newSnapshotForkCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			return runTask(cmd, "Forking "+args[0], func() (*dicerdv1.Instance, error) {
-				return client.ForkSnapshot(cmd.Context(), req)
+			return runTask(cmd, "Forking "+args[0], func() (dicer.Instance, error) {
+				return client.Snapshots.Fork(cmd.Context(), args[0], opts)
 			}, forkedMessage("snapshot "+args[0]))
 		},
 	}
@@ -225,7 +223,7 @@ func newSnapshotDeleteCommand() *cobra.Command {
 		ValidArgsFunction: complete(0, listSnapshots),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return eachNameOrAll(cmd, args, listSnapshots, "snapshots", func(client *dicer.Client, name string) error {
-				if _, err := client.DeleteSnapshot(cmd.Context(), &dicerdv1.DeleteSnapshotRequest{Name: name}); err != nil {
+				if err := client.Snapshots.Delete(cmd.Context(), name); err != nil {
 					return err
 				}
 

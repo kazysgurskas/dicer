@@ -44,7 +44,7 @@ $ dicer run -d --vcpus 2 alpine:3.21 sleep infinity
 | `--health-cmd string` | Command to check health with, run by /bin/sh in the guest. |
 | `--health-http string` | Check health with an HTTP GET in the guest, as PORT[/path]; 2xx or 3xx is healthy. |
 | `--health-interval duration` | Time between health checks (default 10s). |
-| `--health-retries int32` | Failed checks in a row that make the instance unhealthy (default 3). |
+| `--health-retries int` | Failed checks in a row that make the instance unhealthy (default 3). |
 | `--health-start-period duration` | Time after a start in which failed checks do not count (default none). |
 | `--health-tcp int` | Check health by connecting to a TCP port in the guest. |
 | `--health-timeout duration` | Time a health check may take (default 5s). |
@@ -57,7 +57,7 @@ $ dicer run -d --vcpus 2 alpine:3.21 sleep infinity
 | `--kernel-args string` | Kernel command line arguments. |
 | `-l`, `--label stringArray` | Label as KEY=VALUE (repeatable). |
 | `--max-memory string` | Most memory `dicer resize` can give the running instance, e.g. 4GiB (0: none). |
-| `--max-vcpus int32` | Most vCPUs `dicer resize` can give the running instance, on Cloud Hypervisor (0: none). |
+| `--max-vcpus int` | Most vCPUs `dicer resize` can give the running instance, on Cloud Hypervisor (0: none). |
 | `-m`, `--memory string` | Memory, e.g. 512MiB or 2GiB. Default: `512MiB`. |
 | `--mount stringArray` | Mount a volume, host file or tmpfs, as [type=volume\|file\|tmpfs,][source=...,]target=/path[,readonly] (repeatable). |
 | `--name string` | Instance name (default: the image's name and a random suffix). |
@@ -69,7 +69,7 @@ $ dicer run -d --vcpus 2 alpine:3.21 sleep infinity
 | `--rm` | Delete the instance once it stops, the daemon doing the deleting. |
 | `--standby-after duration` | Put the instance on standby once it has been idle this long, e.g. 15m (0: never). |
 | `--upload-rate string` | Bytes per second the guest can send, e.g. 10MiB (0: unlimited). |
-| `--vcpus int32` | Number of virtual CPUs. Default: `1`. |
+| `--vcpus int` | Number of virtual CPUs. Default: `1`. |
 
 ## Global flags
 

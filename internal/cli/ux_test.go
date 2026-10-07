@@ -13,7 +13,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func TestResourcesCommandIsGone(t *testing.T) {
@@ -202,29 +202,28 @@ func TestPsWatch(t *testing.T) {
 }
 
 func TestInstanceStatusForAnInstanceThatEnded(t *testing.T) {
-	ago := timestamppb.New(time.Now().Add(-2 * time.Minute))
-	soon := timestamppb.New(time.Now().Add(30 * time.Second))
-	code := func(c int32) *int32 { return &c }
+	ago := time.Now().Add(-2 * time.Minute)
+	soon := time.Now().Add(30 * time.Second)
 
 	tests := []struct {
-		instance *dicerdv1.Instance
+		instance dicer.Instance
 		want     string
 	}{
-		{&dicerdv1.Instance{State: stateStopped, ExitCode: code(0), FinishTime: ago}, "Exited (0) 2 minutes ago"},
+		{dicer.Instance{State: dicer.InstanceStateStopped, ExitCode: dicer.Ptr(0), FinishTime: ago}, "Exited (0) 2 minutes ago"},
 		{
-			&dicerdv1.Instance{State: stateFailed, StateError: "exit code 1", ExitCode: code(1), FinishTime: ago},
+			dicer.Instance{State: dicer.InstanceStateFailed, StateError: "exit code 1", ExitCode: dicer.Ptr(1), FinishTime: ago},
 			"Exited (1) 2 minutes ago",
 		},
-		{&dicerdv1.Instance{State: stateFailed, StateError: "the guest reset"}, "Failed: the guest reset"},
-		{&dicerdv1.Instance{State: stateRestarting, RestartCount: 3, NextRestartTime: soon}, "Restarting (3) in 2"},
-		{&dicerdv1.Instance{State: stateRestarting, RestartCount: 1}, "Restarting (1)"},
-		{&dicerdv1.Instance{State: stateStopped}, "Stopped"},
+		{dicer.Instance{State: dicer.InstanceStateFailed, StateError: "the guest reset"}, "Failed: the guest reset"},
+		{dicer.Instance{State: dicer.InstanceStateRestarting, RestartCount: 3, NextRestartTime: soon}, "Restarting (3) in 2"},
+		{dicer.Instance{State: dicer.InstanceStateRestarting, RestartCount: 1}, "Restarting (1)"},
+		{dicer.Instance{State: dicer.InstanceStateStopped}, "Stopped"},
 	}
 	for _, tt := range tests {
 		// The wait before a restart is only compared as far as it does not
 		// depend on how long the test takes.
 		if got := instanceStatus(tt.instance); !strings.HasPrefix(got, tt.want) ||
-			(tt.instance.GetNextRestartTime() == nil && got != tt.want) {
+			(tt.instance.NextRestartTime.IsZero() && got != tt.want) {
 			t.Errorf("instanceStatus(%v) = %q, want %q", tt.instance, got, tt.want)
 		}
 	}
@@ -232,7 +231,7 @@ func TestInstanceStatusForAnInstanceThatEnded(t *testing.T) {
 
 func TestParseRestartPolicy(t *testing.T) {
 	p, err := parseRestartPolicy("on-failure:5")
-	if err != nil || p.GetMode() != dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE || p.GetMaxRetries() != 5 {
+	if err != nil || p.Mode != dicer.RestartModeOnFailure || p.MaxRetries != 5 {
 		t.Errorf("parseRestartPolicy(on-failure:5) = %v, %v", p, err)
 	}
 	if _, err := parseRestartPolicy("on-failure:many"); err == nil {

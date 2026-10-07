@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -11,13 +12,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/compose"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // composeSession is what most commands start with: the project, and a
@@ -99,7 +97,7 @@ func runComposeDown(cmd *cobra.Command, _ []string) error {
 
 	for _, name := range names {
 		start := time.Now()
-		if _, err := client.DeleteInstance(ctx, &dicerdv1.DeleteInstanceRequest{Name: name, Force: true}); err != nil {
+		if err := client.Instances.Delete(ctx, name, dicer.DeleteOptions{Force: true}); err != nil {
 			return fmt.Errorf("delete %s: %w", name, err)
 		}
 		out.printf("Instance %s deleted in %s", name, humanize.Duration(time.Since(start)))
@@ -110,13 +108,13 @@ func runComposeDown(cmd *cobra.Command, _ []string) error {
 		if n.External {
 			continue
 		}
-		_, err := client.DeleteNetwork(ctx, &dicerdv1.DeleteNetworkRequest{Name: n.Name})
+		err := client.Networks.Delete(ctx, n.Name)
 		switch {
 		case err == nil:
 			out.printf("Network %s deleted", n.Name)
-		case status.Code(err) == codes.NotFound:
+		case errors.Is(err, dicer.ErrNotFound):
 		default:
-			out.printf("Network %s kept: %s", n.Name, errorMessage(err))
+			out.printf("Network %s kept: %s", n.Name, err.Error())
 		}
 	}
 
@@ -128,13 +126,13 @@ func runComposeDown(cmd *cobra.Command, _ []string) error {
 		if v.External {
 			continue
 		}
-		_, err := client.DeleteVolume(ctx, &dicerdv1.DeleteVolumeRequest{Name: v.Name})
+		err := client.Volumes.Delete(ctx, v.Name)
 		switch {
 		case err == nil:
 			out.printf("Volume %s deleted", v.Name)
-		case status.Code(err) == codes.NotFound:
+		case errors.Is(err, dicer.ErrNotFound):
 		default:
-			out.printf("Volume %s kept: %s", v.Name, errorMessage(err))
+			out.printf("Volume %s kept: %s", v.Name, err.Error())
 		}
 	}
 	return nil
@@ -142,7 +140,7 @@ func runComposeDown(cmd *cobra.Command, _ []string) error {
 
 // printableService is a project's instances as ps lists them.
 type printableService struct {
-	Instances []*dicerdv1.Instance
+	Instances []dicer.Instance
 }
 
 func (p *printableService) Columns() []string {
@@ -157,13 +155,13 @@ func (p *printableService) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Instances))
 	for _, instance := range p.Instances {
 		rows = append(rows, map[string]any{
-			"Name":    instance.GetName(),
-			"Service": orDash(instance.GetLabels()[compose.LabelService]),
-			"Image":   instance.GetImageRef(),
-			"State":   stateName(instance.GetState()),
+			"Name":    instance.Name,
+			"Service": orDash(instance.Labels[compose.LabelService]),
+			"Image":   instance.ImageRef,
+			"State":   stateName(instance.State),
 			"Status":  instanceStatus(instance),
-			"IP":      orDash(instance.GetIp()),
-			"Ports":   orDash(formatPorts(instance.GetPorts())),
+			"IP":      orDash(instance.IP),
+			"Ports":   orDash(formatPorts(instance.Ports)),
 		})
 	}
 	return rows
@@ -194,10 +192,10 @@ func newComposePsCommand() *cobra.Command {
 				}
 			}
 
-			var shown []*dicerdv1.Instance
+			var shown []dicer.Instance
 			for _, name := range slices.Sorted(maps.Keys(instances)) {
 				instance := instances[name]
-				if len(args) == 0 || slices.Contains(args, instance.GetLabels()[compose.LabelService]) {
+				if len(args) == 0 || slices.Contains(args, instance.Labels[compose.LabelService]) {
 					shown = append(shown, instance)
 				}
 			}
@@ -230,7 +228,7 @@ func newComposeLogsCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("follow", "f", false, "Keep writing new output until the instances stop")
-	cmd.Flags().Int32P("tail", "n", 0, "Show only the last lines of each (default: all)")
+	cmd.Flags().IntP("tail", "n", 0, "Show only the last lines of each (default: all)")
 	cmd.Flags().Bool("no-prefix", false, "Do not mark each line with its instance's name")
 
 	return cmd
@@ -238,7 +236,7 @@ func newComposeLogsCommand() *cobra.Command {
 
 func runComposeLogs(cmd *cobra.Command, args []string) error {
 	follow, _ := cmd.Flags().GetBool("follow")
-	tail, _ := cmd.Flags().GetInt32("tail")
+	tail, _ := cmd.Flags().GetInt("tail")
 	noPrefix, _ := cmd.Flags().GetBool("no-prefix")
 
 	s, err := openComposeSession(cmd)
@@ -259,7 +257,7 @@ func runComposeLogs(cmd *cobra.Command, args []string) error {
 	var names []string
 	for _, svc := range services {
 		if instance, err := serviceInstance(svc, instances); err == nil {
-			names = append(names, instance.GetName())
+			names = append(names, instance.Name)
 		}
 	}
 
@@ -274,12 +272,10 @@ func runComposeLogs(cmd *cobra.Command, args []string) error {
 			if noPrefix {
 				w.prefix = ""
 			}
-			err := streamLogs(cmd.Context(), s.client, &dicerdv1.GetInstanceLogsRequest{
-				Name: name, TailLines: tail, Follow: follow,
-			}, w)
+			err := streamLogs(cmd.Context(), s.client, name, dicer.LogOptions{TailLines: tail, Follow: follow}, w)
 			w.flush()
 			// An instance never started has no console yet: nothing to show.
-			if status.Code(err) != codes.NotFound {
+			if !errors.Is(err, dicer.ErrNotFound) {
 				errs[i] = err
 			}
 		})
@@ -298,7 +294,7 @@ func runComposeLogs(cmd *cobra.Command, args []string) error {
 // service named, or every one, in order.
 func newComposeLifecycleCommand(
 	use, short string, reverse bool,
-	do func(s *composeSession, instance *dicerdv1.Instance, out *lineWriter) error,
+	do func(s *composeSession, instance dicer.Instance, out *lineWriter) error,
 ) *cobra.Command {
 	return &cobra.Command{
 		Use:               use + " [SERVICE...]",
@@ -354,11 +350,11 @@ func newComposeStopCommand() *cobra.Command {
 
 func newComposeRestartCommand() *cobra.Command {
 	cmd := newComposeLifecycleCommand("restart", "Restart the project's instances", false,
-		func(s *composeSession, instance *dicerdv1.Instance, out *lineWriter) error {
+		func(s *composeSession, instance dicer.Instance, out *lineWriter) error {
 			if err := stopService(s, instance, out); err != nil {
 				return err
 			}
-			return startInstance(s, instance.GetName(), out)
+			return startInstance(s, instance.Name, out)
 		})
 	cmd.Long = "Stops each of the services' instances if it is running, then starts it. It is\n" +
 		"how a changed file mount takes effect; a changed definition needs\n" +
@@ -367,38 +363,38 @@ func newComposeRestartCommand() *cobra.Command {
 }
 
 // startService starts a service's instance unless it is running or paused.
-func startService(s *composeSession, instance *dicerdv1.Instance, out *lineWriter) error {
-	if isActive(instance.GetState()) {
+func startService(s *composeSession, instance dicer.Instance, out *lineWriter) error {
+	if isActive(instance.State) {
 		return nil
 	}
-	return startInstance(s, instance.GetName(), out)
+	return startInstance(s, instance.Name, out)
 }
 
 // startInstance starts an instance, whatever state it was last seen in.
 func startInstance(s *composeSession, name string, out *lineWriter) error {
 	start := time.Now()
-	started, err := s.client.StartInstance(s.cmd.Context(), &dicerdv1.StartInstanceRequest{Name: name})
+	started, err := s.client.Instances.Start(s.cmd.Context(), name)
 	if err != nil {
 		return fmt.Errorf("start %s: %w", name, err)
 	}
-	out.printf("Instance %s started in %s (%s)", started.GetName(), humanize.Duration(time.Since(start)), orDash(started.GetIp()))
+	out.printf("Instance %s started in %s (%s)", started.Name, humanize.Duration(time.Since(start)), orDash(started.IP))
 	return nil
 }
 
 // stopService stops a service's instance if it is running, paused,
 // starting, restarting or on standby.
-func stopService(s *composeSession, instance *dicerdv1.Instance, out *lineWriter) error {
-	switch instance.GetState() {
-	case stateRunning, statePaused, stateStarting, stateRestarting, stateStandby:
+func stopService(s *composeSession, instance dicer.Instance, out *lineWriter) error {
+	switch instance.State {
+	case dicer.InstanceStateRunning, dicer.InstanceStatePaused, dicer.InstanceStateStarting, dicer.InstanceStateRestarting, dicer.InstanceStateStandby:
 	default:
 		return nil
 	}
 
 	start := time.Now()
-	if _, err := s.client.StopInstance(s.cmd.Context(), &dicerdv1.StopInstanceRequest{Name: instance.GetName()}); err != nil {
-		return fmt.Errorf("stop %s: %w", instance.GetName(), err)
+	if _, err := s.client.Instances.Stop(s.cmd.Context(), instance.Name); err != nil {
+		return fmt.Errorf("stop %s: %w", instance.Name, err)
 	}
-	out.printf("Instance %s stopped in %s", instance.GetName(), humanize.Duration(time.Since(start)))
+	out.printf("Instance %s stopped in %s", instance.Name, humanize.Duration(time.Since(start)))
 	return nil
 }
 
@@ -424,7 +420,7 @@ func newComposePullCommand() *cobra.Command {
 
 			var pulled []string
 			for _, svc := range services {
-				ref := svc.Instance.GetImageRef()
+				ref := svc.Instance.ImageRef
 				if slices.Contains(pulled, ref) {
 					continue
 				}
@@ -474,7 +470,7 @@ func newComposeExecCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return runInstanceExecCommand(cmd, append([]string{instance.GetName()}, args[1:]...))
+		return runInstanceExecCommand(cmd, append([]string{instance.Name}, args[1:]...))
 	}
 	return cmd
 }

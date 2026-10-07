@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Turning a decoded compose file into a Project: its services, networks and
-// volumes checked and made the daemon's requests.
+// volumes checked and made definitions the client creates.
 
 package compose
 
@@ -18,12 +18,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
-	"google.golang.org/protobuf/types/known/durationpb"
-
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/naming"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // An instance's size unless its service gives one: the same as dicer run's.
@@ -202,7 +199,7 @@ func (b *builder) checkDependencies() error {
 func (b *builder) checkInstanceNames() error {
 	seen := make(map[string]string)
 	for _, name := range b.p.ServiceNames() {
-		instance := b.p.Services[name].Instance.GetName()
+		instance := b.p.Services[name].Instance.Name
 		if other, ok := seen[instance]; ok {
 			return fmt.Errorf("services %s and %s would both be instance %s", other, name, instance)
 		}
@@ -281,11 +278,11 @@ func (b *builder) network(key string, raw *rawNetwork) (*Network, error) {
 		return nil, errors.New("a gateway needs a subnet to be in")
 	}
 
-	n.Request = &dicerdv1.CreateNetworkRequest{
+	n.Spec = &dicer.NetworkSpec{
 		Name:        name,
 		Subnet:      subnet,
 		Gateway:     gateway,
-		Mtu:         raw.MTU,
+		MTU:         int(raw.MTU),
 		Nameservers: raw.Nameservers,
 		Isolated:    raw.Isolated,
 		Internal:    raw.Internal,
@@ -320,7 +317,7 @@ func (b *builder) volume(key string, raw *rawVolume) (*Volume, error) {
 	if size <= 0 {
 		return nil, errors.New("its size must be more than 0")
 	}
-	v.Request = &dicerdv1.CreateVolumeRequest{Name: name, SizeBytes: size}
+	v.SizeBytes = size
 	return v, nil
 }
 
@@ -342,14 +339,14 @@ func (b *builder) service(key string, raw *rawService) (*Service, error) {
 			"use letters, digits and hyphens in the service's name, or set container_name", name)
 	}
 
-	req := &dicerdv1.CreateInstanceRequest{
+	spec := &dicer.InstanceSpec{
 		Name:              name,
 		ImageRef:          raw.Image,
 		Hostname:          cmp.Or(raw.Hostname, key),
 		KernelName:        raw.Kernel,
 		KernelArgs:        raw.KernelArgs,
 		HypervisorVersion: raw.HypervisorVersion,
-		Vcpus:             defaultVCPUs,
+		VCPUs:             defaultVCPUs,
 		MemoryBytes:       defaultMemoryBytes,
 		DiskBytes:         defaultDiskBytes,
 	}
@@ -362,24 +359,24 @@ func (b *builder) service(key string, raw *rawService) (*Service, error) {
 		if raw.Command != nil {
 			cmd = append(cmd, *raw.Command...)
 		}
-		req.Cmd = cmd
+		spec.Cmd = cmd
 	}
 
-	steps := []func(*rawService, *dicerdv1.CreateInstanceRequest) error{
+	steps := []func(*rawService, *dicer.InstanceSpec) error{
 		b.setSizes, b.setRateLimits, b.setStandby, b.setHypervisor, b.setInitMode, b.setEnvironment, b.setLabels, b.setPorts, b.setMounts,
 		b.setNetwork, b.setRestartPolicy, b.setHealthCheck,
 	}
 	for _, step := range steps {
-		if err := step(raw, req); err != nil {
+		if err := step(raw, spec); err != nil {
 			return nil, err
 		}
 	}
 
-	req.Labels[LabelProject] = b.p.Name
-	req.Labels[LabelService] = key
-	req.Labels[LabelConfigHash] = ConfigHash(req)
+	spec.Labels[LabelProject] = b.p.Name
+	spec.Labels[LabelService] = key
+	spec.Labels[LabelConfigHash] = ConfigHash(*spec)
 
-	s := &Service{Name: key, Instance: req}
+	s := &Service{Name: key, Instance: *spec}
 	for _, dep := range raw.DependsOn.names {
 		condition, err := parseCondition(raw.DependsOn.conditions[dep])
 		if err != nil {
@@ -404,20 +401,20 @@ func parseCondition(s string) (Condition, error) {
 }
 
 // setSizes sets the instance's vCPUs, memory and disk.
-func (b *builder) setSizes(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setSizes(raw *rawService, spec *dicer.InstanceSpec) error {
 	switch {
 	case raw.VCPUs != nil && raw.CPUs != nil:
 		return errors.New("give vcpus or cpus, not both")
 	case raw.VCPUs != nil:
-		req.Vcpus = *raw.VCPUs
+		spec.VCPUs = int(*raw.VCPUs)
 	case raw.CPUs != nil:
 		cpus := *raw.CPUs
 		if cpus != float64(int32(cpus)) {
 			return fmt.Errorf("cpus: %v is not a whole number: a guest has whole vCPUs", cpus)
 		}
-		req.Vcpus = int32(cpus)
+		spec.VCPUs = int(cpus)
 	}
-	if req.GetVcpus() < 1 {
+	if spec.VCPUs < 1 {
 		return errors.New("it needs at least 1 vCPU")
 	}
 
@@ -425,48 +422,48 @@ func (b *builder) setSizes(raw *rawService, req *dicerdv1.CreateInstanceRequest)
 	case raw.Memory != nil && raw.MemLimit != nil:
 		return errors.New("give memory or mem_limit, not both")
 	case raw.Memory != nil:
-		req.MemoryBytes = int64(*raw.Memory)
+		spec.MemoryBytes = int64(*raw.Memory)
 	case raw.MemLimit != nil:
-		req.MemoryBytes = int64(*raw.MemLimit)
+		spec.MemoryBytes = int64(*raw.MemLimit)
 	}
 	if raw.Disk != nil {
-		req.DiskBytes = int64(*raw.Disk)
+		spec.DiskBytes = int64(*raw.Disk)
 	}
 	return nil
 }
 
 // setStandby sets how long the instance may be idle before it is put on
 // standby.
-func (b *builder) setStandby(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
-	req.StandbyAfter = duration(raw.StandbyAfter)
+func (b *builder) setStandby(raw *rawService, spec *dicer.InstanceSpec) error {
+	spec.StandbyAfter = raw.StandbyAfter
 	return nil
 }
 
 // setRateLimits sets the instance's disk and network rate limits.
-func (b *builder) setRateLimits(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setRateLimits(raw *rawService, spec *dicer.InstanceSpec) error {
 	if raw.DiskRate != nil {
-		req.DiskBytesPerSecond = int64(*raw.DiskRate)
+		spec.DiskBytesPerSecond = int64(*raw.DiskRate)
 	}
 	if raw.DiskIOPS != nil {
-		req.DiskIops = *raw.DiskIOPS
+		spec.DiskIOPS = *raw.DiskIOPS
 	}
 	if raw.UploadRate != nil {
-		req.UploadBytesPerSecond = int64(*raw.UploadRate)
+		spec.UploadBytesPerSecond = int64(*raw.UploadRate)
 	}
 	if raw.DownloadRate != nil {
-		req.DownloadBytesPerSecond = int64(*raw.DownloadRate)
+		spec.DownloadBytesPerSecond = int64(*raw.DownloadRate)
 	}
 	return nil
 }
 
 // setHypervisor sets the hypervisor the instance runs under.
-func (b *builder) setHypervisor(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setHypervisor(raw *rawService, spec *dicer.InstanceSpec) error {
 	switch raw.Hypervisor {
 	case "":
 	case "cloud-hypervisor":
-		req.HypervisorType = dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR
+		spec.HypervisorType = dicer.HypervisorTypeCloudHypervisor
 	case "firecracker":
-		req.HypervisorType = dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER
+		spec.HypervisorType = dicer.HypervisorTypeFirecracker
 	default:
 		return fmt.Errorf("invalid hypervisor %q: want cloud-hypervisor or firecracker", raw.Hypervisor)
 	}
@@ -474,15 +471,15 @@ func (b *builder) setHypervisor(raw *rawService, req *dicerdv1.CreateInstanceReq
 }
 
 // setInitMode sets how the guest's init runs the workload.
-func (b *builder) setInitMode(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setInitMode(raw *rawService, spec *dicer.InstanceSpec) error {
 	switch raw.InitMode {
 	case "":
 	case "auto":
-		req.InitMode = dicerdv1.InitMode_INIT_MODE_AUTO
+		spec.InitMode = dicer.InitModeAuto
 	case "exec":
-		req.InitMode = dicerdv1.InitMode_INIT_MODE_EXEC
+		spec.InitMode = dicer.InitModeExec
 	case "systemd":
-		req.InitMode = dicerdv1.InitMode_INIT_MODE_SYSTEMD
+		spec.InitMode = dicer.InitModeSystemd
 	default:
 		return fmt.Errorf("invalid init_mode %q: want auto, exec or systemd", raw.InitMode)
 	}
@@ -492,7 +489,7 @@ func (b *builder) setInitMode(raw *rawService, req *dicerdv1.CreateInstanceReque
 // setEnvironment sets env_file's variables, in order, then environment's,
 // which win. A variable given no value takes the environment's, and is left
 // out if it has none, as with Docker Compose.
-func (b *builder) setEnvironment(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setEnvironment(raw *rawService, spec *dicer.InstanceSpec) error {
 	env := make(map[string]string)
 	set := func(vars map[string]*string) {
 		for k, v := range vars {
@@ -514,32 +511,32 @@ func (b *builder) setEnvironment(raw *rawService, req *dicerdv1.CreateInstanceRe
 	set(raw.Environment)
 
 	if len(env) > 0 {
-		req.Env = env
+		spec.Env = env
 	}
 	return nil
 }
 
 // setLabels sets the service's labels, refusing dicer compose's own.
-func (b *builder) setLabels(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
-	req.Labels = make(map[string]string, len(raw.Labels)+3)
+func (b *builder) setLabels(raw *rawService, spec *dicer.InstanceSpec) error {
+	spec.Labels = make(map[string]string, len(raw.Labels)+3)
 	for k, v := range raw.Labels {
 		if strings.HasPrefix(k, LabelPrefix) {
 			return fmt.Errorf("label %s: labels starting %s are reserved for dicer compose", k, LabelPrefix)
 		}
 		if v != nil {
-			req.Labels[k] = *v
+			spec.Labels[k] = *v
 		} else {
-			req.Labels[k] = ""
+			spec.Labels[k] = ""
 		}
 	}
 	return nil
 }
 
 // setPorts sets the ports the instance publishes.
-func (b *builder) setPorts(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setPorts(raw *rawService, spec *dicer.InstanceSpec) error {
 	for _, p := range raw.Ports {
 		var (
-			m   *dicerdv1.PortMapping
+			m   dicer.PortMapping
 			err error
 		)
 		if p.Short != "" {
@@ -550,13 +547,13 @@ func (b *builder) setPorts(raw *rawService, req *dicerdv1.CreateInstanceRequest)
 		if err != nil {
 			return fmt.Errorf("line %d: %w", p.line, err)
 		}
-		req.Ports = append(req.Ports, m)
+		spec.Ports = append(spec.Ports, m)
 	}
 	return nil
 }
 
 // parseShortPort parses "[HOST_IP:]HOST_PORT:GUEST_PORT[/PROTOCOL]".
-func parseShortPort(s string) (*dicerdv1.PortMapping, error) {
+func parseShortPort(s string) (dicer.PortMapping, error) {
 	spec, protocol, _ := strings.Cut(s, "/")
 
 	var hostIP string
@@ -564,7 +561,7 @@ func parseShortPort(s string) (*dicerdv1.PortMapping, error) {
 		// An IPv6 address, in brackets.
 		end := strings.Index(spec, "]:")
 		if end < 0 {
-			return nil, fmt.Errorf("invalid port %q", s)
+			return dicer.PortMapping{}, fmt.Errorf("invalid port %q", s)
 		}
 		hostIP, spec = spec[1:end], spec[end+2:]
 	}
@@ -573,51 +570,51 @@ func parseShortPort(s string) (*dicerdv1.PortMapping, error) {
 	var hostPort, guestPort string
 	switch {
 	case len(parts) == 1:
-		return nil, fmt.Errorf("port %q: publish it on a port of the host, as HOST_PORT:%s", s, parts[0])
+		return dicer.PortMapping{}, fmt.Errorf("port %q: publish it on a port of the host, as HOST_PORT:%s", s, parts[0])
 	case len(parts) == 2:
 		hostPort, guestPort = parts[0], parts[1]
 	case len(parts) == 3 && hostIP == "":
 		hostIP, hostPort, guestPort = parts[0], parts[1], parts[2]
 	default:
-		return nil, fmt.Errorf("invalid port %q: want [HOST_IP:]HOST_PORT:GUEST_PORT[/tcp|udp]", s)
+		return dicer.PortMapping{}, fmt.Errorf("invalid port %q: want [HOST_IP:]HOST_PORT:GUEST_PORT[/tcp|udp]", s)
 	}
 
-	m := &dicerdv1.PortMapping{HostIp: hostIP}
+	m := dicer.PortMapping{HostIP: hostIP}
 	var err error
 	if m.HostPort, err = parsePortNumber(hostPort); err != nil {
-		return nil, fmt.Errorf("port %q: host port: %w", s, err)
+		return dicer.PortMapping{}, fmt.Errorf("port %q: host port: %w", s, err)
 	}
 	if m.GuestPort, err = parsePortNumber(guestPort); err != nil {
-		return nil, fmt.Errorf("port %q: guest port: %w", s, err)
+		return dicer.PortMapping{}, fmt.Errorf("port %q: guest port: %w", s, err)
 	}
 	if m.Protocol, err = parseProtocol(protocol); err != nil {
-		return nil, fmt.Errorf("port %q: %w", s, err)
+		return dicer.PortMapping{}, fmt.Errorf("port %q: %w", s, err)
 	}
 	return m, nil
 }
 
 // parseLongPort parses Docker's long form of a published port.
-func parseLongPort(p rawPort) (*dicerdv1.PortMapping, error) {
+func parseLongPort(p rawPort) (dicer.PortMapping, error) {
 	if p.Target == 0 || p.Target > 65535 {
-		return nil, errors.New("a port needs a target from 1 to 65535")
+		return dicer.PortMapping{}, errors.New("a port needs a target from 1 to 65535")
 	}
 	if p.Published == "" {
-		return nil, fmt.Errorf("port %d: publish it on a port of the host with published", p.Target)
+		return dicer.PortMapping{}, fmt.Errorf("port %d: publish it on a port of the host with published", p.Target)
 	}
 
-	m := &dicerdv1.PortMapping{HostIp: p.HostIP, GuestPort: p.Target}
+	m := dicer.PortMapping{HostIP: p.HostIP, GuestPort: int(p.Target)}
 	var err error
 	if m.HostPort, err = parsePortNumber(p.Published); err != nil {
-		return nil, fmt.Errorf("port %d: published: %w", p.Target, err)
+		return dicer.PortMapping{}, fmt.Errorf("port %d: published: %w", p.Target, err)
 	}
 	if m.Protocol, err = parseProtocol(p.Protocol); err != nil {
-		return nil, fmt.Errorf("port %d: %w", p.Target, err)
+		return dicer.PortMapping{}, fmt.Errorf("port %d: %w", p.Target, err)
 	}
 	return m, nil
 }
 
 // parsePortNumber parses a port from 1 to 65535, refusing a range.
-func parsePortNumber(s string) (uint32, error) {
+func parsePortNumber(s string) (int, error) {
 	if strings.Contains(s, "-") {
 		return 0, fmt.Errorf("%q is a range: publish each port on its own", s)
 	}
@@ -625,32 +622,32 @@ func parsePortNumber(s string) (uint32, error) {
 	if err != nil || n == 0 {
 		return 0, fmt.Errorf("invalid port %q: want a number from 1 to 65535", s)
 	}
-	return uint32(n), nil
+	return int(n), nil
 }
 
 // parseProtocol parses tcp or udp. Empty is left to the daemon.
-func parseProtocol(s string) (dicerdv1.Protocol, error) {
+func parseProtocol(s string) (dicer.Protocol, error) {
 	switch s {
 	case "":
-		return dicerdv1.Protocol_PROTOCOL_UNSPECIFIED, nil
+		return "", nil
 	case "tcp":
-		return dicerdv1.Protocol_PROTOCOL_TCP, nil
+		return dicer.ProtocolTCP, nil
 	case "udp":
-		return dicerdv1.Protocol_PROTOCOL_UDP, nil
+		return dicer.ProtocolUDP, nil
 	default:
-		return 0, fmt.Errorf("invalid protocol %q: want tcp or udp", s)
+		return "", fmt.Errorf("invalid protocol %q: want tcp or udp", s)
 	}
 }
 
 // setMounts sets the service's volumes and tmpfs. A named volume must be one
 // of the file's, and a host path is a file, copied into the guest.
-func (b *builder) setMounts(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setMounts(raw *rawService, spec *dicer.InstanceSpec) error {
 	for _, m := range raw.Volumes {
 		mount, err := b.mount(m)
 		if err != nil {
 			return fmt.Errorf("line %d: %w", m.line, err)
 		}
-		req.Mounts = append(req.Mounts, mount)
+		spec.Mounts = append(spec.Mounts, mount)
 	}
 
 	for _, t := range raw.Tmpfs {
@@ -658,25 +655,25 @@ func (b *builder) setMounts(raw *rawService, req *dicerdv1.CreateInstanceRequest
 		if options != "" {
 			return fmt.Errorf("tmpfs %s: a tmpfs takes no options", t)
 		}
-		req.Mounts = append(req.Mounts, &dicerdv1.Mount{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS, Target: target})
+		spec.Mounts = append(spec.Mounts, dicer.Mount{Type: dicer.MountTypeTmpfs, Target: target})
 	}
 	return nil
 }
 
 // mount builds the mount an entry of a service's volumes describes.
-func (b *builder) mount(m rawMount) (*dicerdv1.Mount, error) {
+func (b *builder) mount(m rawMount) (dicer.Mount, error) {
 	kind, source, target, readOnly := m.Type, m.Source, m.Target, m.ReadOnly
 
 	if m.Short != "" {
 		parts := strings.Split(m.Short, ":")
 		switch len(parts) {
 		case 1:
-			return nil, fmt.Errorf("volume %q: anonymous volumes are not supported: "+
+			return dicer.Mount{}, fmt.Errorf("volume %q: anonymous volumes are not supported: "+
 				"name one, as NAME:%s, and declare it under volumes", m.Short, m.Short)
 		case 2, 3:
 			source, target = parts[0], parts[1]
 		default:
-			return nil, fmt.Errorf("invalid volume %q: want SOURCE:TARGET[:ro]", m.Short)
+			return dicer.Mount{}, fmt.Errorf("invalid volume %q: want SOURCE:TARGET[:ro]", m.Short)
 		}
 		if len(parts) == 3 {
 			switch parts[2] {
@@ -684,7 +681,7 @@ func (b *builder) mount(m rawMount) (*dicerdv1.Mount, error) {
 				readOnly = true
 			case "rw":
 			default:
-				return nil, fmt.Errorf("volume %q: invalid mode %q: want ro or rw", m.Short, parts[2])
+				return dicer.Mount{}, fmt.Errorf("volume %q: invalid mode %q: want ro or rw", m.Short, parts[2])
 			}
 		}
 
@@ -695,33 +692,29 @@ func (b *builder) mount(m rawMount) (*dicerdv1.Mount, error) {
 	}
 
 	if !strings.HasPrefix(target, "/") {
-		return nil, fmt.Errorf("volume target %q: want an absolute path in the guest", target)
+		return dicer.Mount{}, fmt.Errorf("volume target %q: want an absolute path in the guest", target)
 	}
 
 	switch kind {
 	case "volume":
 		v, ok := b.p.Volumes[source]
 		if !ok {
-			return nil, fmt.Errorf("volume %s is not declared under volumes", source)
+			return dicer.Mount{}, fmt.Errorf("volume %s is not declared under volumes", source)
 		}
-		return &dicerdv1.Mount{
-			Type: dicerdv1.MountType_MOUNT_TYPE_VOLUME, Source: v.Name, Target: target, ReadOnly: readOnly,
-		}, nil
+		return dicer.Mount{Type: dicer.MountTypeVolume, Source: v.Name, Target: target, ReadOnly: readOnly}, nil
 	case "bind":
 		path, err := b.resolvePath(source)
 		if err != nil {
-			return nil, err
+			return dicer.Mount{}, err
 		}
-		return &dicerdv1.Mount{
-			Type: dicerdv1.MountType_MOUNT_TYPE_FILE, Source: path, Target: target, ReadOnly: readOnly,
-		}, nil
+		return dicer.Mount{Type: dicer.MountTypeFile, Source: path, Target: target, ReadOnly: readOnly}, nil
 	case "tmpfs":
 		if source != "" {
-			return nil, fmt.Errorf("tmpfs %s: a tmpfs has no source", target)
+			return dicer.Mount{}, fmt.Errorf("tmpfs %s: a tmpfs has no source", target)
 		}
-		return &dicerdv1.Mount{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS, Target: target}, nil
+		return dicer.Mount{Type: dicer.MountTypeTmpfs, Target: target}, nil
 	default:
-		return nil, fmt.Errorf("invalid volume type %q: want volume, bind or tmpfs", kind)
+		return dicer.Mount{}, fmt.Errorf("invalid volume type %q: want volume, bind or tmpfs", kind)
 	}
 }
 
@@ -734,12 +727,12 @@ func isHostPath(source string) bool {
 // setNetwork sets the one network a service joins: the one it names, the
 // file's network called default if it names none, or else the daemon's
 // default.
-func (b *builder) setNetwork(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setNetwork(raw *rawService, spec *dicer.InstanceSpec) error {
 	names := raw.Networks.names
 	switch len(names) {
 	case 0:
 		if n, ok := b.p.Networks["default"]; ok {
-			req.NetworkName = n.Name
+			spec.NetworkName = n.Name
 		}
 		return nil
 	case 1:
@@ -752,45 +745,45 @@ func (b *builder) setNetwork(raw *rawService, req *dicerdv1.CreateInstanceReques
 	if !ok {
 		return fmt.Errorf("network %s is not declared under networks", key)
 	}
-	req.NetworkName = n.Name
-	req.StaticIp = raw.Networks.settings[key].IPv4Address
+	spec.NetworkName = n.Name
+	spec.StaticIP = raw.Networks.settings[key].IPv4Address
 	return nil
 }
 
 // setRestartPolicy sets when the instance is restarted.
-func (b *builder) setRestartPolicy(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setRestartPolicy(raw *rawService, spec *dicer.InstanceSpec) error {
 	if raw.Restart == "" {
 		return nil
 	}
 
 	mode, retries, hasRetries := strings.Cut(raw.Restart, ":")
-	p := &dicerdv1.RestartPolicy{}
+	var p dicer.RestartPolicy
 	switch mode {
 	case "no":
-		p.Mode = dicerdv1.RestartMode_RESTART_MODE_NO
+		p.Mode = dicer.RestartModeNo
 	case "always":
-		p.Mode = dicerdv1.RestartMode_RESTART_MODE_ALWAYS
+		p.Mode = dicer.RestartModeAlways
 	case "unless-stopped":
-		p.Mode = dicerdv1.RestartMode_RESTART_MODE_UNLESS_STOPPED
+		p.Mode = dicer.RestartModeUnlessStopped
 	case "on-failure":
-		p.Mode = dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE
+		p.Mode = dicer.RestartModeOnFailure
 	default:
 		return fmt.Errorf("invalid restart %q: want no, always, unless-stopped or on-failure[:N]", raw.Restart)
 	}
 
 	if hasRetries {
 		n, err := strconv.ParseInt(retries, 10, 32)
-		if p.GetMode() != dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE || err != nil || n < 0 {
+		if p.Mode != dicer.RestartModeOnFailure || err != nil || n < 0 {
 			return fmt.Errorf("invalid restart %q: only on-failure takes a count, as on-failure:5", raw.Restart)
 		}
-		p.MaxRetries = int32(n)
+		p.MaxRetries = int(n)
 	}
-	req.RestartPolicy = p
+	spec.RestartPolicy = p
 	return nil
 }
 
 // setHealthCheck sets how the workload's health is checked.
-func (b *builder) setHealthCheck(raw *rawService, req *dicerdv1.CreateInstanceRequest) error {
+func (b *builder) setHealthCheck(raw *rawService, spec *dicer.InstanceSpec) error {
 	h := raw.HealthCheck
 	if h == nil {
 		return nil
@@ -814,18 +807,18 @@ func (b *builder) setHealthCheck(raw *rawService, req *dicerdv1.CreateInstanceRe
 		if probes > 0 || h.Interval != 0 || h.Timeout != 0 || h.StartPeriod != 0 || h.Retries != 0 {
 			return errors.New("healthcheck: a disabled check takes no other settings")
 		}
-		req.HealthCheck = &dicerdv1.HealthCheck{Disabled: true}
+		spec.HealthCheck = &dicer.HealthCheck{Disabled: true}
 		return nil
 	}
 	if probes != 1 {
 		return errors.New("healthcheck: give exactly one of test, http and tcp")
 	}
 
-	c := &dicerdv1.HealthCheck{
-		Interval:    duration(h.Interval),
-		Timeout:     duration(h.Timeout),
-		StartPeriod: duration(h.StartPeriod),
-		Retries:     h.Retries,
+	c := &dicer.HealthCheck{
+		Interval:    h.Interval,
+		Timeout:     h.Timeout,
+		StartPeriod: h.StartPeriod,
+		Retries:     int(h.Retries),
 	}
 
 	switch {
@@ -834,7 +827,7 @@ func (b *builder) setHealthCheck(raw *rawService, req *dicerdv1.CreateInstanceRe
 		if err != nil {
 			return fmt.Errorf("line %d: healthcheck: %w", h.Test.line, err)
 		}
-		c.Probe = &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{Command: command}}
+		c.Exec = command
 	case h.HTTP != "":
 		portText, path, _ := strings.Cut(h.HTTP, "/")
 		port, err := parsePortNumber(portText)
@@ -844,12 +837,12 @@ func (b *builder) setHealthCheck(raw *rawService, req *dicerdv1.CreateInstanceRe
 		if path != "" {
 			path = "/" + path
 		}
-		c.Probe = &dicerdv1.HealthCheck_Http{Http: &dicerdv1.HealthCheckHTTP{Port: port, Path: path}}
+		c.HTTP = &dicer.HTTPProbe{Port: port, Path: path}
 	default:
-		c.Probe = &dicerdv1.HealthCheck_Tcp{Tcp: &dicerdv1.HealthCheckTCP{Port: h.TCP}}
+		c.TCP = &dicer.TCPProbe{Port: int(h.TCP)}
 	}
 
-	req.HealthCheck = c
+	spec.HealthCheck = c
 	return nil
 }
 
@@ -869,13 +862,4 @@ func healthCheckCommand(test []string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("test must start with CMD, CMD-SHELL or NONE, not %q", test[0])
 	}
-}
-
-// duration returns d as a protobuf duration, or nil for zero, which leaves
-// the daemon's default.
-func duration(d time.Duration) *durationpb.Duration {
-	if d == 0 {
-		return nil
-	}
-	return durationpb.New(d)
 }

@@ -5,6 +5,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,13 +15,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/image/reference"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // maxRecentEvents is how many of an instance's events inspect shows.
@@ -46,14 +43,14 @@ func newEventsCommand() *cobra.Command {
 			"  dicer events -f\n" +
 			"  dicer events --name web --since 1h\n" +
 			"  dicer events --kind image -n 20\n" +
-			"  dicer events -f --format json | jq -r 'select(.action == \"EVENT_ACTION_DIED\") | .name'",
+			"  dicer events -f --format json | jq -r 'select(.action == \"died\") | .name'",
 		Args: noArgs,
 		RunE: runEventsCommand,
 	}
 
 	cmd.Flags().SortFlags = false
 	cmd.Flags().BoolP("follow", "f", false, "Keep writing new events as they happen")
-	cmd.Flags().Int32P("tail", "n", 0, "Show only the last events (default: all kept)")
+	cmd.Flags().IntP("tail", "n", 0, "Show only the last events (default: all kept)")
 	cmd.Flags().String("since", "", "Show only events since a time, or for a duration: 2026-09-22, 10:30, 1h")
 	cmd.Flags().String("kind", "", "Show only events about one kind of resource: instance, snapshot, image, network, volume or kernel")
 	cmd.Flags().String("name", "", "Show only events about the resource with this name")
@@ -67,7 +64,7 @@ func newEventsCommand() *cobra.Command {
 func runEventsCommand(cmd *cobra.Command, _ []string) error {
 	flags := cmd.Flags()
 	follow, _ := flags.GetBool("follow")
-	tail, _ := flags.GetInt32("tail")
+	tail, _ := flags.GetInt("tail")
 	sinceFlag, _ := flags.GetString("since")
 	kind, _ := flags.GetString("kind")
 	name, _ := flags.GetString("name")
@@ -76,20 +73,20 @@ func runEventsCommand(cmd *cobra.Command, _ []string) error {
 	if format != "text" && format != "json" {
 		return usagef(cmd, "unsupported format %q: want text or json", format)
 	}
-	req := &dicerdv1.GetEventsRequest{Name: name, Limit: tail, Follow: follow}
+	opts := dicer.EventOptions{Name: name, Limit: tail, Follow: follow}
 	if kind != "" {
-		k, err := parseEnum[dicerdv1.EventKind]("--kind", kind)
+		k, err := parseChoice("--kind", kind, eventKinds)
 		if err != nil {
 			return usagef(cmd, "%s", err)
 		}
-		req.Kind = k
+		opts.Kind = k
 	}
 	if sinceFlag != "" {
 		since, err := parseSince(sinceFlag, time.Now())
 		if err != nil {
 			return usagef(cmd, "%s", err)
 		}
-		req.Since = timestamp(since)
+		opts.Since = since
 	}
 
 	client, cleanup, err := newClient(cmd)
@@ -102,35 +99,39 @@ func runEventsCommand(cmd *cobra.Command, _ []string) error {
 	// come.
 	table := &eventTable{w: cmd.OutOrStdout(), format: format, palette: paletteFor(cmd.OutOrStdout())}
 
-	var (
-		history  []*dicerdv1.Event
-		caughtUp bool
-		writeErr error
-	)
-	err = streamEvents(cmd.Context(), client, req,
-		func(e *dicerdv1.Event) {
-			if writeErr != nil {
-				return
-			}
-			if !caughtUp {
-				history = append(history, e)
+	stream, err := client.Events(cmd.Context(), opts)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stream.Close() }()
 
-				return
+	var (
+		history  []dicer.Event
+		caughtUp bool
+	)
+	for {
+		batch, err := stream.Next()
+		if err != nil {
+			if cmd.Context().Err() == nil && !errors.Is(err, io.EOF) {
+				return err
 			}
-			writeErr = table.write([]*dicerdv1.Event{e})
-		},
-		func() {
+			break
+		}
+
+		if caughtUp {
+			if err := table.write(batch.Events); err != nil {
+				return err
+			}
+			continue
+		}
+		history = append(history, batch.Events...)
+		if batch.CaughtUp {
 			caughtUp = true
-			if writeErr == nil {
-				writeErr = table.write(history)
+			if err := table.write(history); err != nil {
+				return err
 			}
 			history = nil
-		})
-	if writeErr != nil {
-		return writeErr
-	}
-	if err != nil && cmd.Context().Err() == nil && !errors.Is(err, io.EOF) {
-		return err
+		}
 	}
 
 	// A stream that ended before it caught up still has a history to show.
@@ -158,11 +159,11 @@ type eventTable struct {
 }
 
 // write widens the columns to fit events, then writes them.
-func (t *eventTable) write(events []*dicerdv1.Event) error {
+func (t *eventTable) write(events []dicer.Event) error {
 	for _, e := range events {
-		t.kindWidth = max(t.kindWidth, width(eventLabel(enumName(e.GetKind()))))
+		t.kindWidth = max(t.kindWidth, width(eventLabel(string(e.Kind))))
 		t.nameWidth = max(t.nameWidth, width(eventName(e)))
-		t.actionWidth = max(t.actionWidth, width(eventLabel(enumName(e.GetAction()))))
+		t.actionWidth = max(t.actionWidth, width(eventLabel(string(e.Action))))
 	}
 	for _, e := range events {
 		if err := t.writeOne(e); err != nil {
@@ -173,9 +174,9 @@ func (t *eventTable) write(events []*dicerdv1.Event) error {
 }
 
 // writeOne writes one event, a line of its own.
-func (t *eventTable) writeOne(e *dicerdv1.Event) error {
+func (t *eventTable) writeOne(e dicer.Event) error {
 	if t.format == "json" {
-		data, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(e)
+		data, err := json.Marshal(e)
 		if err != nil {
 			return err
 		}
@@ -184,8 +185,8 @@ func (t *eventTable) writeOne(e *dicerdv1.Event) error {
 		return err
 	}
 
-	line := timeOf(e.GetTime()).Local().Format(time.DateTime) + "  " +
-		pad(eventLabel(enumName(e.GetKind())), t.kindWidth) + "  " +
+	line := e.Time.Local().Format(time.DateTime) + "  " +
+		pad(eventLabel(string(e.Kind)), t.kindWidth) + "  " +
 		pad(eventName(e), t.nameWidth) + "  " +
 		eventAction(e, t.actionWidth, t.palette)
 	_, err := fmt.Fprintln(t.w, line)
@@ -194,9 +195,9 @@ func (t *eventTable) writeOne(e *dicerdv1.Event) error {
 
 // eventName is the name of an event's resource as the table shows it: an
 // image's as people write it, and none wider than maxNameWidth.
-func eventName(e *dicerdv1.Event) string {
-	name := e.GetName()
-	if e.GetKind() == dicerdv1.EventKind_EVENT_KIND_IMAGE {
+func eventName(e dicer.Event) string {
+	name := e.Name
+	if e.Kind == dicer.EventKindImage {
 		name = reference.FamiliarString(name)
 	}
 	return shorten(name, maxNameWidth)
@@ -223,19 +224,19 @@ func pad(s string, n int) string {
 
 // eventAction formats an event's coloured action, padded to width, and its
 // message.
-func eventAction(e *dicerdv1.Event, width int, p palette) string {
-	action := eventLabel(enumName(e.GetAction()))
-	if e.GetMessage() == "" {
-		return p.event(e.GetAction(), action)
+func eventAction(e dicer.Event, width int, p palette) string {
+	action := eventLabel(string(e.Action))
+	if e.Message == "" {
+		return p.event(e.Action, action)
 	}
 
-	return p.event(e.GetAction(), pad(action, width)) + "  " + e.GetMessage()
+	return p.event(e.Action, pad(action, width)) + "  " + e.Message
 }
 
-// eventLabel humanises a kind or action: "snapshot-restored" is "Snapshot
+// eventLabel humanises a kind or action: "snapshot_restored" is "Snapshot
 // restored".
 func eventLabel(s string) string {
-	return capitalize(strings.ReplaceAll(s, "-", " "))
+	return capitalize(strings.ReplaceAll(s, "_", " "))
 }
 
 // capitalize upper-cases the first letter of s.
@@ -251,15 +252,15 @@ func capitalize(s string) string {
 // time alone for today's.
 //
 //	09:49:48  Unhealthy   Health check "tcp :3000" failed 3 times in a row: connection refused
-func eventLines(recent []*dicerdv1.Event, p palette) []string {
+func eventLines(recent []dicer.Event, p palette) []string {
 	actionWidth := 0
 	for _, e := range recent {
-		actionWidth = max(actionWidth, width(eventLabel(enumName(e.GetAction()))))
+		actionWidth = max(actionWidth, width(eventLabel(string(e.Action))))
 	}
 
 	lines := make([]string, 0, len(recent))
 	for _, e := range recent {
-		lines = append(lines, eventTime(timeOf(e.GetTime()))+"  "+eventAction(e, actionWidth, p))
+		lines = append(lines, eventTime(e.Time)+"  "+eventAction(e, actionWidth, p))
 	}
 
 	return lines
@@ -277,21 +278,29 @@ func eventTime(t time.Time) string {
 
 // recentEvents returns an instance's last events, for inspect. A daemon too
 // old to keep events has none to show, which is no error.
-func recentEvents(ctx context.Context, client *dicer.Client, instanceID string) ([]*dicerdv1.Event, error) {
-	var out []*dicerdv1.Event
-
-	err := streamEvents(ctx, client, &dicerdv1.GetEventsRequest{
-		Kind:  dicerdv1.EventKind_EVENT_KIND_INSTANCE,
-		Id:    instanceID,
+func recentEvents(ctx context.Context, client *dicer.Client, instanceID string) ([]dicer.Event, error) {
+	stream, err := client.Events(ctx, dicer.EventOptions{
+		Kind:  dicer.EventKindInstance,
+		ID:    instanceID,
 		Limit: maxRecentEvents,
-	}, func(e *dicerdv1.Event) { out = append(out, e) }, nil)
-	switch {
-	case errors.Is(err, io.EOF), err == nil:
-		return out, nil
-	case status.Code(err) == codes.Unimplemented:
-		return nil, nil
-	default:
+	})
+	if err != nil {
 		return nil, err
+	}
+	defer func() { _ = stream.Close() }()
+
+	var out []dicer.Event
+	for {
+		batch, err := stream.Next()
+		switch {
+		case errors.Is(err, io.EOF):
+			return out, nil
+		case errors.Is(err, dicer.ErrUnimplemented):
+			return nil, nil
+		case err != nil:
+			return nil, err
+		}
+		out = append(out, batch.Events...)
 	}
 }
 

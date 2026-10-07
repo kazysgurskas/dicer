@@ -99,7 +99,7 @@ func copyToInstance(cmd *cobra.Command, src string, dest copyEndpoint) (int64, e
 	}()
 
 	counted := &countingReader{r: pr}
-	err = sendArchive(cmd.Context(), client, dest.instance, dest.path, counted)
+	err = client.Instances.CopyArchiveTo(cmd.Context(), dest.instance, dest.path, counted)
 	_ = pr.CloseWithError(err)
 
 	return counted.n, err
@@ -114,38 +114,38 @@ func copyFromInstance(cmd *cobra.Command, src copyEndpoint, dest string) (int64,
 	}
 	defer cleanup()
 
-	var (
-		pr, pw  = io.Pipe()
-		recvErr error
-	)
-	go func() {
-		recvErr = receiveArchive(cmd.Context(), client, src.instance, src.path, pw)
-		_ = pw.CloseWithError(recvErr)
-	}()
+	r, err := client.Instances.CopyArchiveFrom(cmd.Context(), src.instance, src.path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = r.Close() }()
 
-	counted := &countingReader{r: pr}
+	counted := &countingReader{r: r}
 	err = archive.Unpack(counted, dest)
-	_ = pr.CloseWithError(err)
 
 	// A failure from the other end is reported as it said it, not as a
 	// broken archive: "no such file", not "read archive: ...".
-	if err != nil && recvErr != nil {
-		return counted.n, recvErr
+	if err != nil && counted.err != nil && !errors.Is(counted.err, io.EOF) {
+		return counted.n, counted.err
 	}
 
 	return counted.n, err
 }
 
 // countingReader counts what is read through it, so that a copy can report
-// how much it moved.
+// how much it moved, and keeps the error reading ended with.
 type countingReader struct {
-	r io.Reader
-	n int64
+	r   io.Reader
+	n   int64
+	err error
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
+	if err != nil {
+		c.err = err
+	}
 
 	return n, err
 }

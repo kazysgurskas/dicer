@@ -10,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
 func TestParseSince(t *testing.T) {
@@ -38,27 +36,18 @@ func TestParseSince(t *testing.T) {
 }
 
 // testEvent is an event about the instance grafana. action is written as
-// the CLI writes it: "snapshot-restored".
-func testEvent(action, message string) *dicerdv1.Event {
-	return &dicerdv1.Event{
-		Time: timestamppb.New(time.Date(2026, 9, 1, 9, 49, 48, 0, time.Local)),
-		Kind: dicerdv1.EventKind_EVENT_KIND_INSTANCE, Id: "abc", Name: "grafana",
-		Action: eventActionNamed(action), Message: message,
+// the client writes it: "snapshot_restored".
+func testEvent(action, message string) dicer.Event {
+	return dicer.Event{
+		Time: time.Date(2026, 9, 1, 9, 49, 48, 0, time.Local),
+		Kind: dicer.EventKindInstance, ID: "abc", Name: "grafana",
+		Action: dicer.EventAction(action), Message: message,
 		Attributes: map[string]string{"failing_streak": "3"},
 	}
 }
 
-// eventActionNamed is the action enumName writes as name.
-func eventActionNamed(name string) dicerdv1.EventAction {
-	a, err := parseEnum[dicerdv1.EventAction]("action", name)
-	if err != nil {
-		panic(err)
-	}
-	return a
-}
-
 // writeEvents writes list as one batch of dicer events.
-func writeEvents(t *testing.T, format string, list ...*dicerdv1.Event) string {
+func writeEvents(t *testing.T, format string, list ...dicer.Event) string {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := (&eventTable{w: &buf, format: format}).write(list); err != nil {
@@ -67,9 +56,9 @@ func writeEvents(t *testing.T, format string, list ...*dicerdv1.Event) string {
 	return buf.String()
 }
 
-func imageEvent(name, action, message string) *dicerdv1.Event {
+func imageEvent(name, action, message string) dicer.Event {
 	e := testEvent(action, message)
-	e.Kind, e.Id, e.Name = dicerdv1.EventKind_EVENT_KIND_IMAGE, "", name
+	e.Kind, e.ID, e.Name = dicer.EventKindImage, "", name
 
 	return e
 }
@@ -95,9 +84,9 @@ func TestEventColumnsFitTheEvents(t *testing.T) {
 func TestFollowedEventsWidenTheColumns(t *testing.T) {
 	var buf bytes.Buffer
 	table := &eventTable{w: &buf, format: "text"}
-	_ = table.write([]*dicerdv1.Event{testEvent("started", "a"), testEvent("healthy", "b")})
-	_ = table.write([]*dicerdv1.Event{testEvent("stopped", "c")})
-	_ = table.write([]*dicerdv1.Event{imageEvent("ghcr.io/example/app:1.2", "pulled", "d")})
+	_ = table.write([]dicer.Event{testEvent("started", "a"), testEvent("healthy", "b")})
+	_ = table.write([]dicer.Event{testEvent("stopped", "c")})
+	_ = table.write([]dicer.Event{imageEvent("ghcr.io/example/app:1.2", "pulled", "d")})
 
 	want := "2026-09-01 09:49:48  Instance  grafana  Started  a\n" +
 		"2026-09-01 09:49:48  Instance  grafana  Healthy  b\n" +
@@ -130,15 +119,18 @@ func TestWriteEventJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(line), &record); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, line)
 	}
-	if record["action"] != "EVENT_ACTION_STARTED" || record["name"] != "grafana" || strings.Count(line, "\n") != 1 {
-		t.Errorf("json = %s, want one line with the API's field names", line)
+	if record["action"] != "started" || record["name"] != "grafana" || strings.Count(line, "\n") != 1 {
+		t.Errorf("json = %s, want one line with the client's field names", line)
 	}
 }
 
 // inspect ends with what happened to the instance lately, lined up.
 func TestInspectShowsRecentEvents(t *testing.T) {
-	instance := &dicerdv1.Instance{Name: "grafana", ImageRef: "grafana/grafana", State: stateRunning}
-	recent := []*dicerdv1.Event{
+	instance := dicer.Instance{
+		InstanceSpec: dicer.InstanceSpec{Name: "grafana", ImageRef: "grafana/grafana"},
+		State:        dicer.InstanceStateRunning,
+	}
+	recent := []dicer.Event{
 		testEvent("unhealthy", "Check failed 3 times: timed out after 5s"),
 		testEvent("restarting", "Restart 1 in 1s"),
 		testEvent("started", "Restart 1, cloud-hypervisor v49.0.0, IP 172.20.0.2"),
@@ -175,11 +167,11 @@ func TestEventColours(t *testing.T) {
 		"restarting": ansiYellow, "collected": ansiYellow,
 		"died": ansiRed, "unhealthy": ansiRed,
 	} {
-		if got := p.event(eventActionNamed(action), action); got != colour+action+ansiReset {
+		if got := p.event(dicer.EventAction(action), action); got != colour+action+ansiReset {
 			t.Errorf("event(%s) = %q, want it in %q", action, got, colour)
 		}
 	}
-	if got := p.event(dicerdv1.EventAction_EVENT_ACTION_CREATED, "created"); got != "created" {
+	if got := p.event(dicer.EventActionCreated, "created"); got != "created" {
 		t.Errorf("created is painted %q, want it plain", got)
 	}
 }
@@ -199,7 +191,7 @@ func TestEventTime(t *testing.T) {
 func TestEventLabel(t *testing.T) {
 	for in, want := range map[string]string{
 		"created":           "Created",
-		"snapshot-restored": "Snapshot restored",
+		"snapshot_restored": "Snapshot restored",
 		"instance":          "Instance",
 		"":                  "",
 	} {
@@ -209,16 +201,17 @@ func TestEventLabel(t *testing.T) {
 	}
 }
 
-// The API's own values are what scripts match on: JSON keeps them.
-func TestJSONEventsKeepTheAPIsValues(t *testing.T) {
-	line := writeEvents(t, "json", imageEvent("docker.io/library/busybox:latest", "snapshot-restored", "before"))
+// JSON writes the values as the CLI and the client write them, which
+// scripts match on.
+func TestJSONEventsWriteTheClientsValues(t *testing.T) {
+	line := writeEvents(t, "json", imageEvent("docker.io/library/busybox:latest", "snapshot_restored", "before"))
 	var record map[string]any
 	if err := json.Unmarshal([]byte(line), &record); err != nil {
 		t.Fatal(err)
 	}
-	if record["action"] != "EVENT_ACTION_SNAPSHOT_RESTORED" || record["kind"] != "EVENT_KIND_IMAGE" ||
+	if record["action"] != "snapshot_restored" || record["kind"] != "image" ||
 		record["message"] != "before" ||
 		record["name"] != "docker.io/library/busybox:latest" {
-		t.Errorf("json = %s, want the API's values", line)
+		t.Errorf("json = %s, want the client's values", line)
 	}
 }

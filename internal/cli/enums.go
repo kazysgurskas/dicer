@@ -5,121 +5,89 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
-	"google.golang.org/protobuf/reflect/protoreflect"
-
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
+	"github.com/konradasb/dicer"
 )
 
-// protoEnum is a generated API enum, such as dicerdv1.RestartMode.
-type protoEnum interface {
-	~int32
-	protoreflect.Enum
-}
-
-// enumName is how the CLI writes an API enum value: its name without the
-// enum's prefix, lower case, with hyphens. RESTART_MODE_ON_FAILURE is
-// "on-failure". Unspecified is "".
-func enumName[E protoEnum](v E) string {
-	if v == 0 {
-		return ""
+// The values of the client's enumerations that the CLI takes on its
+// command line, in the order it offers them.
+var (
+	instanceStates = []dicer.InstanceState{
+		dicer.InstanceStateStopped, dicer.InstanceStateStarting, dicer.InstanceStateRunning,
+		dicer.InstanceStatePaused, dicer.InstanceStateStopping, dicer.InstanceStateRestarting,
+		dicer.InstanceStateFailed, dicer.InstanceStateStandby,
 	}
-
-	d := v.Descriptor()
-	value := d.Values().ByNumber(v.Number())
-	if value == nil {
-		return strconv.Itoa(int(v))
+	hypervisorTypes = []dicer.HypervisorType{dicer.HypervisorTypeCloudHypervisor, dicer.HypervisorTypeFirecracker}
+	initModes       = []dicer.InitMode{dicer.InitModeAuto, dicer.InitModeExec, dicer.InitModeSystemd}
+	pullPolicies    = []dicer.PullPolicy{dicer.PullPolicyMissing, dicer.PullPolicyAlways, dicer.PullPolicyNever}
+	restartModes    = []dicer.RestartMode{
+		dicer.RestartModeNo, dicer.RestartModeOnFailure, dicer.RestartModeUnlessStopped, dicer.RestartModeAlways,
 	}
-
-	name := strings.TrimPrefix(string(value.Name()), enumPrefix(d))
-	return strings.ReplaceAll(strings.ToLower(name), "_", "-")
-}
-
-// parseEnum reads a value written as enumName writes it.
-func parseEnum[E protoEnum](what, s string) (E, error) {
-	var zero E
-	d := zero.Descriptor()
-
-	name := enumPrefix(d) + strings.ToUpper(strings.ReplaceAll(s, "-", "_"))
-	if value := d.Values().ByName(protoreflect.Name(name)); value != nil && value.Number() != 0 {
-		return E(value.Number()), nil
+	mountTypes    = []dicer.MountType{dicer.MountTypeVolume, dicer.MountTypeFile, dicer.MountTypeTmpfs}
+	protocols     = []dicer.Protocol{dicer.ProtocolTCP, dicer.ProtocolUDP}
+	architectures = []dicer.Architecture{dicer.ArchitectureX86_64, dicer.ArchitectureAArch64}
+	logSources    = []dicer.LogSource{dicer.LogSourceGuest, dicer.LogSourceHypervisor}
+	eventKinds    = []dicer.EventKind{
+		dicer.EventKindInstance, dicer.EventKindImage, dicer.EventKindNetwork,
+		dicer.EventKindVolume, dicer.EventKindKernel, dicer.EventKindSnapshot,
 	}
+)
 
-	return zero, fmt.Errorf("invalid %s %q: want %s", what, s, orList(enumNames[E]()))
-}
-
-// enumNames returns every value of an enum but unspecified, as enumName
-// writes them.
-func enumNames[E protoEnum]() []string {
-	var zero E
-	values := zero.Descriptor().Values()
-
-	names := make([]string, 0, values.Len()-1)
-	for i := range values.Len() {
-		if n := values.Get(i).Number(); n != 0 {
-			names = append(names, enumName(E(n)))
+// parseChoice reads one of values, as the client writes it, in any case and
+// with underscores and hyphens alike: "on-failure", "X86_64".
+func parseChoice[T ~string](what, s string, values []T) (T, error) {
+	for _, v := range values {
+		if normalChoice(string(v)) == normalChoice(s) {
+			return v, nil
 		}
+	}
+
+	return "", fmt.Errorf("invalid %s %q: want %s", what, s, orList(choiceNames(values)))
+}
+
+// normalChoice returns s in lower case, with hyphens for underscores.
+func normalChoice(s string) string {
+	return strings.ReplaceAll(strings.ToLower(s), "_", "-")
+}
+
+// choiceNames returns values as strings.
+func choiceNames[T ~string](values []T) []string {
+	names := make([]string, len(values))
+	for i, v := range values {
+		names[i] = string(v)
 	}
 	return names
 }
 
-// enumPrefix is what every value of an enum is named with: HYPERVISOR_TYPE_,
-// from HYPERVISOR_TYPE_UNSPECIFIED.
-func enumPrefix(d protoreflect.EnumDescriptor) string {
-	return strings.TrimSuffix(string(d.Values().ByNumber(0).Name()), "UNSPECIFIED")
-}
-
-// The API's enum values the CLI refers to, named as it would write them.
-const (
-	stateStopped    = dicerdv1.InstanceState_INSTANCE_STATE_STOPPED
-	stateStarting   = dicerdv1.InstanceState_INSTANCE_STATE_STARTING
-	stateRunning    = dicerdv1.InstanceState_INSTANCE_STATE_RUNNING
-	statePaused     = dicerdv1.InstanceState_INSTANCE_STATE_PAUSED
-	stateStandby    = dicerdv1.InstanceState_INSTANCE_STATE_STANDBY
-	stateStopping   = dicerdv1.InstanceState_INSTANCE_STATE_STOPPING
-	stateRestarting = dicerdv1.InstanceState_INSTANCE_STATE_RESTARTING
-	stateFailed     = dicerdv1.InstanceState_INSTANCE_STATE_FAILED
-
-	healthStarting  = dicerdv1.HealthStatus_HEALTH_STATUS_STARTING
-	healthHealthy   = dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY
-	healthUnhealthy = dicerdv1.HealthStatus_HEALTH_STATUS_UNHEALTHY
-)
-
 // stateName is an instance state as the CLI shows it on its own: "Running".
-func stateName(s dicerdv1.InstanceState) string {
-	return capitalize(enumName(s))
+func stateName(s dicer.InstanceState) string {
+	return capitalize(string(s))
 }
 
 // isActive reports whether an instance in state s has a live guest.
-func isActive(s dicerdv1.InstanceState) bool {
-	return s == stateRunning || s == statePaused
+func isActive(s dicer.InstanceState) bool {
+	return s == dicer.InstanceStateRunning || s == dicer.InstanceStatePaused
 }
 
-// archName is a kernel's architecture as uname -m names it: "x86_64".
-func archName(a dicerdv1.Architecture) string {
-	return strings.ReplaceAll(enumName(a), "-", "_")
-}
-
-// protocolName is a port mapping's protocol: "tcp" when unspecified, as
-// the daemon takes it.
-func protocolName(p dicerdv1.Protocol) string {
-	if p == dicerdv1.Protocol_PROTOCOL_UNSPECIFIED {
-		return enumName(dicerdv1.Protocol_PROTOCOL_TCP)
+// protocolName is a port mapping's protocol: "tcp" when unset, as the
+// daemon takes it.
+func protocolName(p dicer.Protocol) string {
+	if p == "" {
+		return string(dicer.ProtocolTCP)
 	}
-	return enumName(p)
+	return string(p)
 }
 
 // restartPolicyName is a restart policy as --restart takes it:
 // "on-failure:5", or "no" for none.
-func restartPolicyName(p *dicerdv1.RestartPolicy) string {
-	mode := p.GetMode()
-	if mode == dicerdv1.RestartMode_RESTART_MODE_UNSPECIFIED {
-		mode = dicerdv1.RestartMode_RESTART_MODE_NO
+func restartPolicyName(p dicer.RestartPolicy) string {
+	mode := p.Mode
+	if mode == "" {
+		mode = dicer.RestartModeNo
 	}
-	if n := p.GetMaxRetries(); n > 0 {
-		return fmt.Sprintf("%s:%d", enumName(mode), n)
+	if p.MaxRetries > 0 {
+		return fmt.Sprintf("%s:%d", mode, p.MaxRetries)
 	}
-	return enumName(mode)
+	return string(mode)
 }

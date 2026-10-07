@@ -8,17 +8,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/printer"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 type printableImage struct {
-	Images []*dicerdv1.Image
+	Images []dicer.Image
 }
 
 func (p *printableImage) Columns() []string {
@@ -29,11 +27,11 @@ func (p *printableImage) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Images))
 	for _, image := range p.Images {
 		rows = append(rows, map[string]any{
-			"Name":      image.GetName(),
-			"Digest":    image.GetDigest(),
-			"Size":      humanize.Bytes(image.GetSizeBytes()),
-			"Created":   age(timeOf(image.GetCreateTime())),
-			"Last used": age(timeOf(image.GetLastUsedTime())),
+			"Name":      image.Name,
+			"Digest":    image.Digest,
+			"Size":      humanize.Bytes(image.SizeBytes),
+			"Created":   age(image.CreateTime),
+			"Last used": age(image.LastUsedTime),
 		})
 	}
 	return rows
@@ -74,19 +72,19 @@ func newImagePullCommand() *cobra.Command {
 			defer reporter.done()
 
 			start := time.Now()
-			image, err := pullImage(cmd.Context(), client, args[0], reporter.report)
+			image, err := client.Images.Pull(cmd.Context(), args[0], reporter.report)
 			if err != nil {
 				return err
 			}
 			reporter.done()
 
 			if !reporter.fetched {
-				succeeded(cmd, "Image %s is up to date (%s)", image.GetName(), reference.ShortDigest(image.GetDigest()))
+				succeeded(cmd, "Image %s is up to date (%s)", image.Name, reference.ShortDigest(image.Digest))
 
 				return nil
 			}
-			succeeded(cmd, "Image %s pulled in %s (%s, %s)", image.GetName(),
-				humanize.Duration(time.Since(start)), reference.ShortDigest(image.GetDigest()), humanize.Bytes(image.GetSizeBytes()))
+			succeeded(cmd, "Image %s pulled in %s (%s, %s)", image.Name,
+				humanize.Duration(time.Since(start)), reference.ShortDigest(image.Digest), humanize.Bytes(image.SizeBytes))
 
 			return nil
 		},
@@ -106,12 +104,12 @@ func newImageListCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			resp, err := client.ListImages(cmd.Context(), &dicerdv1.ListImagesRequest{})
+			list, err := client.Images.List(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			return render(cmd, &printableImage{Images: resp.GetImages()})
+			return render(cmd, &printableImage{Images: list})
 		},
 	}
 
@@ -121,15 +119,15 @@ func newImageListCommand() *cobra.Command {
 }
 
 func newImageShowCommand() *cobra.Command {
-	return newShowCommand(showSpec[*dicerdv1.Image]{
+	return newShowCommand(showSpec[dicer.Image]{
 		use:   "show REF",
 		short: "Show a pulled image",
 		arg:   "an image",
 		list:  listImages,
-		get: func(ctx context.Context, client *dicer.Client, ref string) (*dicerdv1.Image, error) {
-			return client.GetImage(ctx, &dicerdv1.GetImageRequest{Ref: ref})
+		get: func(ctx context.Context, client *dicer.Client, ref string) (dicer.Image, error) {
+			return client.Images.Get(ctx, ref)
 		},
-		printable: func(v *dicerdv1.Image) printer.Printable { return &printableImage{Images: []*dicerdv1.Image{v}} },
+		printable: func(v dicer.Image) printer.Printable { return &printableImage{Images: []dicer.Image{v}} },
 	})
 }
 
@@ -147,8 +145,8 @@ func newImageDeleteCommand() *cobra.Command {
 			force, _ := cmd.Flags().GetBool("force")
 
 			return eachNameOrAll(cmd, args, listImages, "images", func(client *dicer.Client, ref string) error {
-				if _, err := client.DeleteImage(cmd.Context(), &dicerdv1.DeleteImageRequest{Ref: ref, Force: force}); err != nil {
-					return withHint(err, codes.FailedPrecondition, "use -f to delete it anyway")
+				if err := client.Images.Delete(cmd.Context(), ref, dicer.DeleteOptions{Force: force}); err != nil {
+					return withHint(err, dicer.ErrFailedPrecondition, "use -f to delete it anyway")
 				}
 
 				succeeded(cmd, "Image %s deleted", ref)
@@ -185,16 +183,16 @@ func newImagePruneCommand() *cobra.Command {
 			}
 			defer cleanup()
 
-			result, err := client.PruneImages(cmd.Context(), &dicerdv1.PruneImagesRequest{})
+			result, err := client.Images.Prune(cmd.Context())
 			if err != nil {
 				return err
 			}
 
-			for _, image := range result.GetImages() {
-				succeeded(cmd, "Deleted %s", image.GetName())
+			for _, image := range result.Images {
+				succeeded(cmd, "Deleted %s", image.Name)
 			}
 			succeeded(cmd, "Reclaimed %s from %d image(s)",
-				humanize.Bytes(result.GetReclaimedBytes()), len(result.GetImages()))
+				humanize.Bytes(result.ReclaimedBytes), len(result.Images))
 
 			return nil
 		},

@@ -15,8 +15,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/humanize"
-	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // healthCheckFlags is a health check as the flags give it.
@@ -31,7 +31,7 @@ type healthCheckFlags struct {
 	Interval    time.Duration
 	Timeout     time.Duration
 	StartPeriod time.Duration
-	Retries     int32
+	Retries     int
 
 	// Disabled switches health checking off, the image's included.
 	Disabled bool
@@ -54,13 +54,13 @@ func addHealthCheckFlags(flags *pflag.FlagSet) {
 	flags.Duration("health-interval", 0, "Time between health checks (default 10s)")
 	flags.Duration("health-timeout", 0, "Time a health check may take (default 5s)")
 	flags.Duration("health-start-period", 0, "Time after a start in which failed checks do not count (default none)")
-	flags.Int32("health-retries", 0, "Failed checks in a row that make the instance unhealthy (default 3)")
+	flags.Int("health-retries", 0, "Failed checks in a row that make the instance unhealthy (default 3)")
 	flags.Bool("no-healthcheck", false, "Check no health, not even as the image says to")
 }
 
 // healthCheckFromFlags returns the health check the flags give, or nil if
 // none were given. It replaces any existing check whole.
-func healthCheckFromFlags(cmd *cobra.Command) (*dicerdv1.HealthCheck, error) {
+func healthCheckFromFlags(cmd *cobra.Command) (*dicer.HealthCheck, error) {
 	flags := cmd.Flags()
 	if !slices.ContainsFunc(healthCheckFlagNames, flags.Changed) {
 		return nil, nil //nolint:nilnil // no health flag given is not an error
@@ -73,7 +73,7 @@ func healthCheckFromFlags(cmd *cobra.Command) (*dicerdv1.HealthCheck, error) {
 	f.Interval, _ = flags.GetDuration("health-interval")
 	f.Timeout, _ = flags.GetDuration("health-timeout")
 	f.StartPeriod, _ = flags.GetDuration("health-start-period")
-	f.Retries, _ = flags.GetInt32("health-retries")
+	f.Retries, _ = flags.GetInt("health-retries")
 	f.Disabled, _ = flags.GetBool("no-healthcheck")
 
 	return f.healthCheck()
@@ -81,7 +81,7 @@ func healthCheckFromFlags(cmd *cobra.Command) (*dicerdv1.HealthCheck, error) {
 
 // healthCheck converts what was given into a health check, checking what the
 // daemon cannot: that it is said in one way. The daemon checks the rest.
-func (f healthCheckFlags) healthCheck() (*dicerdv1.HealthCheck, error) {
+func (f healthCheckFlags) healthCheck() (*dicer.HealthCheck, error) {
 	probes := 0
 	for _, set := range []bool{f.Cmd != "", f.HTTP != "", f.TCP != 0} {
 		if set {
@@ -93,36 +93,36 @@ func (f healthCheckFlags) healthCheck() (*dicerdv1.HealthCheck, error) {
 		if probes > 0 || f.Interval != 0 || f.Timeout != 0 || f.StartPeriod != 0 || f.Retries != 0 {
 			return nil, errors.New("--no-healthcheck cannot be given with other health check settings")
 		}
-		return &dicerdv1.HealthCheck{Disabled: true}, nil
+		return &dicer.HealthCheck{Disabled: true}, nil
 	}
 	if probes != 1 {
 		return nil, errors.New("a health check needs exactly one of --health-cmd, --health-http and --health-tcp")
 	}
 
-	c := &dicerdv1.HealthCheck{
-		Interval:    duration(f.Interval),
-		Timeout:     duration(f.Timeout),
-		StartPeriod: duration(f.StartPeriod),
+	c := &dicer.HealthCheck{
+		Interval:    f.Interval,
+		Timeout:     f.Timeout,
+		StartPeriod: f.StartPeriod,
 		Retries:     f.Retries,
 	}
 	switch {
 	case f.Cmd != "":
-		c.Probe = &dicerdv1.HealthCheck_Exec{Exec: &dicerdv1.HealthCheckExec{Command: []string{"/bin/sh", "-c", f.Cmd}}}
+		c.Exec = []string{"/bin/sh", "-c", f.Cmd}
 	case f.HTTP != "":
 		port, path, err := parseHTTPTarget(f.HTTP)
 		if err != nil {
 			return nil, err
 		}
-		c.Probe = &dicerdv1.HealthCheck_Http{Http: &dicerdv1.HealthCheckHTTP{Port: port, Path: path}}
+		c.HTTP = &dicer.HTTPProbe{Port: port, Path: path}
 	default:
-		c.Probe = &dicerdv1.HealthCheck_Tcp{Tcp: &dicerdv1.HealthCheckTCP{Port: uint32(f.TCP)}}
+		c.TCP = &dicer.TCPProbe{Port: f.TCP}
 	}
 
 	return c, nil
 }
 
 // parseHTTPTarget parses PORT[/path]: "3000/api/health", "8080".
-func parseHTTPTarget(s string) (uint32, string, error) {
+func parseHTTPTarget(s string) (int, string, error) {
 	portText, path, _ := strings.Cut(s, "/")
 	port, err := strconv.ParseUint(portText, 10, 16)
 	if err != nil {
@@ -132,18 +132,21 @@ func parseHTTPTarget(s string) (uint32, string, error) {
 		path = "/" + path
 	}
 
-	return uint32(port), path, nil
+	return int(port), path, nil
 }
 
 // healthSuffix returns a status suffix like " (healthy)", or "".
-func healthSuffix(instance *dicerdv1.Instance) string {
-	switch status := instance.GetHealth().GetStatus(); status {
-	case dicerdv1.HealthStatus_HEALTH_STATUS_UNSPECIFIED:
+func healthSuffix(instance dicer.Instance) string {
+	if instance.Health == nil {
 		return ""
-	case healthStarting:
+	}
+	switch status := instance.Health.Status; status {
+	case "":
+		return ""
+	case dicer.HealthStatusStarting:
 		return " (health: starting)"
 	default:
-		return " (" + enumName(status) + ")"
+		return " (" + string(status) + ")"
 	}
 }
 
@@ -151,41 +154,41 @@ func healthSuffix(instance *dicerdv1.Instance) string {
 // runs, then its other timing -- "http :3000/api/health every 10s",
 // "timeout 5s, 3 retries". Unset timings are left out, to be taken as the
 // defaults.
-func healthCheckLines(c *dicerdv1.HealthCheck) []string {
+func healthCheckLines(c *dicer.HealthCheck) []string {
 	if c == nil {
 		return nil
 	}
-	if c.GetDisabled() {
+	if c.Disabled {
 		return []string{"disabled"}
 	}
 
 	var probe string
-	switch p := c.GetProbe().(type) {
-	case *dicerdv1.HealthCheck_Exec:
-		command := p.Exec.GetCommand()
+	switch {
+	case len(c.Exec) > 0:
+		command := c.Exec
 		if len(command) == 3 && command[0] == "/bin/sh" && command[1] == "-c" {
 			command = command[2:]
 		}
 		probe = "exec " + shellJoin(command)
-	case *dicerdv1.HealthCheck_Http:
-		probe = fmt.Sprintf("http :%d%s", p.Http.GetPort(), cmp.Or(p.Http.GetPath(), "/"))
-	case *dicerdv1.HealthCheck_Tcp:
-		probe = fmt.Sprintf("tcp :%d", p.Tcp.GetPort())
+	case c.HTTP != nil:
+		probe = fmt.Sprintf("http :%d%s", c.HTTP.Port, cmp.Or(c.HTTP.Path, "/"))
+	case c.TCP != nil:
+		probe = fmt.Sprintf("tcp :%d", c.TCP.Port)
 	default:
 		return nil
 	}
-	if d := c.GetInterval().AsDuration(); d != 0 {
-		probe += " every " + d.String()
+	if c.Interval != 0 {
+		probe += " every " + c.Interval.String()
 	}
 
 	var timing []string
-	if d := c.GetTimeout().AsDuration(); d != 0 {
-		timing = append(timing, "timeout "+d.String())
+	if c.Timeout != 0 {
+		timing = append(timing, "timeout "+c.Timeout.String())
 	}
-	if d := c.GetStartPeriod().AsDuration(); d != 0 {
-		timing = append(timing, "start period "+d.String())
+	if c.StartPeriod != 0 {
+		timing = append(timing, "start period "+c.StartPeriod.String())
 	}
-	switch n := c.GetRetries(); n {
+	switch n := c.Retries; n {
 	case 0:
 	case 1:
 		timing = append(timing, "1 retry")
@@ -200,24 +203,24 @@ func healthCheckLines(c *dicerdv1.HealthCheck) []string {
 }
 
 // healthLines describes an instance's health and check for inspect.
-func healthLines(instance *dicerdv1.Instance, p palette) []string {
-	h := instance.GetHealth()
+func healthLines(instance dicer.Instance, p palette) []string {
+	h := instance.Health
 	if h == nil {
-		return healthCheckLines(instance.GetHealthCheck())
+		return healthCheckLines(instance.HealthCheck)
 	}
 
-	verdict := p.status(enumName(h.GetStatus()))
-	if last := timeOf(h.GetLastCheckTime()); !last.IsZero() {
-		verdict += ", checked " + age(last)
+	verdict := p.status(string(h.Status))
+	if !h.LastCheckTime.IsZero() {
+		verdict += ", checked " + age(h.LastCheckTime)
 	}
-	if n := h.GetFailingStreak(); n > 0 {
+	if n := h.FailingStreak; n > 0 {
 		verdict += fmt.Sprintf(", %s failed in a row", humanize.Count(n, "check"))
 	}
 
 	out := []string{verdict}
-	if last := firstLine(h.GetLastOutput()); last != "" && h.GetStatus() != healthHealthy {
+	if last := firstLine(h.LastOutput); last != "" && h.Status != dicer.HealthStatusHealthy {
 		out = append(out, "last probe: "+last)
 	}
 
-	return append(out, healthCheckLines(h.GetCheck())...)
+	return append(out, healthCheckLines(&h.Check)...)
 }
