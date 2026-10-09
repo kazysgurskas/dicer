@@ -1,0 +1,82 @@
+{{- /*
+  Renders a console block: commands after a "$ " prompt, and their output.
+  Chroma's console lexer highlights one line at a time, so the lines a
+  command continues onto would be highlighted as its output: after a
+  trailing \, | or &&, inside an unclosed quote, or in a heredoc. This
+  groups each command with those lines, highlights it whole as bash, and
+  leaves the output to the console lexer. The block is otherwise rendered
+  as Hextra renders one, with its filename and copy button.
+*/ -}}
+{{- $filename := .Attributes.filename | default "" -}}
+
+{{- /* Each part is a command, without its prompt, or a line of output. */ -}}
+{{- $parts := slice -}}
+{{- $command := "" -}}
+{{- $inCommand := false -}}
+{{- $heredoc := "" -}}
+{{- range split (strings.TrimSuffix "\n" .Inner) "\n" -}}
+  {{- $continues := false -}}
+  {{- if $inCommand -}}
+    {{- if $heredoc -}}
+      {{- $continues = true -}}
+      {{- if eq (strings.TrimSpace .) $heredoc -}}{{- $heredoc = "" -}}{{- end -}}
+    {{- else -}}
+      {{- $trimmed := strings.TrimRight " " $command -}}
+      {{- $continues = or
+        (strings.HasSuffix $trimmed "\\")
+        (strings.HasSuffix $trimmed "|")
+        (strings.HasSuffix $trimmed "&&")
+        (eq (mod (strings.Count "'" (replaceRE `"[^"']*"` "" $command)) 2) 1)
+      -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $continues -}}
+    {{- $command = printf "%s\n%s" $command . -}}
+  {{- else -}}
+    {{- if $inCommand -}}{{- $parts = $parts | append (dict "command" $command) -}}{{- end -}}
+    {{- $inCommand = strings.HasPrefix . "$ " -}}
+    {{- if $inCommand -}}
+      {{- $command = strings.TrimPrefix "$ " . -}}
+    {{- else -}}
+      {{- $parts = $parts | append (dict "output" .) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- /* A heredoc starts on the line that names its delimiter. */ -}}
+  {{- if and $inCommand (not $heredoc) -}}
+    {{- with findRESubmatch `<<-?\s*['"]?(\w+)['"]?\s*$` . 1 -}}
+      {{- $heredoc = index (index . 0) 1 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if $inCommand -}}{{- $parts = $parts | append (dict "command" $command) -}}{{- end -}}
+
+{{- $lines := slice -}}
+{{- range $parts -}}
+  {{- if isset . "command" -}}
+    {{- $code := transform.Highlight (printf "%s\n" .command) "bash" | string -}}
+    {{- $code = replaceRE `(?s)^.*?<code[^>]*>(.*)</code>.*$` "$1" $code -}}
+    {{- $prompt := `<span class="line"><span class="cl"><span class="gp">$</span> ` -}}
+    {{- $lines = $lines | append (strings.Replace $code `<span class="line"><span class="cl">` $prompt 1) -}}
+  {{- else if .output -}}
+    {{- $code := transform.Highlight .output "console" | string -}}
+    {{- $lines = $lines | append (replaceRE `(?s)^.*?<code[^>]*>(.*)</code>.*$` "$1" $code) -}}
+  {{- else -}}
+    {{- /* An empty line highlights to nothing, so it is written as the
+      console lexer writes it within a block. */ -}}
+    {{- $lines = $lines | append "<span class=\"line\"><span class=\"cl\"><span class=\"err\">\n</span></span></span>" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* The blank lines are those Hextra's code blocks start with. */ -}}
+<div class="hextra-code-block hx:relative hx:mt-6 hx:first:mt-0 hx:group/code">{{ "\n\n" }}
+  {{- with $filename -}}
+    <div class="hextra-code-filename not-prose" dir="auto">{{ . }}</div>
+  {{- end -}}
+  <div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console">{{ delimit $lines "" | safeHTML }}</code></pre></div></div>
+
+  {{- if or (eq site.Params.highlight.copy.enable nil) (site.Params.highlight.copy.enable) -}}
+    {{- partialCached "components/codeblock-copy-button" (dict "filename" $filename) $filename -}}
+  {{- end -}}
+</div>
