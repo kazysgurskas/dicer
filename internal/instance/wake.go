@@ -42,7 +42,7 @@ type wakeListener struct {
 // instance lock, and calls it after anything that can change either.
 func (m *Manager) syncWaker(ctx context.Context, instanceID string) {
 	want := false
-	instance, err := m.definitions.Instance(instanceID)
+	instance, err := m.store.Instance(instanceID)
 	if err == nil && instance.StandbyAfter > 0 && m.onStandby(instance) {
 		status, err := m.Status(instance)
 		want = err == nil && !status.State.IsActive()
@@ -179,7 +179,7 @@ func (m *Manager) wake(ctx context.Context, instanceID string, wokenByPort uint1
 	defer lock.Unlock()
 	defer m.syncWaker(ctx, instanceID)
 
-	instance, err := m.definitions.Instance(instanceID)
+	instance, err := m.store.Instance(instanceID)
 	if err != nil {
 		return err
 	}

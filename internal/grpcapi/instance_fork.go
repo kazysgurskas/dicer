@@ -19,7 +19,7 @@ import (
 func (h *instanceHandler) ForkInstance(
 	ctx context.Context, req *dicerdv1.ForkInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	source, err := h.definitions.Instance(req.GetName())
+	source, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}

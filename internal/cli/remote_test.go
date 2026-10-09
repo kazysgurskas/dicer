@@ -38,7 +38,7 @@ func serveDaemon(t *testing.T) (address, value string) {
 	t.Helper()
 
 	logger := slog.New(slog.DiscardHandler)
-	definitions, err := filestore.NewManager(filestore.Config{
+	store, err := filestore.New(filestore.Config{
 		DataDir: filepath.Join(t.TempDir(), "data"),
 		Logger:  logger,
 	})
@@ -48,7 +48,7 @@ func serveDaemon(t *testing.T) (address, value string) {
 
 	cert, fingerprint := newTestCertificate(t)
 	secret := token.NewSecret()
-	err = definitions.CreateToken(token.Token{
+	err = store.CreateToken(token.Token{
 		ID: "id-laptop", Name: "laptop", SecretSHA256: token.SecretSHA256(secret), Scopes: []token.Scope{token.ScopeAll},
 	})
 	if err != nil {
@@ -60,7 +60,7 @@ func serveDaemon(t *testing.T) (address, value string) {
 		t.Fatal(err)
 	}
 
-	authentication := grpcapi.NewAuthentication(definitions, logger)
+	authentication := grpcapi.NewAuthentication(store, logger)
 	server := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}})),
 		grpc.ChainUnaryInterceptor(authentication.UnaryInterceptor(),
@@ -69,7 +69,7 @@ func serveDaemon(t *testing.T) (address, value string) {
 			grpcapi.StreamStatusInterceptor, grpcapi.StreamAuthorizationInterceptor),
 	)
 	grpcapi.NewServer(grpcapi.Config{
-		Definitions:      definitions,
+		Store:            store,
 		ListenAddress:    listener.Addr().String(),
 		Fingerprint:      fingerprint,
 		TokenFingerprint: fingerprint,

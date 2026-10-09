@@ -33,8 +33,8 @@ const (
 )
 
 // newMetrics builds the metrics this daemon records into, whether or not the
-// endpoint is served. The scrape-time sources read managers that
-// openDefinitionsAndAllocations and initServices create later.
+// endpoint is served. The scrape-time sources read the store and managers
+// that openStore, openNetworks and initServices create later.
 func (d *daemon) newMetrics() *metrics.Metrics {
 	return metrics.New(metrics.Options{
 		Version: version.Version,
@@ -94,11 +94,11 @@ func (d *daemon) instanceStats() []instance.Stats {
 // networkSummaries reads each network's address pool usage for a scrape. A
 // network whose allocations cannot be read is skipped.
 func (d *daemon) networkSummaries() []metrics.NetworkSummary {
-	if d.definitions == nil || d.networks == nil {
+	if d.store == nil || d.networks == nil {
 		return nil
 	}
 
-	networks := d.definitions.Networks()
+	networks := d.store.Networks()
 
 	summaries := make([]metrics.NetworkSummary, 0, len(networks))
 	for _, network := range networks {
@@ -140,11 +140,11 @@ func (d *daemon) imageSummary() metrics.ImageSummary {
 // kernelSummary counts the kernels defined, and sums what they hold on disk,
 // for a scrape. It reports nothing before the kernel manager exists.
 func (d *daemon) kernelSummary() metrics.KernelSummary {
-	if d.definitions == nil || d.kernels == nil {
+	if d.store == nil || d.kernels == nil {
 		return metrics.KernelSummary{}
 	}
 
-	kernels := d.definitions.Kernels()
+	kernels := d.store.Kernels()
 
 	summary := metrics.KernelSummary{Count: len(kernels)}
 	for _, k := range kernels {
@@ -158,11 +158,11 @@ func (d *daemon) kernelSummary() metrics.KernelSummary {
 // they take up on disk, for a scrape. It reports nothing before the volume
 // manager exists.
 func (d *daemon) volumeSummary() metrics.VolumeSummary {
-	if d.definitions == nil || d.volumes == nil {
+	if d.store == nil || d.volumes == nil {
 		return metrics.VolumeSummary{}
 	}
 
-	volumes := d.definitions.Volumes()
+	volumes := d.store.Volumes()
 
 	summary := metrics.VolumeSummary{Count: len(volumes)}
 	for _, v := range volumes {

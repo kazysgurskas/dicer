@@ -27,7 +27,7 @@ breaking` checks, and CI runs it on every pull request that touches `proto/`.
 ## Pull requests
 
 - Title pull requests as [Conventional Commits](https://www.conventionalcommits.org),
-  e.g. `fix(vm): release the TAP device when a start fails`. CI checks this.
+  e.g. `fix(instance): release the TAP device when a start fails`. CI checks this.
 - Sign off your commits (`git commit -s`) to certify the
   [Developer Certificate of Origin](https://developercertificate.org).
 - Add tests for behaviour you change, and documentation for anything a user

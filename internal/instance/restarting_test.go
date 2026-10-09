@@ -167,7 +167,7 @@ func TestStopCancelsPendingRestart(t *testing.T) {
 	if len(h.manager.restarts) != 0 {
 		t.Error("the restart is still pending")
 	}
-	if instance, _ := h.definitions.Instance(h.instance.ID); !instance.StoppedByUser {
+	if instance, _ := h.store.Instance(h.instance.ID); !instance.StoppedByUser {
 		t.Error("the stop is not recorded as a user's")
 	}
 }

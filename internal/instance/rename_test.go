@@ -29,10 +29,10 @@ func TestRename(t *testing.T) {
 		t.Errorf("ID = %q, want it unchanged (%q)", renamed.ID, h.instance.ID)
 	}
 
-	if _, err := h.definitions.Instance("web"); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := h.store.Instance("web"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("the old name still resolves: %v", err)
 	}
-	stored, err := h.definitions.Instance("web-2")
+	stored, err := h.store.Instance("web-2")
 	if err != nil {
 		t.Fatalf("the new name does not resolve: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestRename(t *testing.T) {
 	}
 
 	// Looking it up by ID finds it under its new name.
-	byID, err := h.definitions.Instance(h.instance.ID)
+	byID, err := h.store.Instance(h.instance.ID)
 	if err != nil || byID.Name != "web-2" {
 		t.Errorf("by ID = %+v, %v; want the renamed instance", byID, err)
 	}
@@ -77,7 +77,7 @@ func TestRenameAllowsAFailedInstance(t *testing.T) {
 	if _, err := h.manager.Rename(t.Context(), h.instance, "web-2"); err != nil {
 		t.Fatalf("Rename of a failed instance: %v", err)
 	}
-	if _, err := h.definitions.Instance("web-2"); err != nil {
+	if _, err := h.store.Instance("web-2"); err != nil {
 		t.Errorf("the failed instance was not renamed: %v", err)
 	}
 }
@@ -91,14 +91,14 @@ func TestRenameRefusesARunningInstance(t *testing.T) {
 		t.Errorf("Rename of a running instance = %v, want an invalid state", err)
 	}
 
-	if _, err := h.definitions.Instance("web"); err != nil {
+	if _, err := h.store.Instance("web"); err != nil {
 		t.Errorf("the refused rename moved the instance anyway: %v", err)
 	}
 }
 
 func TestRenameRefusesANameInUse(t *testing.T) {
 	h := newHarness(t)
-	seedInstance(t, h.definitions, "taken")
+	seedInstance(t, h.store, "taken")
 
 	if _, err := h.manager.Rename(t.Context(), h.instance, "taken"); !errors.Is(err, errdefs.ErrExists) {
 		t.Errorf("Rename onto a taken name = %v, want an already-exists error", err)

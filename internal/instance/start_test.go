@@ -21,11 +21,11 @@ import (
 // its data must outlive a restart, so every start attaches the disk the
 // volume was created with rather than making a new one.
 func TestResolveMountsAttachesExistingDisk(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	volumes := fakeVolumes{dir: t.TempDir()}
 	manager.volumes = volumes
 
-	definitions.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
+	store.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
 	disk := volumes.Path("vol-1")
 	if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
 	mounts, disks, err := manager.resolveMounts(instance)
@@ -50,11 +50,11 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 }
 
 func TestResolveMountsMissingDisk(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	manager.volumes = fakeVolumes{dir: t.TempDir()}
 
-	definitions.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
-	instance := seedInstance(t, definitions, "web")
+	store.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
+	instance := seedInstance(t, store, "web")
 	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
 	if _, _, err := manager.resolveMounts(instance); err == nil {
@@ -66,12 +66,12 @@ func TestResolveMountsMissingDisk(t *testing.T) {
 // volume disks are lettered in order past the other mounts, and that a file
 // keeps its contents and permissions, and is owned by root.
 func TestResolveMountsMixed(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	volumes := fakeVolumes{dir: t.TempDir()}
 	manager.volumes = volumes
 
 	for _, name := range []string{"a", "b"} {
-		definitions.volumes[name] = volume.Volume{ID: "vol-" + name, Name: name}
+		store.volumes[name] = volume.Volume{ID: "vol-" + name, Name: name}
 		disk := volumes.Path("vol-" + name)
 		if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 			t.Fatal(err)
@@ -80,7 +80,7 @@ func TestResolveMountsMixed(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	instance.Mounts = []Mount{
 		{Type: MountTypeVolume, Source: "a", Target: "/a"},
 		{Type: MountTypeFile, Content: []byte("k=v"), Mode: 0o640, Target: "/etc/app.conf", ReadOnly: true},
@@ -159,7 +159,7 @@ func TestStartAppliesRateLimits(t *testing.T) {
 	h.instance.DiskIOPS = 1000
 	h.instance.UploadBytesPerSecond = 1 << 20
 	h.instance.DownloadBytesPerSecond = 2 << 20
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 
 	h.start(t)
 

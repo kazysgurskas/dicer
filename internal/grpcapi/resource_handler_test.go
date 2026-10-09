@@ -16,17 +16,17 @@ import (
 )
 
 func TestGetResources(t *testing.T) {
-	s, definitions := newTestServer(t)
+	s, store := newTestServer(t)
 
 	for _, instance := range []instance.Spec{
 		{ID: "i-1", Name: "web", VCPUs: 2, MemoryBytes: 1 << 30, DiskBytes: 10 << 30},
 		{ID: "i-2", Name: "db", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 20 << 30},
 	} {
-		if err := definitions.CreateInstance(instance); err != nil {
+		if err := store.CreateInstance(instance); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := definitions.CreateVolume(volume.Volume{ID: "v-1", Name: "data", SizeBytes: 5 << 30}); err != nil {
+	if err := store.CreateVolume(volume.Volume{ID: "v-1", Name: "data", SizeBytes: 5 << 30}); err != nil {
 		t.Fatal(err)
 	}
 

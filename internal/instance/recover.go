@@ -23,7 +23,7 @@ import (
 //   - Restarting: schedule the restart again.
 //   - Stopped or Failed: nothing.
 func (m *Manager) Recover(ctx context.Context) {
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	var adopted, cleaned int
 	for _, instance := range instances {
@@ -44,7 +44,7 @@ func (m *Manager) Recover(ctx context.Context) {
 	}
 
 	// Include networks with no instances so stale allocations are dropped.
-	for _, n := range m.definitions.Networks() {
+	for _, n := range m.store.Networks() {
 		networks[n.Name] = struct{}{}
 	}
 
@@ -154,7 +154,7 @@ func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []Spec) 
 		if err != nil || !status.State.IsActive() {
 			continue
 		}
-		nw, err := m.definitions.Network(instance.NetworkName)
+		nw, err := m.store.Network(instance.NetworkName)
 		if err != nil {
 			continue
 		}
@@ -191,7 +191,7 @@ func operationOf(s State) string {
 // StartOnBoot starts every Stopped or Failed instance whose restart policy
 // starts it on boot. It runs after Recover.
 func (m *Manager) StartOnBoot(ctx context.Context) {
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	for _, instance := range instances {
 		if ctx.Err() != nil {

@@ -20,16 +20,16 @@ import (
 	"github.com/konradasb/dicer/internal/token"
 )
 
-func newTestManager(t *testing.T) *Manager {
+func newTestStore(t *testing.T) *Store {
 	t.Helper()
 
 	dir := t.TempDir()
-	m, err := NewManager(Config{DataDir: filepath.Join(dir, "data")})
+	s, err := New(Config{DataDir: filepath.Join(dir, "data")})
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 
-	return m
+	return s
 }
 
 func testNetwork(name string) network.Network {
@@ -54,14 +54,14 @@ func testInstance(name string) instance.Spec {
 }
 
 func TestInstancesAreFoundByNameOrIDAndListedByName(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	if err := m.CreateInstance(testInstance("web")); err != nil {
+	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
 	for _, key := range []string{"web", "id-web"} {
-		got, err := m.Instance(key)
+		got, err := s.Instance(key)
 		if err != nil {
 			t.Fatalf("Instance(%q): %v", key, err)
 		}
@@ -70,12 +70,12 @@ func TestInstancesAreFoundByNameOrIDAndListedByName(t *testing.T) {
 		}
 	}
 
-	if err := m.CreateInstance(testInstance("db")); err != nil {
+	if err := s.CreateInstance(testInstance("db")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
 	var got []string
-	for _, instance := range m.Instances() {
+	for _, instance := range s.Instances() {
 		got = append(got, instance.Name)
 	}
 	if want := []string{"db", "web"}; !slices.Equal(got, want) {
@@ -84,21 +84,21 @@ func TestInstancesAreFoundByNameOrIDAndListedByName(t *testing.T) {
 }
 
 func TestCreateDuplicateFailsWithExists(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	if err := m.CreateInstance(testInstance("web")); err != nil {
+	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
-	err := m.CreateInstance(testInstance("web"))
+	err := s.CreateInstance(testInstance("web"))
 	if !errors.Is(err, errdefs.ErrExists) {
 		t.Errorf("duplicate create error = %v, want ErrExists", err)
 	}
 }
 
 func TestMissingInstanceIsNotFound(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	_, err := m.Instance("nope")
+	_, err := s.Instance("nope")
 	if !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("error = %v, want ErrNotFound", err)
 	}
@@ -108,18 +108,18 @@ func TestDefinitionsSurviveReopen(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{DataDir: filepath.Join(dir, "data")}
 
-	m, err := NewManager(cfg)
+	s, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	if err := m.CreateInstance(testInstance("web")); err != nil {
+	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
-	if err := m.CreateNetwork(testNetwork("default")); err != nil {
+	if err := s.CreateNetwork(testNetwork("default")); err != nil {
 		t.Fatalf("CreateNetwork: %v", err)
 	}
 
-	reopened, err := NewManager(cfg)
+	reopened, err := New(cfg)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -137,23 +137,23 @@ func TestDefinitionsSurviveReopen(t *testing.T) {
 }
 
 func TestDeleteRemovesInstanceDirectory(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	if err := m.CreateInstance(testInstance("web")); err != nil {
+	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
 	// A sibling file in the instance directory (an overlay disk, say) must go
 	// away with the instance.
-	disk := filepath.Join(m.InstanceDir("web"), "overlay.img")
+	disk := filepath.Join(s.InstanceDir("web"), "overlay.img")
 	if err := os.WriteFile(disk, []byte("disk"), 0o600); err != nil {
 		t.Fatalf("write overlay: %v", err)
 	}
 
-	if err := m.DeleteInstance("web"); err != nil {
+	if err := s.DeleteInstance("web"); err != nil {
 		t.Fatalf("DeleteInstance: %v", err)
 	}
-	if _, err := os.Stat(m.InstanceDir("web")); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(s.InstanceDir("web")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("instance directory still present after delete")
 	}
 }
@@ -162,11 +162,11 @@ func TestMalformedDefinitionIsSkippedNotFatal(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{DataDir: filepath.Join(dir, "data")}
 
-	m, err := NewManager(cfg)
+	s, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	if err := m.CreateInstance(testInstance("good")); err != nil {
+	if err := s.CreateInstance(testInstance("good")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
@@ -179,9 +179,9 @@ func TestMalformedDefinitionIsSkippedNotFatal(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	reopened, err := NewManager(cfg)
+	reopened, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager with a malformed definition present: %v", err)
+		t.Fatalf("New with a malformed definition present: %v", err)
 	}
 
 	if _, err := reopened.Instance("good"); err != nil {
@@ -196,11 +196,11 @@ func TestMalformedDefinitionIsSkippedNotFatal(t *testing.T) {
 // is skipped rather than loaded under a name that its own contents contradict.
 func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 	cfg := Config{DataDir: filepath.Join(t.TempDir(), "data")}
-	m, err := NewManager(cfg)
+	s, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	if err := m.CreateInstance(testInstance("web")); err != nil {
+	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 	if err := os.MkdirAll(copied, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(m.InstanceDir("web"), configFile))
+	data, err := os.ReadFile(filepath.Join(s.InstanceDir("web"), configFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,9 +216,9 @@ func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := NewManager(cfg)
+	reopened, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	if _, err := reopened.Instance("copy"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("Instance(copy) = %v, want the misplaced definition skipped", err)
@@ -229,18 +229,18 @@ func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 }
 
 func TestCreateRejectsPathTraversal(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	err := m.CreateNetwork(network.Network{ID: "n1", Name: "../escape"})
+	err := s.CreateNetwork(network.Network{ID: "n1", Name: "../escape"})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Fatalf("CreateNetwork(../escape) = %v, want ErrInvalidArgument", err)
 	}
 }
 
 func TestMatchingInstancesAreThoseMatchAccepts(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 	for _, name := range []string{"web", "db", "cache"} {
-		if err := m.CreateInstance(testInstance(name)); err != nil {
+		if err := s.CreateInstance(testInstance(name)); err != nil {
 			t.Fatalf("CreateInstance %s: %v", name, err)
 		}
 	}
@@ -257,7 +257,7 @@ func TestMatchingInstancesAreThoseMatchAccepts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
-			for _, instance := range m.MatchingInstances(tt.match) {
+			for _, instance := range s.MatchingInstances(tt.match) {
 				got = append(got, instance.Name)
 			}
 			slices.Sort(got)
@@ -273,7 +273,7 @@ func TestMatchingInstancesAreThoseMatchAccepts(t *testing.T) {
 func BenchmarkMatchingInstances(b *testing.B) {
 	for _, size := range []int{10, 100, 1000} {
 		b.Run(strconv.Itoa(size), func(b *testing.B) {
-			m, err := NewManager(Config{
+			s, err := New(Config{
 				DataDir: filepath.Join(b.TempDir(), "data"),
 				Logger:  slog.New(slog.DiscardHandler),
 			})
@@ -281,14 +281,14 @@ func BenchmarkMatchingInstances(b *testing.B) {
 				b.Fatal(err)
 			}
 			for i := range size {
-				if err := m.CreateInstance(testInstance("instance-" + strconv.Itoa(i))); err != nil {
+				if err := s.CreateInstance(testInstance("instance-" + strconv.Itoa(i))); err != nil {
 					b.Fatal(err)
 				}
 			}
 
 			b.ReportAllocs()
 			for b.Loop() {
-				m.MatchingInstances(func(i instance.Spec) bool { return i.Name == "instance-5" })
+				s.MatchingInstances(func(i instance.Spec) bool { return i.Name == "instance-5" })
 			}
 		})
 	}
@@ -297,12 +297,12 @@ func BenchmarkMatchingInstances(b *testing.B) {
 func TestStagedSnapshotIsMovedIntoPlace(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{DataDir: filepath.Join(dir, "data")}
-	m, err := NewManager(cfg)
+	s, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 
-	staged, err := m.StageSnapshot()
+	staged, err := s.StageSnapshot()
 	if err != nil {
 		t.Fatalf("StageSnapshot: %v", err)
 	}
@@ -310,18 +310,18 @@ func TestStagedSnapshotIsMovedIntoPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := instance.Snapshot{ID: "id-snap", Name: "snap", Kind: instance.SnapshotKindDisk, Instance: testInstance("web")}
-	if err := m.CreateSnapshot(snapshot, staged); err != nil {
+	if err := s.CreateSnapshot(snapshot, staged); err != nil {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(m.SnapshotDir("snap"), "overlay.img")); err != nil {
+	if _, err := os.Stat(filepath.Join(s.SnapshotDir("snap"), "overlay.img")); err != nil {
 		t.Errorf("the staged file is not in the snapshot's directory: %v", err)
 	}
 	if _, err := os.Stat(staged); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the staging directory is still there")
 	}
 
-	reopened, err := NewManager(cfg)
+	reopened, err := New(cfg)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -335,14 +335,14 @@ func TestStagedSnapshotIsMovedIntoPlace(t *testing.T) {
 }
 
 func TestCreateSnapshotOfATakenNameFails(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
 	for i, want := range []error{nil, errdefs.ErrExists} {
-		staged, err := m.StageSnapshot()
+		staged, err := s.StageSnapshot()
 		if err != nil {
 			t.Fatalf("StageSnapshot: %v", err)
 		}
-		err = m.CreateSnapshot(instance.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap"}, staged)
+		err = s.CreateSnapshot(instance.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap"}, staged)
 		if !errors.Is(err, want) {
 			t.Errorf("CreateSnapshot %d = %v, want %v", i, err, want)
 		}
@@ -354,16 +354,16 @@ func TestCreateSnapshotOfATakenNameFails(t *testing.T) {
 func TestStagingLeftByACrashIsRemoved(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{DataDir: filepath.Join(dir, "data")}
-	m, err := NewManager(cfg)
+	s, err := New(cfg)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	staged, err := m.StageSnapshot()
+	staged, err := s.StageSnapshot()
 	if err != nil {
 		t.Fatalf("StageSnapshot: %v", err)
 	}
 
-	if _, err := NewManager(cfg); err != nil {
+	if _, err := New(cfg); err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
 	if _, err := os.Stat(staged); !errors.Is(err, fs.ErrNotExist) {
@@ -376,20 +376,20 @@ func testToken(name, secretHash string) token.Token {
 }
 
 func TestTokenIsFoundBySecretSHA256(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
 	const ciHash, deployHash = "aa", "bb"
 	for _, tok := range []token.Token{testToken("ci", ciHash), testToken("deploy", deployHash)} {
-		if err := m.CreateToken(tok); err != nil {
+		if err := s.CreateToken(tok); err != nil {
 			t.Fatalf("CreateToken: %v", err)
 		}
 	}
 
-	got, err := m.TokenBySecretSHA256(deployHash)
+	got, err := s.TokenBySecretSHA256(deployHash)
 	if err != nil || got.Name != "deploy" {
 		t.Errorf("TokenBySecretSHA256 = %q, %v; want deploy", got.Name, err)
 	}
-	if _, err := m.TokenBySecretSHA256("cc"); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := s.TokenBySecretSHA256("cc"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("TokenBySecretSHA256 of an unknown hash = %v, want ErrNotFound", err)
 	}
 }
@@ -398,26 +398,26 @@ func TestTokenIsFoundBySecretSHA256(t *testing.T) {
 // a call does with what it read before, never puts back a secret the token
 // was rotated away from meanwhile.
 func TestRecordTokenUseKeepsARotation(t *testing.T) {
-	m := newTestManager(t)
+	s := newTestStore(t)
 
-	if err := m.CreateToken(testToken("ci", "old")); err != nil {
+	if err := s.CreateToken(testToken("ci", "old")); err != nil {
 		t.Fatal(err)
 	}
 	rotated := testToken("ci", "new")
-	if err := m.UpdateToken(rotated); err != nil {
+	if err := s.UpdateToken(rotated); err != nil {
 		t.Fatal(err)
 	}
 
 	used := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
-	if err := m.RecordTokenUse("ci", used); err != nil {
+	if err := s.RecordTokenUse("ci", used); err != nil {
 		t.Fatalf("RecordTokenUse: %v", err)
 	}
 
-	got, _ := m.Token("ci")
+	got, _ := s.Token("ci")
 	if got.SecretSHA256 != "new" || !got.LastUsedAt.Equal(used) {
 		t.Errorf("token = %+v, want the new secret, last used at %v", got, used)
 	}
-	if err := m.RecordTokenUse("gone", used); !errors.Is(err, errdefs.ErrNotFound) {
+	if err := s.RecordTokenUse("gone", used); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("RecordTokenUse of a missing token = %v, want ErrNotFound", err)
 	}
 }

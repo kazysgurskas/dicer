@@ -22,9 +22,9 @@ import (
 
 // volumeHandler handles volume-related RPCs.
 type volumeHandler struct {
-	definitions *filestore.Manager
-	volumes     *volumepkg.Manager
-	events      recorder
+	store   *filestore.Store
+	volumes *volumepkg.Manager
+	events  recorder
 }
 
 // CreateVolume creates and formats a volume.
@@ -38,7 +38,7 @@ func (h *volumeHandler) CreateVolume(
 		return nil, errdefs.InvalidArgument("size_bytes must be greater than 0")
 	}
 
-	if _, err := h.definitions.Volume(req.GetName()); err == nil {
+	if _, err := h.store.Volume(req.GetName()); err == nil {
 		return nil, errdefs.Exists("volume %q already exists", req.GetName())
 	}
 
@@ -47,7 +47,7 @@ func (h *volumeHandler) CreateVolume(
 		return nil, fmt.Errorf("create volume: %w", err)
 	}
 
-	if err := h.definitions.CreateVolume(*volume); err != nil {
+	if err := h.store.CreateVolume(*volume); err != nil {
 		// Roll back the backing disk so a failed create leaves nothing behind.
 		_ = h.volumes.Delete(volume.ID)
 		return nil, err
@@ -61,7 +61,7 @@ func (h *volumeHandler) CreateVolume(
 func (h *volumeHandler) ListVolumes(
 	_ context.Context, _ *dicerdv1.ListVolumesRequest,
 ) (*dicerdv1.ListVolumesResponse, error) {
-	volumes := h.definitions.Volumes()
+	volumes := h.store.Volumes()
 
 	resp := &dicerdv1.ListVolumesResponse{
 		Volumes: make([]*dicerdv1.Volume, 0, len(volumes)),
@@ -77,7 +77,7 @@ func (h *volumeHandler) ListVolumes(
 func (h *volumeHandler) GetVolume(
 	_ context.Context, req *dicerdv1.GetVolumeRequest,
 ) (*dicerdv1.Volume, error) {
-	volume, err := h.definitions.Volume(req.GetName())
+	volume, err := h.store.Volume(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (h *volumeHandler) GetVolume(
 func (h *volumeHandler) DeleteVolume(
 	_ context.Context, req *dicerdv1.DeleteVolumeRequest,
 ) (*emptypb.Empty, error) {
-	volume, err := h.definitions.Volume(req.GetName())
+	volume, err := h.store.Volume(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,11 @@ func (h *volumeHandler) DeleteVolume(
 		_, ok := instance.VolumeMount(volume.Name)
 		return ok
 	}
-	if err := refuseInUse(h.definitions, fmt.Sprintf("volume %q is mounted", volume.Name), mounted); err != nil {
+	if err := refuseInUse(h.store, fmt.Sprintf("volume %q is mounted", volume.Name), mounted); err != nil {
 		return nil, err
 	}
 
-	if err := h.definitions.DeleteVolume(volume.Name); err != nil {
+	if err := h.store.DeleteVolume(volume.Name); err != nil {
 		return nil, err
 	}
 	h.record(volume, events.ActionDeleted, "Deleted volume of "+humanize.Bytes(volume.SizeBytes)+" and its data")

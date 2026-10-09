@@ -16,8 +16,8 @@ import (
 
 // snapshotHandler handles snapshot-related RPCs.
 type snapshotHandler struct {
-	definitions *filestore.Manager
-	instances   *instance.Manager
+	store     *filestore.Store
+	instances *instance.Manager
 }
 
 // CreateSnapshot snapshots an instance.
@@ -27,7 +27,7 @@ func (h *snapshotHandler) CreateSnapshot(
 	if req.GetInstance() == "" {
 		return nil, errdefs.InvalidArgument("instance is required")
 	}
-	instance, err := h.definitions.Instance(req.GetInstance())
+	instance, err := h.store.Instance(req.GetInstance())
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (h *snapshotHandler) ListSnapshots(
 ) (*dicerdv1.ListSnapshotsResponse, error) {
 	var instanceID string
 	if req.GetInstance() != "" {
-		instance, err := h.definitions.Instance(req.GetInstance())
+		instance, err := h.store.Instance(req.GetInstance())
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +122,7 @@ func (h *snapshotHandler) ForkSnapshot(
 		return nil, err
 	}
 	// What a created instance is checked for applies to a fork as much.
-	creation := instanceHandler{definitions: h.definitions, instances: h.instances}
+	creation := instanceHandler{store: h.store, instances: h.instances}
 	if err := creation.checkCanStart(fork); err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (h *snapshotHandler) snapshot(nameOrID string) (instance.Snapshot, error) {
 // instanceName returns the name a snapshot's instance has now, or, if it
 // has been deleted, the name it had.
 func (h *snapshotHandler) instanceName(snapshot instance.Snapshot) string {
-	if instance, err := h.definitions.Instance(snapshot.Instance.ID); err == nil {
+	if instance, err := h.store.Instance(snapshot.Instance.ID); err == nil {
 		return instance.Name
 	}
 	return snapshot.Instance.Name

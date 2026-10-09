@@ -23,7 +23,7 @@ import (
 // ensureDefaultNetwork creates the default network on the configured subnet,
 // unless it already exists. An existing one is left as it is.
 func (d *daemon) ensureDefaultNetwork() error {
-	if _, err := d.definitions.Network(network.DefaultName); err == nil {
+	if _, err := d.store.Network(network.DefaultName); err == nil {
 		return nil
 	}
 
@@ -35,10 +35,10 @@ func (d *daemon) ensureDefaultNetwork() error {
 	if err != nil {
 		return fmt.Errorf("list the host's subnets: %w", err)
 	}
-	if err := network.CheckSubnetOverlap(n, d.definitions.Networks(), hostSubnets); err != nil {
+	if err := network.CheckSubnetOverlap(n, d.store.Networks(), hostSubnets); err != nil {
 		return fmt.Errorf("create the default network: %w; set network.default_subnet to a free subnet", err)
 	}
-	if err := d.definitions.CreateNetwork(n); err != nil {
+	if err := d.store.CreateNetwork(n); err != nil {
 		return fmt.Errorf("create the default network: %w", err)
 	}
 
@@ -70,7 +70,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		})
 	}
 
-	k, err := d.definitions.Kernel(kernel.DefaultName)
+	k, err := d.store.Kernel(kernel.DefaultName)
 	switch {
 	case errors.Is(err, errdefs.ErrNotFound):
 		now := time.Now()
@@ -78,7 +78,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		if err := d.kernels.ExtractDefault(want.ID); err != nil {
 			return err
 		}
-		if err := d.definitions.CreateKernel(want); err != nil {
+		if err := d.store.CreateKernel(want); err != nil {
 			return fmt.Errorf("define the default kernel: %w", err)
 		}
 		record(want, events.ActionImported, fmt.Sprintf("Imported the default kernel for %s, version %s: %s",
@@ -102,7 +102,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		return err
 	}
 	k.Architecture, k.SHA256, k.UpdatedAt = want.Architecture, want.SHA256, time.Now()
-	if err := d.definitions.UpdateKernel(k); err != nil {
+	if err := d.store.UpdateKernel(k); err != nil {
 		return fmt.Errorf("update the default kernel: %w", err)
 	}
 	record(k, events.ActionUpdated, fmt.Sprintf("Updated the default kernel to version %s, which this version of Dicer carries",

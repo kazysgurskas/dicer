@@ -19,7 +19,7 @@ import (
 
 // tokenHandler handles token-related RPCs.
 type tokenHandler struct {
-	definitions *filestore.Manager
+	store *filestore.Store
 
 	// servesTCP reports whether the daemon is served over TCP, the only
 	// place a token is any use.
@@ -64,7 +64,7 @@ func (h *tokenHandler) CreateToken(ctx context.Context, req *dicerdv1.CreateToke
 	if err := checkCallerAllows(ctx, t); err != nil {
 		return nil, err
 	}
-	if err := h.definitions.CreateToken(t); err != nil {
+	if err := h.store.CreateToken(t); err != nil {
 		return nil, err
 	}
 
@@ -73,7 +73,7 @@ func (h *tokenHandler) CreateToken(ctx context.Context, req *dicerdv1.CreateToke
 
 // ListTokens returns every token.
 func (h *tokenHandler) ListTokens(context.Context, *dicerdv1.ListTokensRequest) (*dicerdv1.ListTokensResponse, error) {
-	tokens := h.definitions.Tokens()
+	tokens := h.store.Tokens()
 
 	out := make([]*dicerdv1.Token, 0, len(tokens))
 	for _, t := range tokens {
@@ -84,7 +84,7 @@ func (h *tokenHandler) ListTokens(context.Context, *dicerdv1.ListTokensRequest) 
 
 // GetToken returns one token.
 func (h *tokenHandler) GetToken(_ context.Context, req *dicerdv1.GetTokenRequest) (*dicerdv1.Token, error) {
-	t, err := h.definitions.Token(req.GetName())
+	t, err := h.store.Token(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (h *tokenHandler) RotateToken(ctx context.Context, req *dicerdv1.RotateToke
 	if err := h.checkServesTCP(); err != nil {
 		return nil, err
 	}
-	t, err := h.definitions.Token(req.GetName())
+	t, err := h.store.Token(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (h *tokenHandler) RotateToken(ctx context.Context, req *dicerdv1.RotateToke
 
 	t.SecretSHA256 = token.SecretSHA256(secret)
 	t.UpdatedAt = time.Now()
-	if err := h.definitions.UpdateToken(t); err != nil {
+	if err := h.store.UpdateToken(t); err != nil {
 		return nil, err
 	}
 
@@ -119,14 +119,14 @@ func (h *tokenHandler) RotateToken(ctx context.Context, req *dicerdv1.RotateToke
 
 // DeleteToken removes a token.
 func (h *tokenHandler) DeleteToken(ctx context.Context, req *dicerdv1.DeleteTokenRequest) (*emptypb.Empty, error) {
-	t, err := h.definitions.Token(req.GetName())
+	t, err := h.store.Token(req.GetName())
 	if err != nil {
 		return nil, err
 	}
 	if err := checkCallerAllows(ctx, t); err != nil {
 		return nil, err
 	}
-	if err := h.definitions.DeleteToken(t.ID); err != nil {
+	if err := h.store.DeleteToken(t.ID); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
@@ -165,7 +165,7 @@ func (h *tokenHandler) secret(given string) (string, error) {
 		return "", errdefs.InvalidArgument("%v", err)
 	}
 
-	_, err := h.definitions.TokenBySecretSHA256(token.SecretSHA256(given))
+	_, err := h.store.TokenBySecretSHA256(token.SecretSHA256(given))
 	switch {
 	case err == nil:
 		return "", errdefs.Exists("another token has that secret")

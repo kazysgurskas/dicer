@@ -73,7 +73,7 @@ func x86Kernel(name, sha256 string) *dicerdv1.ImportKernelStart {
 // deletion are recorded with its architecture, and refused requests
 // are not.
 func TestKernelImportedAndDeletedAreRecorded(t *testing.T) {
-	s, definitions := newTestServer(t)
+	s, store := newTestServer(t)
 	recorded := &fakeRecorder{}
 	s.kernelHandler.events = recorded
 
@@ -85,13 +85,13 @@ func TestKernelImportedAndDeletedAreRecorded(t *testing.T) {
 		t.Fatal("ImportKernel of a name taken succeeded")
 	}
 
-	if err := definitions.CreateInstance(instance.Spec{ID: "i-1", Name: "web", KernelName: "k"}); err != nil {
+	if err := store.CreateInstance(instance.Spec{ID: "i-1", Name: "web", KernelName: "k"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: "k"}); err == nil {
 		t.Fatal("DeleteKernel of a kernel in use succeeded")
 	}
-	if err := definitions.DeleteInstance("web"); err != nil {
+	if err := store.DeleteInstance("web"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: "k"}); err != nil {
@@ -125,7 +125,7 @@ func TestKernelImportedAndDeletedAreRecorded(t *testing.T) {
 // sends is recorded with the SHA-256 of what was sent, and is on
 // the host.
 func TestImportKernelKeepsAKernelTheClientSends(t *testing.T) {
-	s, definitions := newTestServer(t)
+	s, store := newTestServer(t)
 	recorded := &fakeRecorder{}
 	s.kernelHandler.events = recorded
 
@@ -141,7 +141,7 @@ func TestImportKernelKeepsAKernelTheClientSends(t *testing.T) {
 		t.Errorf("kernel = %+v, want the SHA-256 %s", k, digest)
 	}
 
-	stored, err := definitions.Kernel("sent")
+	stored, err := store.Kernel("sent")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +160,8 @@ func TestImportKernelKeepsAKernelTheClientSends(t *testing.T) {
 }
 
 func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
-	s, definitions := newTestServer(t)
-	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: "taken"}); err != nil {
+	s, store := newTestServer(t)
+	if err := store.CreateKernel(kernel.Kernel{ID: "k-1", Name: "taken"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,14 +186,14 @@ func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
 			}
 		})
 	}
-	if _, err := definitions.Kernel("bad"); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := store.Kernel("bad"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("a kernel that failed its checksum was recorded: %v", err)
 	}
 
 	if _, err := importKernel(t, s, x86Kernel("empty", "")); !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("importing an empty kernel = %v, want errdefs.ErrInvalidArgument", err)
 	}
-	if _, err := definitions.Kernel("empty"); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := store.Kernel("empty"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("an empty kernel was recorded: %v", err)
 	}
 }
@@ -201,8 +201,8 @@ func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
 // TestDefaultKernelIsReserved checks that the default kernel cannot be
 // deleted, and that no kernel can be imported under its name.
 func TestDefaultKernelIsReserved(t *testing.T) {
-	s, definitions := newTestServer(t)
-	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: kernel.DefaultName}); err != nil {
+	s, store := newTestServer(t)
+	if err := store.CreateKernel(kernel.Kernel{ID: "k-1", Name: kernel.DefaultName}); err != nil {
 		t.Fatal(err)
 	}
 

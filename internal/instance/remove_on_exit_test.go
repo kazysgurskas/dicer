@@ -17,18 +17,18 @@ func (h *harness) setRemoveOnExit(t *testing.T) {
 	t.Helper()
 
 	h.instance.RemoveOnExit = true
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 }
 
-// waitForRemoval waits until the instance is gone from the definitions. The
-// delete runs after the stop that triggered it, so it is not there the
-// instant the instance stops.
+// waitForRemoval waits until the instance is gone from the store. The delete
+// runs after the stop that triggered it, so it is not there the instant the
+// instance stops.
 func (h *harness) waitForRemoval(t *testing.T) {
 	t.Helper()
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if _, err := h.definitions.Instance(h.instance.ID); errors.Is(err, errdefs.ErrNotFound) {
+		if _, err := h.store.Instance(h.instance.ID); errors.Is(err, errdefs.ErrNotFound) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -85,7 +85,7 @@ func TestRemoveOnExitKeepsAnInstanceThatWillRestart(t *testing.T) {
 
 	// It comes back rather than going away.
 	h.waitForVMMs(t, 2)
-	if _, err := h.definitions.Instance(h.instance.ID); err != nil {
+	if _, err := h.store.Instance(h.instance.ID); err != nil {
 		t.Fatalf("a restarting instance was deleted: %v", err)
 	}
 }
@@ -98,7 +98,7 @@ func TestAnInstanceThatDidNotAskIsNotDeleted(t *testing.T) {
 	h.exit(t, 0)
 	h.waitForState(t, StateStopped)
 
-	if _, err := h.definitions.Instance(h.instance.ID); err != nil {
+	if _, err := h.store.Instance(h.instance.ID); err != nil {
 		t.Errorf("an instance that did not ask to be deleted was: %v", err)
 	}
 }

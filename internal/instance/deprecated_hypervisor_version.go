@@ -15,7 +15,7 @@ import (
 // frozen on one, and a memory snapshot taken with one. The daemon calls it
 // once, after Recover.
 func (m *Manager) WarnDeprecatedHypervisorVersions(ctx context.Context) {
-	for _, instance := range m.definitions.Instances() {
+	for _, instance := range m.store.Instances() {
 		hypervisorType := instance.EffectiveHypervisorType()
 		starters := m.starters[hypervisorType]
 
@@ -30,7 +30,7 @@ func (m *Manager) WarnDeprecatedHypervisorVersions(ctx context.Context) {
 		}
 	}
 
-	for _, snapshot := range m.definitions.Snapshots() {
+	for _, snapshot := range m.store.Snapshots() {
 		if snapshot.Kind != SnapshotKindMemory {
 			continue
 		}

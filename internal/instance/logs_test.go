@@ -37,8 +37,8 @@ func writeGuestLog(t *testing.T, manager *Manager, instance Spec, contents strin
 }
 
 func TestStreamLogs(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 	writeGuestLog(t, manager, instance, "booting\nready\n")
 
 	var out bytes.Buffer
@@ -52,8 +52,8 @@ func TestStreamLogs(t *testing.T) {
 }
 
 func TestStreamLogsTail(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	var sb strings.Builder
 	for i := range 500 {
@@ -91,8 +91,8 @@ func TestStreamLogsTail(t *testing.T) {
 // TestStreamLogsTailSpansChunks covers a tail that has to read back through
 // more than one chunk of the file.
 func TestStreamLogsTailSpansChunks(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	line := strings.Repeat("x", 1000) + "\n"
 	var sb strings.Builder
@@ -119,8 +119,8 @@ func TestStreamLogsTailSpansChunks(t *testing.T) {
 // when the instance does, rather than hanging on a file nothing will write
 // to again.
 func TestStreamLogsFollowStopsWithInstance(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 	path := writeGuestLog(t, manager, instance, "booting\n")
 
 	pid := os.Getpid()
@@ -172,8 +172,8 @@ func TestStreamLogsFollowStopsWithInstance(t *testing.T) {
 // instance still starting follows its boot, rather than ending before it has
 // run: an attached 'dicer run' follows the console from the start.
 func TestStreamLogsFollowsAStartingInstance(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 	writeGuestLog(t, manager, instance, "booting\n")
 	forceState(t, manager, instance.ID, StateStarting)
 
@@ -268,8 +268,8 @@ func writeHypervisorLog(t *testing.T, h *harness, contents string) {
 }
 
 func TestStreamLogsMissing(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	err := manager.StreamLogs(t.Context(), instance, LogOptions{}, &bytes.Buffer{})
 	if !errors.Is(err, errdefs.ErrNotFound) {
@@ -278,8 +278,8 @@ func TestStreamLogsMissing(t *testing.T) {
 }
 
 func TestStreamLogsUnknownSource(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	err := manager.StreamLogs(t.Context(), instance, LogOptions{Source: "syslog"}, &bytes.Buffer{})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {

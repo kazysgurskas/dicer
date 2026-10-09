@@ -31,8 +31,9 @@ import (
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
-// Definitions stores the instance, network, volume and kernel definitions.
-type Definitions interface {
+// Store keeps the definitions of instances, snapshots, networks, volumes and
+// kernels.
+type Store interface {
 	CreateInstance(instance Spec) error
 	Instance(nameOrID string) (Spec, error)
 	Instances() []Spec
@@ -121,8 +122,8 @@ type DNSServers interface {
 
 // Config holds the dependencies for a Manager.
 type Config struct {
-	Definitions Definitions
-	Networks    Networks
+	Store    Store
+	Networks Networks
 
 	// RunDir holds ephemeral runtime state. Defaults to defaults.RunDir.
 	RunDir string
@@ -151,7 +152,7 @@ type Config struct {
 // Manager drives instance lifecycle operations and owns the status that
 // describes them.
 type Manager struct {
-	definitions Definitions
+	store       Store
 	networks    Networks
 	runDir      string
 	images      Images
@@ -241,7 +242,7 @@ func NewManager(cfg Config) *Manager {
 	}
 
 	return &Manager{
-		definitions: cfg.Definitions,
+		store:       cfg.Store,
 		networks:    cfg.Networks,
 		runDir:      cfg.RunDir,
 		images:      cfg.Images,

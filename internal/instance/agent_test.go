@@ -22,8 +22,8 @@ import (
 // TestAgentWaitsForBootingGuest checks that a request to a guest whose agent
 // is not listening yet waits for it, rather than failing.
 func TestAgentWaitsForBootingGuest(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 	vsockPath := writeRunningStatus(t, manager, instance)
 
 	go func() {
@@ -46,8 +46,8 @@ func TestAgentWaitsForBootingGuest(t *testing.T) {
 // guest's agent fails as soon as the instance stops, rather than waiting out
 // the timeout.
 func TestAgentStopsWaitingForStoppedInstance(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "job")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "job")
 	writeRunningStatus(t, manager, instance)
 
 	stopped := make(chan struct{})

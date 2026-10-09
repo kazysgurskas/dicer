@@ -18,7 +18,7 @@ func (h *instanceHandler) GetInstanceLogs(
 	req *dicerdv1.GetInstanceLogsRequest,
 	stream grpc.ServerStreamingServer[dicerdv1.InstanceLogChunk],
 ) error {
-	spec, err := h.definitions.Instance(req.GetName())
+	spec, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return err
 	}

@@ -12,8 +12,8 @@ import (
 // TestStopFailedInstance checks that a failed start can be put to rest: Stop
 // on a Failed instance cleans up and leaves it Stopped, rather than refusing.
 func TestStopFailedInstance(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	manager.fail(instance.ID, errors.New("boot failed"))
 
@@ -33,8 +33,8 @@ func TestStopFailedInstance(t *testing.T) {
 // A stop the client gives up on is still seen through: the host network is
 // torn down as fully as for any other.
 func TestStopOutlivesItsRequest(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, hostNetwork := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 	manager.fail(instance.ID, errors.New("boot failed"))
 
 	ctx, cancel := context.WithCancel(t.Context())

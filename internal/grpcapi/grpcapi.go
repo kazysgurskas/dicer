@@ -5,8 +5,8 @@
 // interceptors in front of it: those that authenticate a call's token,
 // authorize it by the token's scopes, and audit it.
 //
-// Handlers validate the request, call the definitions (filestore) or the
-// lifecycle manager (vm), and convert the result. They take their dependencies as concrete types.
+// Handlers validate the request, call the store or the instance manager, and
+// convert the result. They take their dependencies as concrete types.
 package grpcapi
 
 import (
@@ -28,9 +28,9 @@ import (
 
 // Config holds the dependencies for creating a Server.
 type Config struct {
-	Definitions *filestore.Manager
-	Networks    *network.Manager
-	Instances   *instance.Manager
+	Store     *filestore.Store
+	Networks  *network.Manager
+	Instances *instance.Manager
 
 	Hypervisors map[hypervisor.Type][]hypervisor.Starter
 	Images      *image.Manager
@@ -108,42 +108,42 @@ type Server struct {
 func NewServer(cfg Config) *Server {
 	return &Server{
 		instanceHandler: instanceHandler{
-			definitions: cfg.Definitions,
-			instances:   cfg.Instances,
+			store:     cfg.Store,
+			instances: cfg.Instances,
 
 			statsInterval: instanceStatsInterval,
 		},
-		snapshotHandler: snapshotHandler{definitions: cfg.Definitions, instances: cfg.Instances},
+		snapshotHandler: snapshotHandler{store: cfg.Store, instances: cfg.Instances},
 		networkHandler: networkHandler{
-			definitions: cfg.Definitions,
+			store:       cfg.Store,
 			networks:    cfg.Networks,
 			hostSubnets: cfg.HostSubnets,
 			events:      recorderOf(cfg.Events),
 		},
 		volumeHandler: volumeHandler{
-			definitions: cfg.Definitions,
-			volumes:     cfg.Volumes,
-			events:      recorderOf(cfg.Events),
+			store:   cfg.Store,
+			volumes: cfg.Volumes,
+			events:  recorderOf(cfg.Events),
 		},
 		kernelHandler: kernelHandler{
-			definitions: cfg.Definitions,
-			kernels:     cfg.Kernels,
-			events:      recorderOf(cfg.Events),
+			store:   cfg.Store,
+			kernels: cfg.Kernels,
+			events:  recorderOf(cfg.Events),
 		},
 		tokenHandler: tokenHandler{
-			definitions: cfg.Definitions,
+			store:       cfg.Store,
 			servesTCP:   cfg.ListenAddress != "",
 			fingerprint: cfg.TokenFingerprint,
 		},
 		imageHandler: imageHandler{
-			definitions: cfg.Definitions,
-			instances:   cfg.Instances,
-			images:      cfg.Images,
+			store:     cfg.Store,
+			instances: cfg.Instances,
+			images:    cfg.Images,
 		},
 		resourceHandler: resourceHandler{
-			definitions: cfg.Definitions,
-			instances:   cfg.Instances,
-			dataDir:     cfg.DataDir,
+			store:     cfg.Store,
+			instances: cfg.Instances,
+			dataDir:   cfg.DataDir,
 		},
 		hostHandler: hostHandler{
 			version:       cfg.Version,
@@ -163,8 +163,8 @@ func (s *Server) Register(gs *grpc.Server) {
 
 // refuseInUse returns an ErrInvalidState error naming the first instance
 // for which inUse is true, or nil. what reads like `kernel "k" is in use`.
-func refuseInUse(definitions *filestore.Manager, what string, inUse func(instance.Spec) bool) error {
-	for _, instance := range definitions.Instances() {
+func refuseInUse(store *filestore.Store, what string, inUse func(instance.Spec) bool) error {
+	for _, instance := range store.Instances() {
 		if inUse(instance) {
 			return errdefs.InvalidState("%s by instance %q", what, instance.Name)
 		}

@@ -254,7 +254,7 @@ func TestHealthCheckComesFromTheImage(t *testing.T) {
 				Entrypoint: []string{"/bin/sh"}, HealthCheck: imageCheck,
 			}
 			h.instance.HealthCheck = tt.own
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
 
 			check, _, ok := h.manager.Health(h.instance)

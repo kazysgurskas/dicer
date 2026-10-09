@@ -129,7 +129,7 @@ func (p fakeProc) write(t *testing.T, name, content string) {
 func TestStatsAreReadFromTheVMMAndItsTAPDevice(t *testing.T) {
 	h := newHarness(t)
 	h.instance.MemoryBytes = 1 << 30
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 	h.start(t)
 
 	proc := newFakeProc(t, h.manager)

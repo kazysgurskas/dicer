@@ -14,7 +14,7 @@ import (
 // from.
 func (m *Manager) ImagesInUse() (map[string]struct{}, error) {
 	inUse := make(map[string]struct{})
-	for _, instance := range m.definitions.Instances() {
+	for _, instance := range m.store.Instances() {
 		if image, err := m.images.Image(instance.ImageRef); err == nil {
 			inUse[image.Digest] = struct{}{}
 		}
@@ -44,7 +44,7 @@ func (m *Manager) ImagesInUse() (map[string]struct{}, error) {
 			}
 		}
 	}
-	for _, snapshot := range m.definitions.Snapshots() {
+	for _, snapshot := range m.store.Snapshots() {
 		if snapshot.ImageDigest != "" {
 			inUse[snapshot.ImageDigest] = struct{}{}
 		}

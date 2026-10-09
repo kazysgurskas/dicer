@@ -21,14 +21,14 @@ func TestUsageCountsEveryStateIncludingEmptyOnes(t *testing.T) {
 }
 
 func TestUsageCountsByStateAndSumsHeldResources(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 
 	running := Spec{ID: "i-run", Name: "run", VCPUs: 2, MemoryBytes: 1 << 30}
 	paused := Spec{ID: "i-pause", Name: "pause", VCPUs: 1, MemoryBytes: 1 << 29}
 	stopped := Spec{ID: "i-stop", Name: "stop", VCPUs: 8, MemoryBytes: 1 << 33}
 
 	for _, instance := range []Spec{running, paused, stopped} {
-		definitions.instances[instance.Name] = instance
+		store.instances[instance.Name] = instance
 	}
 	if err := manager.writeStatus(Status{
 		InstanceID: running.ID, State: StateRunning, VCPUs: running.VCPUs, MemoryBytes: running.MemoryBytes,

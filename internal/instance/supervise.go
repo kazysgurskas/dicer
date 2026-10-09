@@ -192,7 +192,7 @@ func (m *Manager) handleExit(ctx context.Context, instance Spec, vmm *process.Pr
 	m.forget(instance.ID)
 
 	// Apply the current definition's restart policy.
-	if current, err := m.definitions.Instance(instance.ID); err == nil {
+	if current, err := m.store.Instance(instance.ID); err == nil {
 		instance = current
 	}
 
@@ -346,7 +346,7 @@ func (m *Manager) restart(ctx context.Context, instanceID string, pending *pendi
 	defer lock.Unlock()
 
 	// Deleted, or edited, while the restart waited.
-	instance, err := m.definitions.Instance(instanceID)
+	instance, err := m.store.Instance(instanceID)
 	if err != nil {
 		return
 	}

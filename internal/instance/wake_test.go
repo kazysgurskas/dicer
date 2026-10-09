@@ -33,7 +33,7 @@ func newWakeHarness(t *testing.T, standbyAfter time.Duration) *wakeHarness {
 	h := &wakeHarness{harness: newHarness(t), port: freePort(t)}
 	h.instance.StandbyAfter = standbyAfter
 	h.instance.Ports = []network.PortMapping{{HostIP: "127.0.0.1", HostPort: uint16(h.port), GuestPort: 80}}
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 
 	guest := echoServer(t)
 	h.manager.dialGuest = func(ctx context.Context, address string) (net.Conn, error) {

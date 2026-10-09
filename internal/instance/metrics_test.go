@@ -9,12 +9,12 @@ import (
 )
 
 func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	recorder := &fakeMetrics{}
 	manager.metrics = recorder
 
 	instance := Spec{ID: "i-1", Name: "web", VCPUs: 1, MemoryBytes: 1 << 30}
-	definitions.instances[instance.Name] = instance
+	store.instances[instance.Name] = instance
 
 	// Stopping an already-stopped instance succeeds, and is still an
 	// operation that happened.
@@ -45,10 +45,10 @@ func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
 // A Manager built without a recorder records into a discard, so the
 // lifecycle code can call it unconditionally.
 func TestOperationsWithoutAMetricsRecorder(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 
 	instance := Spec{ID: "i-1", Name: "web"}
-	definitions.instances[instance.Name] = instance
+	store.instances[instance.Name] = instance
 
 	if err := manager.Stop(context.Background(), instance); err != nil {
 		t.Fatalf("Stop: %v", err)

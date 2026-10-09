@@ -18,7 +18,7 @@ func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ 
 	lock.Lock()
 	defer lock.Unlock()
 
-	current, err := m.definitions.Instance(instance.ID)
+	current, err := m.store.Instance(instance.ID)
 	if err != nil {
 		return Spec{}, err
 	}
@@ -39,7 +39,7 @@ func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ 
 	renamed := current
 	renamed.Name = newName
 
-	if err := m.definitions.RenameInstance(current.ID, renamed); err != nil {
+	if err := m.store.RenameInstance(current.ID, renamed); err != nil {
 		return Spec{}, fmt.Errorf("rename instance %q: %w", current.Name, err)
 	}
 

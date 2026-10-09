@@ -46,7 +46,7 @@ func TestCreateFollowsThePullPolicy(t *testing.T) {
 				t.Errorf("pulls = %d, want %d", images.pulls, tt.wantPulls)
 			}
 
-			_, getErr := h.definitions.Instance(instance.Name)
+			_, getErr := h.store.Instance(instance.Name)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
 					t.Fatalf("Create = %v, want %v", err, tt.wantErr)

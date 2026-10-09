@@ -34,7 +34,7 @@ func (m *Manager) Update(ctx context.Context, updated Spec) error {
 	defer lock.Unlock()
 	defer m.syncWaker(ctx, updated.ID)
 
-	current, err := m.definitions.Instance(updated.ID)
+	current, err := m.store.Instance(updated.ID)
 	if err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func (m *Manager) Update(ctx context.Context, updated Spec) error {
 		return err
 	}
 
-	if err := m.definitions.UpdateInstance(updated); err != nil {
+	if err := m.store.UpdateInstance(updated); err != nil {
 		return fmt.Errorf("update instance %q: %w", current.Name, err)
 	}
 	m.record(updated, events.ActionUpdated, updateMessage(current, updated, status.State), nil)

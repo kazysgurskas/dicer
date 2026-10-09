@@ -20,7 +20,7 @@ func (m *Manager) Usage() Usage {
 		usage.ByHealth[healthStatus] = 0
 	}
 
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	for _, instance := range instances {
 		status, err := m.Status(instance)

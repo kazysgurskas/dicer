@@ -105,7 +105,7 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 			h := newHarness(t)
 			volumes := fakeVolumes{dir: t.TempDir()}
 			h.manager.volumes = volumes
-			h.definitions.volumes["data"] = volume.Volume{ID: "vol-data", Name: "data"}
+			h.store.volumes["data"] = volume.Volume{ID: "vol-data", Name: "data"}
 			disk := volumes.Path("vol-data")
 			if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 				t.Fatal(err)
@@ -114,15 +114,15 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.share(&h.instance)
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
 			if err := h.manager.Standby(t.Context(), h.instance); err != nil {
 				t.Fatal(err)
 			}
 
-			other := seedInstance(t, h.definitions, "other")
+			other := seedInstance(t, h.store, "other")
 			tt.share(&other)
-			h.definitions.instances[other.Name] = other
+			h.store.instances[other.Name] = other
 
 			if err := h.manager.Start(t.Context(), other); !errors.Is(err, errdefs.ErrInvalidState) {
 				t.Errorf("Start of an instance sharing the %s = %v, want ErrInvalidState", tt.name, err)

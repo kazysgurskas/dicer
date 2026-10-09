@@ -85,7 +85,7 @@ func (s Stats) CPUPercent(prev Stats) (float64, bool) {
 // Stats returns what the VMM of each running or paused instance uses of the
 // host now, in name order. An instance whose VMM cannot be read is left out.
 func (m *Manager) Stats() []Stats {
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	proc, err := procfs.NewFS(m.procDir)
 	if err != nil {

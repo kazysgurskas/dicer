@@ -113,7 +113,7 @@ func (m *Manager) handleUnhealthy(ctx context.Context, instance Spec, vmm *proce
 		// Stopped, deleted or replaced while we waited for the lock.
 		return
 	}
-	if current, err := m.definitions.Instance(instance.ID); err == nil {
+	if current, err := m.store.Instance(instance.ID); err == nil {
 		instance = current
 	}
 	status, err := m.Status(instance)

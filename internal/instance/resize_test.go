@@ -19,7 +19,7 @@ func resizable(t *testing.T, h *harness) {
 
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
 	h.instance.MaxVCPUs, h.instance.MaxMemoryBytes = 4, 4<<30
-	if err := h.definitions.UpdateInstance(h.instance); err != nil {
+	if err := h.store.UpdateInstance(h.instance); err != nil {
 		t.Fatal(err)
 	}
 	h.hv.capabilities.SupportsHotplugCPU = true
@@ -43,7 +43,7 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 		t.Errorf("holds %s, want %s", held, want)
 	}
 	// Kept for the next start.
-	if saved, _ := h.definitions.Instance(h.instance.Name); saved.Resources() != want {
+	if saved, _ := h.store.Instance(h.instance.Name); saved.Resources() != want {
 		t.Errorf("definition asks for %s, want %s", saved.Resources(), want)
 	}
 
@@ -163,7 +163,7 @@ func TestFailedResizeKeepsTheLargerReservation(t *testing.T) {
 	if held := h.status(t).HeldResources(); held != want {
 		t.Errorf("holds %s, want the larger %s", held, want)
 	}
-	if saved, _ := h.definitions.Instance(h.instance.Name); saved.Resources() != want {
+	if saved, _ := h.store.Instance(h.instance.Name); saved.Resources() != want {
 		t.Errorf("definition asks for %s, want %s", saved.Resources(), want)
 	}
 	if _, ok := h.events.last(events.ActionResized); ok {
@@ -189,7 +189,7 @@ func TestStartLeavesRoomForTheMaximums(t *testing.T) {
 			h := newHarness(t)
 			h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
 			h.instance.MaxVCPUs, h.instance.MaxMemoryBytes = tt.maxVCPUs, tt.maxMemoryBytes
-			if err := h.definitions.UpdateInstance(h.instance); err != nil {
+			if err := h.store.UpdateInstance(h.instance); err != nil {
 				t.Fatal(err)
 			}
 
@@ -223,7 +223,7 @@ func TestRefusedResizeChangesNothing(t *testing.T) {
 	if held := h.status(t).HeldResources(); held != before {
 		t.Errorf("holds %s, want %s as before", held, before)
 	}
-	if saved, _ := h.definitions.Instance(h.instance.Name); saved.Resources() != before {
+	if saved, _ := h.store.Instance(h.instance.Name); saved.Resources() != before {
 		t.Errorf("definition asks for %s, want %s as before", saved.Resources(), before)
 	}
 	if _, ok := h.events.last(events.ActionResized); ok {

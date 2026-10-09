@@ -23,7 +23,7 @@ func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPoli
 		return err
 	}
 
-	if err := m.definitions.CreateInstance(instance); err != nil {
+	if err := m.store.CreateInstance(instance); err != nil {
 		return err
 	}
 	m.record(instance, events.ActionCreated,

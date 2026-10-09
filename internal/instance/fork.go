@@ -38,7 +38,7 @@ func (m *Manager) ForkInstance(ctx context.Context, source, instance Spec) (err 
 	started := time.Now()
 	defer func() { m.observeOperation(operationForkInstance, started, err) }()
 
-	staged, err := m.definitions.StageSnapshot()
+	staged, err := m.store.StageSnapshot()
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (m *Manager) fork(
 ) (err error) {
 	started := time.Now()
 
-	if err := m.definitions.CreateInstance(instance); err != nil {
+	if err := m.store.CreateInstance(instance); err != nil {
 		return err
 	}
 	created := maps.Clone(attrs)

@@ -11,8 +11,8 @@ import (
 )
 
 func TestTransitionRejectsIllegalMove(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
+	manager, store, _ := newTestManager(t)
+	instance := seedInstance(t, store, "web")
 
 	// Stopped -> Paused is not a legal move; it must be refused before
 	// anything touches the host.

@@ -29,7 +29,7 @@ import (
 	"github.com/konradasb/dicer/internal/volume"
 )
 
-// Config configures a Manager.
+// Config configures a Store.
 type Config struct {
 	// DataDir holds the definitions; empty means defaults.DataDir.
 	DataDir string
@@ -37,12 +37,12 @@ type Config struct {
 	Logger *slog.Logger
 }
 
-// Manager holds the definitions, backed by YAML files. It implements
-// instance.Definitions and is safe for concurrent use.
+// Store holds the definitions, backed by YAML files. It implements
+// instance.Store and is safe for concurrent use.
 //
 // Every lookup takes a name or an ID and returns an errdefs.ErrNotFound error
 // if there is no such definition.
-type Manager struct {
+type Store struct {
 	instances *collection[instance.Spec]
 	snapshots *collection[instance.Snapshot]
 	networks  *collection[network.Network]
@@ -51,9 +51,9 @@ type Manager struct {
 	tokens    *collection[token.Token]
 }
 
-// NewManager loads all definitions into memory, creating their directories
+// New loads all definitions into memory, creating their directories
 // if needed. Malformed files are logged and skipped.
-func NewManager(cfg Config) (*Manager, error) {
+func New(cfg Config) (*Store, error) {
 	if cfg.DataDir == "" {
 		cfg.DataDir = defaults.DataDir
 	}
@@ -62,7 +62,7 @@ func NewManager(cfg Config) (*Manager, error) {
 	}
 	logger := cfg.Logger.With("component", "filestore")
 
-	m := &Manager{
+	s := &Store{
 		instances: newCollection(
 			"instance", filepath.Join(cfg.DataDir, "instances"), nested, logger,
 			func(v instance.Spec) (string, string) { return v.ID, v.Name },
@@ -89,7 +89,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		),
 	}
 	for _, load := range []func() error{
-		m.instances.load, m.snapshots.load, m.networks.load, m.volumes.load, m.kernels.load, m.tokens.load,
+		s.instances.load, s.snapshots.load, s.networks.load, s.volumes.load, s.kernels.load, s.tokens.load,
 	} {
 		if err := load(); err != nil {
 			return nil, err
@@ -98,66 +98,66 @@ func NewManager(cfg Config) (*Manager, error) {
 
 	logger.Info("definitions loaded",
 		"data_dir", cfg.DataDir,
-		"instances", m.instances.len(),
-		"snapshots", m.snapshots.len(),
-		"networks", m.networks.len(),
-		"volumes", m.volumes.len(),
-		"kernels", m.kernels.len(),
-		"tokens", m.tokens.len(),
+		"instances", s.instances.len(),
+		"snapshots", s.snapshots.len(),
+		"networks", s.networks.len(),
+		"volumes", s.volumes.len(),
+		"kernels", s.kernels.len(),
+		"tokens", s.tokens.len(),
 	)
 
-	return m, nil
+	return s, nil
 }
 
 // CreateInstance records a new instance definition.
-func (m *Manager) CreateInstance(v instance.Spec) error {
-	return m.instances.create(v)
+func (s *Store) CreateInstance(v instance.Spec) error {
+	return s.instances.create(v)
 }
 
 // Instance returns an instance by name or ID.
-func (m *Manager) Instance(nameOrID string) (instance.Spec, error) {
-	return m.instances.definition(nameOrID)
+func (s *Store) Instance(nameOrID string) (instance.Spec, error) {
+	return s.instances.definition(nameOrID)
 }
 
 // UpdateInstance overwrites an existing instance definition.
-func (m *Manager) UpdateInstance(v instance.Spec) error {
-	return m.instances.update(v)
+func (s *Store) UpdateInstance(v instance.Spec) error {
+	return s.instances.update(v)
 }
 
 // RenameInstance moves an instance to a new name, taking its directory, with
 // its overlay disk, console log and snapshots, with it.
-func (m *Manager) RenameInstance(nameOrID string, renamed instance.Spec) error {
-	return m.instances.rename(nameOrID, renamed)
+func (s *Store) RenameInstance(nameOrID string, renamed instance.Spec) error {
+	return s.instances.rename(nameOrID, renamed)
 }
 
 // DeleteInstance removes an instance and its directory, including its
 // overlay disk.
-func (m *Manager) DeleteInstance(nameOrID string) error {
-	return m.instances.delete(nameOrID)
+func (s *Store) DeleteInstance(nameOrID string) error {
+	return s.instances.delete(nameOrID)
 }
 
 // Instances returns every instance, sorted by name.
-func (m *Manager) Instances() []instance.Spec {
-	return m.instances.definitions()
+func (s *Store) Instances() []instance.Spec {
+	return s.instances.definitions()
 }
 
 // MatchingInstances returns the instances match reports true for, in no
-// particular order. match must not call back into the Manager.
-func (m *Manager) MatchingInstances(match func(instance.Spec) bool) []instance.Spec {
-	return m.instances.matchingDefinitions(match)
+// particular order. match must not call back into the Store.
+func (s *Store) MatchingInstances(match func(instance.Spec) bool) []instance.Spec {
+	return s.instances.matchingDefinitions(match)
 }
 
 // InstanceDir returns an instance's persistent directory, removed when the
 // instance is deleted.
-func (m *Manager) InstanceDir(name string) string {
-	return m.instances.nestedDir(name)
+func (s *Store) InstanceDir(name string) string {
+	return s.instances.nestedDir(name)
 }
 
 // StageSnapshot returns a new, empty directory beside the snapshots for a
 // snapshot's files to be written in before CreateSnapshot moves it into
 // place. One a crash leaves behind is removed when the store next loads.
-func (m *Manager) StageSnapshot() (string, error) {
-	dir, err := os.MkdirTemp(m.snapshots.dir, stagingPrefix)
+func (s *Store) StageSnapshot() (string, error) {
+	dir, err := os.MkdirTemp(s.snapshots.dir, stagingPrefix)
 	if err != nil {
 		return "", fmt.Errorf("create snapshot staging directory: %w", err)
 	}
@@ -167,112 +167,112 @@ func (m *Manager) StageSnapshot() (string, error) {
 // CreateSnapshot records a new snapshot whose files are in staged, a
 // directory from StageSnapshot, moving it into place. A snapshot is thus
 // either whole or absent.
-func (m *Manager) CreateSnapshot(v instance.Snapshot, staged string) error {
-	return m.snapshots.createFrom(v, staged)
+func (s *Store) CreateSnapshot(v instance.Snapshot, staged string) error {
+	return s.snapshots.createFrom(v, staged)
 }
 
 // Snapshot returns a snapshot by name or ID.
-func (m *Manager) Snapshot(nameOrID string) (instance.Snapshot, error) {
-	return m.snapshots.definition(nameOrID)
+func (s *Store) Snapshot(nameOrID string) (instance.Snapshot, error) {
+	return s.snapshots.definition(nameOrID)
 }
 
 // Snapshots returns every snapshot, sorted by name.
-func (m *Manager) Snapshots() []instance.Snapshot {
-	return m.snapshots.definitions()
+func (s *Store) Snapshots() []instance.Snapshot {
+	return s.snapshots.definitions()
 }
 
 // DeleteSnapshot removes a snapshot and its files.
-func (m *Manager) DeleteSnapshot(nameOrID string) error {
-	return m.snapshots.delete(nameOrID)
+func (s *Store) DeleteSnapshot(nameOrID string) error {
+	return s.snapshots.delete(nameOrID)
 }
 
 // SnapshotDir returns the directory holding a snapshot's files.
-func (m *Manager) SnapshotDir(name string) string {
-	return m.snapshots.nestedDir(name)
+func (s *Store) SnapshotDir(name string) string {
+	return s.snapshots.nestedDir(name)
 }
 
 // CreateNetwork records a new network definition.
-func (m *Manager) CreateNetwork(v network.Network) error {
-	return m.networks.create(v)
+func (s *Store) CreateNetwork(v network.Network) error {
+	return s.networks.create(v)
 }
 
 // Network returns a network by name or ID.
-func (m *Manager) Network(nameOrID string) (network.Network, error) {
-	return m.networks.definition(nameOrID)
+func (s *Store) Network(nameOrID string) (network.Network, error) {
+	return s.networks.definition(nameOrID)
 }
 
 // DeleteNetwork removes a network definition.
-func (m *Manager) DeleteNetwork(nameOrID string) error {
-	return m.networks.delete(nameOrID)
+func (s *Store) DeleteNetwork(nameOrID string) error {
+	return s.networks.delete(nameOrID)
 }
 
 // Networks returns every network, sorted by name.
-func (m *Manager) Networks() []network.Network {
-	return m.networks.definitions()
+func (s *Store) Networks() []network.Network {
+	return s.networks.definitions()
 }
 
 // CreateVolume records a new volume definition.
-func (m *Manager) CreateVolume(v volume.Volume) error {
-	return m.volumes.create(v)
+func (s *Store) CreateVolume(v volume.Volume) error {
+	return s.volumes.create(v)
 }
 
 // Volume returns a volume by name or ID.
-func (m *Manager) Volume(nameOrID string) (volume.Volume, error) {
-	return m.volumes.definition(nameOrID)
+func (s *Store) Volume(nameOrID string) (volume.Volume, error) {
+	return s.volumes.definition(nameOrID)
 }
 
 // DeleteVolume removes a volume definition. The backing disk is the volume
 // manager's to delete.
-func (m *Manager) DeleteVolume(nameOrID string) error {
-	return m.volumes.delete(nameOrID)
+func (s *Store) DeleteVolume(nameOrID string) error {
+	return s.volumes.delete(nameOrID)
 }
 
 // Volumes returns every volume, sorted by name.
-func (m *Manager) Volumes() []volume.Volume {
-	return m.volumes.definitions()
+func (s *Store) Volumes() []volume.Volume {
+	return s.volumes.definitions()
 }
 
 // CreateKernel records a new kernel definition.
-func (m *Manager) CreateKernel(v kernel.Kernel) error {
-	return m.kernels.create(v)
+func (s *Store) CreateKernel(v kernel.Kernel) error {
+	return s.kernels.create(v)
 }
 
 // Kernel returns a kernel by name or ID.
-func (m *Manager) Kernel(nameOrID string) (kernel.Kernel, error) {
-	return m.kernels.definition(nameOrID)
+func (s *Store) Kernel(nameOrID string) (kernel.Kernel, error) {
+	return s.kernels.definition(nameOrID)
 }
 
 // UpdateKernel replaces a kernel definition.
-func (m *Manager) UpdateKernel(v kernel.Kernel) error {
-	return m.kernels.update(v)
+func (s *Store) UpdateKernel(v kernel.Kernel) error {
+	return s.kernels.update(v)
 }
 
 // DeleteKernel removes a kernel definition. The binary is the kernel
 // manager's to delete.
-func (m *Manager) DeleteKernel(nameOrID string) error {
-	return m.kernels.delete(nameOrID)
+func (s *Store) DeleteKernel(nameOrID string) error {
+	return s.kernels.delete(nameOrID)
 }
 
 // Kernels returns every kernel, sorted by name.
-func (m *Manager) Kernels() []kernel.Kernel {
-	return m.kernels.definitions()
+func (s *Store) Kernels() []kernel.Kernel {
+	return s.kernels.definitions()
 }
 
 // CreateToken records a new token.
-func (m *Manager) CreateToken(v token.Token) error {
-	return m.tokens.create(v)
+func (s *Store) CreateToken(v token.Token) error {
+	return s.tokens.create(v)
 }
 
 // Token returns a token by name or ID.
-func (m *Manager) Token(nameOrID string) (token.Token, error) {
-	return m.tokens.definition(nameOrID)
+func (s *Store) Token(nameOrID string) (token.Token, error) {
+	return s.tokens.definition(nameOrID)
 }
 
 // TokenBySecretSHA256 returns the token whose secret has the SHA-256
 // secretSHA256, or an errdefs.ErrNotFound error if there is none. It
 // compares them in constant time.
-func (m *Manager) TokenBySecretSHA256(secretSHA256 string) (token.Token, error) {
-	matches := m.tokens.matchingDefinitions(func(v token.Token) bool {
+func (s *Store) TokenBySecretSHA256(secretSHA256 string) (token.Token, error) {
+	matches := s.tokens.matchingDefinitions(func(v token.Token) bool {
 		return subtle.ConstantTimeCompare([]byte(v.SecretSHA256), []byte(secretSHA256)) == 1
 	})
 	if len(matches) == 0 {
@@ -282,25 +282,25 @@ func (m *Manager) TokenBySecretSHA256(secretSHA256 string) (token.Token, error) 
 }
 
 // UpdateToken replaces a token.
-func (m *Manager) UpdateToken(v token.Token) error {
-	return m.tokens.update(v)
+func (s *Store) UpdateToken(v token.Token) error {
+	return s.tokens.update(v)
 }
 
 // RecordTokenUse records that a token, by name or ID, made a call at a time.
 // It changes nothing else, so a token rotated meanwhile stays rotated.
-func (m *Manager) RecordTokenUse(nameOrID string, at time.Time) error {
-	return m.tokens.change(nameOrID, func(v token.Token) token.Token {
+func (s *Store) RecordTokenUse(nameOrID string, at time.Time) error {
+	return s.tokens.change(nameOrID, func(v token.Token) token.Token {
 		v.LastUsedAt = at
 		return v
 	})
 }
 
 // DeleteToken removes a token.
-func (m *Manager) DeleteToken(nameOrID string) error {
-	return m.tokens.delete(nameOrID)
+func (s *Store) DeleteToken(nameOrID string) error {
+	return s.tokens.delete(nameOrID)
 }
 
 // Tokens returns every token, sorted by name.
-func (m *Manager) Tokens() []token.Token {
-	return m.tokens.definitions()
+func (s *Store) Tokens() []token.Token {
+	return s.tokens.definitions()
 }

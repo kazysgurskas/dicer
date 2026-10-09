@@ -76,7 +76,7 @@ func TestIdleInstanceIsPutOnStandby(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.instance.StandbyAfter = tt.standbyAfter
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
 			if tt.paused {
 				if err := h.manager.Pause(t.Context(), h.instance); err != nil {

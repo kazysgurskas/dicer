@@ -19,9 +19,9 @@ import (
 
 // imageHandler handles image-related RPCs.
 type imageHandler struct {
-	definitions *filestore.Manager
-	instances   *instance.Manager
-	images      *imagepkg.Manager
+	store     *filestore.Store
+	instances *instance.Manager
+	images    *imagepkg.Manager
 }
 
 // PullImage pulls an image, streaming progress and finally the image.
@@ -142,7 +142,7 @@ func (h *imageHandler) PruneImages(
 // the given digest, sorted.
 func (h *imageHandler) instancesUsing(digest string) []string {
 	var users []string
-	for _, instance := range h.definitions.Instances() {
+	for _, instance := range h.store.Instances() {
 		image, err := h.images.Image(instance.ImageRef)
 		if err == nil && image.Digest == digest {
 			users = append(users, instance.Name)

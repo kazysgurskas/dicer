@@ -20,7 +20,7 @@ import (
 
 // networkHandler handles network-related RPCs.
 type networkHandler struct {
-	definitions *filestore.Manager
+	store       *filestore.Store
 	networks    *network.Manager
 	hostSubnets func() ([]netip.Prefix, error)
 	events      recorder
@@ -43,7 +43,7 @@ func (h *networkHandler) CreateNetwork(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.definitions.Network(n.Name); err == nil {
+	if _, err := h.store.Network(n.Name); err == nil {
 		return nil, errdefs.Exists("network %q already exists", n.Name)
 	}
 
@@ -53,11 +53,11 @@ func (h *networkHandler) CreateNetwork(
 			return nil, fmt.Errorf("list the host's subnets: %w", err)
 		}
 	}
-	if err := network.CheckSubnetOverlap(n, h.definitions.Networks(), hostSubnets); err != nil {
+	if err := network.CheckSubnetOverlap(n, h.store.Networks(), hostSubnets); err != nil {
 		return nil, err
 	}
 
-	if err := h.definitions.CreateNetwork(n); err != nil {
+	if err := h.store.CreateNetwork(n); err != nil {
 		return nil, err
 	}
 	message := fmt.Sprintf("Created network with subnet %s, gateway %s", n.Subnet, n.Gateway)
@@ -76,7 +76,7 @@ func (h *networkHandler) CreateNetwork(
 func (h *networkHandler) ListNetworks(
 	_ context.Context, _ *dicerdv1.ListNetworksRequest,
 ) (*dicerdv1.ListNetworksResponse, error) {
-	networks := h.definitions.Networks()
+	networks := h.store.Networks()
 
 	resp := &dicerdv1.ListNetworksResponse{
 		Networks: make([]*dicerdv1.Network, 0, len(networks)),
@@ -96,7 +96,7 @@ func (h *networkHandler) ListNetworks(
 func (h *networkHandler) GetNetwork(
 	_ context.Context, req *dicerdv1.GetNetworkRequest,
 ) (*dicerdv1.Network, error) {
-	n, err := h.definitions.Network(req.GetName())
+	n, err := h.store.Network(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (h *networkHandler) GetNetwork(
 func (h *networkHandler) DeleteNetwork(
 	_ context.Context, req *dicerdv1.DeleteNetworkRequest,
 ) (*emptypb.Empty, error) {
-	n, err := h.definitions.Network(req.GetName())
+	n, err := h.store.Network(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +123,11 @@ func (h *networkHandler) DeleteNetwork(
 	}
 
 	inUse := func(instance instance.Spec) bool { return instance.NetworkName == n.Name }
-	if err := refuseInUse(h.definitions, fmt.Sprintf("network %q is in use", n.Name), inUse); err != nil {
+	if err := refuseInUse(h.store, fmt.Sprintf("network %q is in use", n.Name), inUse); err != nil {
 		return nil, err
 	}
 
-	if err := h.definitions.DeleteNetwork(n.Name); err != nil {
+	if err := h.store.DeleteNetwork(n.Name); err != nil {
 		return nil, err
 	}
 	h.record(n, events.ActionDeleted, "Deleted network with subnet "+n.Subnet)
@@ -156,7 +156,7 @@ func (h *networkHandler) record(n network.Network, action events.Action, message
 func (h *networkHandler) ListNetworkAllocations(
 	_ context.Context, req *dicerdv1.ListNetworkAllocationsRequest,
 ) (*dicerdv1.ListNetworkAllocationsResponse, error) {
-	n, err := h.definitions.Network(req.GetName())
+	n, err := h.store.Network(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (h *networkHandler) ListNetworkAllocations(
 		return nil, err
 	}
 
-	instances := h.definitions.Instances()
+	instances := h.store.Instances()
 	nameByID := make(map[string]string, len(instances))
 	for _, instance := range instances {
 		nameByID[instance.ID] = instance.Name

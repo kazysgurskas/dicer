@@ -51,7 +51,7 @@ func TestUpdateChangesTheRestartPolicyOfARunningInstance(t *testing.T) {
 	h.restartAtOnce()
 	h.start(t)
 
-	changed, err := h.definitions.Instance(h.instance.ID)
+	changed, err := h.store.Instance(h.instance.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

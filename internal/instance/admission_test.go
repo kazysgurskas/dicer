@@ -28,11 +28,11 @@ func admitHarness(t *testing.T) (*harness, Spec) {
 	h := newHarness(t)
 	h.manager.capacity = testCapacity
 
-	definitions, ok := h.manager.definitions.(*fakeDefinitions)
+	store, ok := h.manager.store.(*fakeStore)
 	if !ok {
-		t.Fatal("harness definitions are not fake")
+		t.Fatal("harness store is not the fake")
 	}
-	other := seedInstance(t, definitions, "other")
+	other := seedInstance(t, store, "other")
 
 	return h, other
 }
@@ -129,9 +129,9 @@ func TestRestoreAdmittedOnTheSnapshotsMemory(t *testing.T) {
 
 	// Make the snapshot as if taken with 4GiB, and fill the host so
 	// only 1GiB is left: enough for the definition, not for the snapshot.
-	snapshot := h.definitions.snapshots["big"]
+	snapshot := h.store.snapshots["big"]
 	snapshot.MemoryBytes = 4 << 30
-	h.definitions.snapshots["big"] = snapshot
+	h.store.snapshots["big"] = snapshot
 	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	_, err := h.manager.RestoreSnapshot(t.Context(), snapshot)
@@ -146,8 +146,8 @@ func TestConcurrentStartsCannotBothTakeTheLastRoom(t *testing.T) {
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
 	other.VCPUs, other.MemoryBytes = 1, 1<<30
 
-	definitions, _ := h.manager.definitions.(*fakeDefinitions)
-	third := seedInstance(t, definitions, "third")
+	store, _ := h.manager.store.(*fakeStore)
+	third := seedInstance(t, store, "third")
 	holding(t, h.manager, third, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	// The two starts never boot: admission is all that is under test, so
@@ -227,9 +227,9 @@ func dataMount(readOnly bool) []Mount {
 func (h *harness) seedVolumeHolder(t *testing.T, state State, readOnly bool) {
 	t.Helper()
 
-	other := seedInstance(t, h.definitions, "other")
+	other := seedInstance(t, h.store, "other")
 	other.Mounts = dataMount(readOnly)
-	h.definitions.instances[other.Name] = other
+	h.store.instances[other.Name] = other
 
 	if err := h.manager.writeStatus(Status{InstanceID: other.ID, State: state}); err != nil {
 		t.Fatalf("writeStatus: %v", err)
@@ -259,7 +259,7 @@ func TestAdmitVolumeSharing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.instance.Mounts = dataMount(tt.mine)
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 			h.seedVolumeHolder(t, tt.state, tt.theirs)
 
 			err := h.manager.admit(h.instance, h.instance.Resources())

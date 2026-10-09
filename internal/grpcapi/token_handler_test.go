@@ -20,22 +20,22 @@ import (
 var testFingerprint = strings.Repeat("ab", 32)
 
 // newTokenHandler returns a token handler for a daemon served over TCP with
-// a certificate of its own, and the definitions it keeps tokens in.
-func newTokenHandler(t *testing.T) (*tokenHandler, *filestore.Manager) {
+// a certificate of its own, and the store it keeps tokens in.
+func newTokenHandler(t *testing.T) (*tokenHandler, *filestore.Store) {
 	t.Helper()
 
-	definitions, err := filestore.NewManager(filestore.Config{DataDir: filepath.Join(t.TempDir(), "data")})
+	store, err := filestore.New(filestore.Config{DataDir: filepath.Join(t.TempDir(), "data")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &tokenHandler{definitions: definitions, servesTCP: true, fingerprint: testFingerprint}, definitions
+	return &tokenHandler{store: store, servesTCP: true, fingerprint: testFingerprint}, store
 }
 
 // TestCreateTokenKeepsOnlyTheSecretsSHA256 checks that the value returned is
 // the one thing that holds the secret: the daemon keeps its hash, and the
 // token answers to it.
 func TestCreateTokenKeepsOnlyTheSecretsSHA256(t *testing.T) {
-	h, definitions := newTokenHandler(t)
+	h, store := newTokenHandler(t)
 
 	issued, err := h.CreateToken(t.Context(), &dicerdv1.CreateTokenRequest{Name: "ci"})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestCreateTokenKeepsOnlyTheSecretsSHA256(t *testing.T) {
 		t.Errorf("fingerprint = %q, want the daemon's", fingerprint)
 	}
 
-	stored, err := definitions.TokenBySecretSHA256(token.SecretSHA256(secret))
+	stored, err := store.TokenBySecretSHA256(token.SecretSHA256(secret))
 	if err != nil || stored.Name != "ci" {
 		t.Fatalf("TokenBySecretSHA256 = %+v, %v; want the token ci", stored, err)
 	}
@@ -135,7 +135,7 @@ func TestCreateTokenWithAGivenSecret(t *testing.T) {
 }
 
 func TestRotateTokenReplacesTheSecret(t *testing.T) {
-	h, definitions := newTokenHandler(t)
+	h, store := newTokenHandler(t)
 
 	created, err := h.CreateToken(t.Context(), &dicerdv1.CreateTokenRequest{Name: "ci"})
 	if err != nil {
@@ -148,10 +148,10 @@ func TestRotateTokenReplacesTheSecret(t *testing.T) {
 
 	oldSecret, _, _ := token.Parse(created.GetValue())
 	newSecret, _, _ := token.Parse(rotated.GetValue())
-	if _, err := definitions.TokenBySecretSHA256(token.SecretSHA256(oldSecret)); err == nil {
+	if _, err := store.TokenBySecretSHA256(token.SecretSHA256(oldSecret)); err == nil {
 		t.Error("the old secret still names the token")
 	}
-	if got, err := definitions.TokenBySecretSHA256(token.SecretSHA256(newSecret)); err != nil || got.Name != "ci" {
+	if got, err := store.TokenBySecretSHA256(token.SecretSHA256(newSecret)); err != nil || got.Name != "ci" {
 		t.Errorf("the new secret names %+v, %v; want ci", got, err)
 	}
 	if rotated.GetToken().GetId() != created.GetToken().GetId() ||

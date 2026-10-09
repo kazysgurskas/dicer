@@ -15,7 +15,7 @@ import (
 // kernel, network or volume, more volumes than a guest can have, or more
 // resources than the host allows.
 func (h *instanceHandler) checkCanStart(instance instance.Spec) error {
-	if _, err := h.definitions.Kernel(instance.KernelName); err != nil {
+	if _, err := h.store.Kernel(instance.KernelName); err != nil {
 		return errdefs.InvalidArgument("%v", err)
 	}
 	if err := h.checkStaticIP(instance.NetworkName, instance.StaticIP); err != nil {
@@ -30,7 +30,7 @@ func (h *instanceHandler) checkCanStart(instance instance.Spec) error {
 // checkStaticIP checks that a network exists and that ip, if set, is an
 // assignable address on it.
 func (h *instanceHandler) checkStaticIP(networkName, ip string) error {
-	n, err := h.definitions.Network(networkName)
+	n, err := h.store.Network(networkName)
 	if err != nil {
 		return errdefs.InvalidArgument("%v", err)
 	}
@@ -60,7 +60,7 @@ func (h *instanceHandler) checkMounts(mounts []instance.Mount) error {
 			continue
 		}
 		volumes++
-		if _, err := h.definitions.Volume(m.Source); err != nil {
+		if _, err := h.store.Volume(m.Source); err != nil {
 			return errdefs.InvalidArgument("%v", err)
 		}
 	}

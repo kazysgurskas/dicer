@@ -161,7 +161,7 @@ func TestCreateSnapshotRejections(t *testing.T) {
 	t.Run("name another instance's snapshot has", func(t *testing.T) {
 		h := newHarness(t)
 		h.running(t)
-		other := seedInstance(t, h.definitions, "other")
+		other := seedInstance(t, h.store, "other")
 		if err := os.MkdirAll(filepath.Dir(h.manager.overlayDiskPath(other)), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -214,7 +214,7 @@ func TestCreateSnapshotCleansUpAfterFailure(t *testing.T) {
 	if _, err := h.manager.Snapshot("doomed"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("Snapshot after a failure = %v, want ErrNotFound", err)
 	}
-	entries, err := os.ReadDir(filepath.Dir(h.definitions.SnapshotDir("doomed")))
+	entries, err := os.ReadDir(filepath.Dir(h.store.SnapshotDir("doomed")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestRestoreSnapshotIsAUserStart(t *testing.T) {
 		t.Fatalf("RestoreSnapshot: %v", err)
 	}
 
-	if instance, _ := h.definitions.Instance(h.instance.ID); instance.StoppedByUser {
+	if instance, _ := h.store.Instance(h.instance.ID); instance.StoppedByUser {
 		t.Error("the restored instance is still recorded as stopped by a user")
 	}
 }
@@ -408,7 +408,7 @@ func TestRestoreMemorySnapshotRefusesAChangedInstance(t *testing.T) {
 	}{
 		{"mounts", func(t *testing.T, h *harness) {
 			h.instance.Mounts = []Mount{{Type: MountTypeTmpfs, Target: "/scratch"}}
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 		}},
 		{"address", func(t *testing.T, h *harness) {
 			if err := h.manager.networks.Release(h.instance.NetworkName, h.instance.ID); err != nil {

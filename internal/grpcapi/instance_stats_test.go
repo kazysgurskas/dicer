@@ -38,8 +38,8 @@ func (s *instanceStatsStream) Send(resp *dicerdv1.GetInstanceStatsResponse) erro
 func newInstanceStatsServer(t *testing.T) *Server {
 	t.Helper()
 
-	s, definitions := newTestServer(t)
-	if err := definitions.CreateInstance(instance.Spec{ID: "i-1", Name: "web"}); err != nil {
+	s, store := newTestServer(t)
+	if err := store.CreateInstance(instance.Spec{ID: "i-1", Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	s.statsInterval = time.Millisecond

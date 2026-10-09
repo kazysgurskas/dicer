@@ -41,7 +41,7 @@ type daemon struct {
 	cfg    *Config
 	logger *slog.Logger
 
-	definitions *filestore.Manager
+	store       *filestore.Store
 	networks    *network.Manager
 	instances   *instance.Manager
 	hostNetwork *hostnet.Host
@@ -81,7 +81,10 @@ func (d *daemon) Run(ctx context.Context) error {
 	d.logger.Info("starting Dicer",
 		"version", version.Version, "commit", version.Commit, "date", version.BuildDate)
 
-	if err := d.openDefinitionsAndAllocations(); err != nil {
+	if err := d.openStore(); err != nil {
+		return err
+	}
+	if err := d.openNetworks(); err != nil {
 		return err
 	}
 
@@ -204,19 +207,25 @@ func stopServer(server *grpc.Server, timeout time.Duration) {
 	}
 }
 
-// openDefinitionsAndAllocations opens what the daemon keeps on disk about
-// instances, networks, volumes and kernels: their definitions, and the
-// networks' address allocations.
-func (d *daemon) openDefinitionsAndAllocations() error {
+// openStore opens the store of instance, snapshot, network, volume, kernel and
+// token definitions.
+func (d *daemon) openStore() error {
 	var err error
-	d.definitions, err = filestore.NewManager(filestore.Config{
+	d.store, err = filestore.New(filestore.Config{
 		DataDir: d.cfg.DataDir,
 		Logger:  d.logger,
 	})
 	if err != nil {
-		return fmt.Errorf("open definitions: %w", err)
+		return fmt.Errorf("open store: %w", err)
 	}
 
+	return nil
+}
+
+// openNetworks opens the network manager, which keeps the networks' address
+// allocations.
+func (d *daemon) openNetworks() error {
+	var err error
 	d.networks, err = network.NewManager(network.Config{
 		Dir:    filepath.Join(d.cfg.DataDir, "allocations"),
 		Logger: d.logger,
@@ -308,7 +317,7 @@ func (d *daemon) initServices() error {
 	}
 
 	instanceCfg := instance.Config{
-		Definitions: d.definitions,
+		Store:       d.store,
 		Networks:    d.networks,
 		RunDir:      d.cfg.RunDir,
 		Images:      d.images,

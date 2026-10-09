@@ -151,7 +151,7 @@ func scrape(t *testing.T, url string) string {
 
 func TestNetworkSummariesJoinsDefinitionsAndAllocations(t *testing.T) {
 	d := newTestDaemon(t, MetricsConfig{})
-	openTestDefinitionsAndAllocations(t, d)
+	openTestDataDir(t, d)
 
 	// A /24 has 256 addresses, of which the network, broadcast and gateway
 	// addresses are not assignable: 253 can be handed out.
@@ -159,7 +159,7 @@ func TestNetworkSummariesJoinsDefinitionsAndAllocations(t *testing.T) {
 	nw := network.Network{
 		ID: "n-1", Name: "default", Subnet: subnet, Gateway: "172.20.0.1", Bridge: "dicer0",
 	}
-	if err := d.definitions.CreateNetwork(nw); err != nil {
+	if err := d.store.CreateNetwork(nw); err != nil {
 		t.Fatalf("create network: %v", err)
 	}
 
@@ -189,30 +189,33 @@ func TestNetworkSummariesJoinsDefinitionsAndAllocations(t *testing.T) {
 // A host with no networks reports none, rather than an error or a series.
 func TestNetworkSummariesWithNoNetworks(t *testing.T) {
 	d := newTestDaemon(t, MetricsConfig{})
-	openTestDefinitionsAndAllocations(t, d)
+	openTestDataDir(t, d)
 
 	if stats := d.networkSummaries(); len(stats) != 0 {
 		t.Errorf("networkSummaries() = %+v, want none", stats)
 	}
 }
 
-// The sources are registered before definitions and allocations are opened,
-// so they have to cope with being called first.
-func TestNetworkSummariesBeforeDefinitionsAndAllocationsAreOpened(t *testing.T) {
+// The sources are registered before the store and the network manager are
+// opened, so they have to cope with being called first.
+func TestNetworkSummariesBeforeTheDataDirIsOpened(t *testing.T) {
 	d := newTestDaemon(t, MetricsConfig{})
 
 	if stats := d.networkSummaries(); stats != nil {
-		t.Errorf("networkSummaries() = %+v, want nil before definitions and allocations are opened", stats)
+		t.Errorf("networkSummaries() = %+v, want nil before the store and the network manager are opened", stats)
 	}
 }
 
-// openTestDefinitionsAndAllocations gives a daemon definitions and a network manager rooted in a
-// temporary directory, as openDefinitionsAndAllocations does at startup.
-func openTestDefinitionsAndAllocations(t *testing.T, d *daemon) {
+// openTestDataDir gives a daemon a store and a network manager in a temporary
+// data directory, as Run opens them at startup.
+func openTestDataDir(t *testing.T, d *daemon) {
 	t.Helper()
 
 	d.cfg.DataDir = t.TempDir()
-	if err := d.openDefinitionsAndAllocations(); err != nil {
-		t.Fatalf("open definitions and allocations: %v", err)
+	if err := d.openStore(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.openNetworks(); err != nil {
+		t.Fatal(err)
 	}
 }

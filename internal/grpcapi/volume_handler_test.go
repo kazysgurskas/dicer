@@ -17,15 +17,15 @@ import (
 // TestVolumeDeletedIsRecorded checks a volume's deletion is recorded with its
 // size, and a refused deletion is not.
 func TestVolumeDeletedIsRecorded(t *testing.T) {
-	s, definitions := newTestServer(t)
+	s, store := newTestServer(t)
 	recorded := &fakeRecorder{}
 	s.volumeHandler.events = recorded
 
 	volume := volume.Volume{ID: "v-1", Name: "data", SizeBytes: 10 << 30}
-	if err := definitions.CreateVolume(volume); err != nil {
+	if err := store.CreateVolume(volume); err != nil {
 		t.Fatal(err)
 	}
-	if err := definitions.CreateInstance(instance.Spec{
+	if err := store.CreateInstance(instance.Spec{
 		ID: "i-1", Name: "db", Mounts: []instance.Mount{{Type: instance.MountTypeVolume, Source: "data", Target: "/data"}},
 	}); err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestVolumeDeletedIsRecorded(t *testing.T) {
 		t.Fatalf("a refused deletion recorded %+v", recorded.events)
 	}
 
-	if err := definitions.DeleteInstance("db"); err != nil {
+	if err := store.DeleteInstance("db"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeleteVolume(t.Context(), &dicerdv1.DeleteVolumeRequest{Name: "data"}); err != nil {

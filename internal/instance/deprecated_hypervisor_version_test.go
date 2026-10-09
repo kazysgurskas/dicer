@@ -25,16 +25,16 @@ func TestWarnDeprecatedHypervisorVersionsNamesWhatMustMove(t *testing.T) {
 	var logs bytes.Buffer
 	h.manager.logger = slog.New(slog.NewTextHandler(&logs, nil))
 
-	pinned := seedInstance(t, h.definitions, "pinned")
+	pinned := seedInstance(t, h.store, "pinned")
 	pinned.HypervisorVersion = testHypervisorVersion
-	h.definitions.instances[pinned.Name] = pinned
-	seedInstance(t, h.definitions, "fresh")
+	h.store.instances[pinned.Name] = pinned
+	seedInstance(t, h.store, "fresh")
 	h.running(t)
-	h.definitions.snapshots["old"] = Snapshot{
+	h.store.snapshots["old"] = Snapshot{
 		Name: "old", Kind: SnapshotKindMemory,
 		HypervisorType: hypervisor.TypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
 	}
-	h.definitions.snapshots["disk"] = Snapshot{
+	h.store.snapshots["disk"] = Snapshot{
 		Name: "disk", Kind: SnapshotKindDisk,
 		HypervisorType: hypervisor.TypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
 	}
@@ -71,7 +71,7 @@ func TestBootWarnsOfDeprecatedHypervisorVersion(t *testing.T) {
 	h.manager.logger = slog.New(slog.NewTextHandler(&logs, nil))
 
 	h.instance.HypervisorVersion = testHypervisorVersion
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 	if err := h.manager.Start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}

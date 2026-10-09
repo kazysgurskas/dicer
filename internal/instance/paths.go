@@ -30,7 +30,7 @@ const (
 
 // instanceDir returns an instance's persistent directory.
 func (m *Manager) instanceDir(instance Spec) string {
-	return m.definitions.InstanceDir(instance.Name)
+	return m.store.InstanceDir(instance.Name)
 }
 
 // overlayDiskPath returns the writable disk holding an instance's root
@@ -57,7 +57,7 @@ func (m *Manager) serialLogPath(instance Spec) string {
 
 // snapshotDir returns the directory holding a snapshot's files.
 func (m *Manager) snapshotDir(snapshot Snapshot) string {
-	return m.definitions.SnapshotDir(snapshot.Name)
+	return m.store.SnapshotDir(snapshot.Name)
 }
 
 // snapshotOverlayDiskPath returns a snapshot's copy of the overlay disk.

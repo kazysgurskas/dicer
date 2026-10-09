@@ -43,7 +43,7 @@ func TestMountsFromProtoCleansTargets(t *testing.T) {
 // TestCheckMounts checks what of an instance's mounts needs the host: that
 // its volumes exist and fit.
 func TestCheckMounts(t *testing.T) {
-	definitions, err := filestore.NewManager(filestore.Config{
+	store, err := filestore.New(filestore.Config{
 		DataDir: filepath.Join(t.TempDir(), "data"),
 		Logger:  slog.New(slog.DiscardHandler),
 	})
@@ -52,11 +52,11 @@ func TestCheckMounts(t *testing.T) {
 	}
 	for i := range instance.MaxVolumeMounts + 1 {
 		name := fmt.Sprintf("v%d", i)
-		if err := definitions.CreateVolume(volume.Volume{ID: "id-" + name, Name: name}); err != nil {
+		if err := store.CreateVolume(volume.Volume{ID: "id-" + name, Name: name}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	h := &instanceHandler{definitions: definitions}
+	h := &instanceHandler{store: store}
 
 	if err := h.checkMounts([]instance.Mount{
 		{Type: instance.MountTypeVolume, Source: "v0", Target: "/data"},

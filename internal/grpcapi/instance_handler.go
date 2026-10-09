@@ -24,8 +24,8 @@ import (
 
 // instanceHandler handles instance-related RPCs.
 type instanceHandler struct {
-	definitions *filestore.Manager
-	instances   *instance.Manager
+	store     *filestore.Store
+	instances *instance.Manager
 
 	// statsInterval is how often GetInstanceStats reads stats.
 	statsInterval time.Duration
@@ -134,7 +134,7 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 	}
 	spec.ImageRef = imageRef.String()
 
-	if _, err := h.definitions.Instance(spec.Name); err == nil {
+	if _, err := h.store.Instance(spec.Name); err == nil {
 		return instance.Spec{}, errdefs.Exists("instance %q already exists", spec.Name)
 	}
 	if err := h.checkCanStart(spec); err != nil {
@@ -149,7 +149,7 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 func (h *instanceHandler) UpdateInstance(
 	ctx context.Context, req *dicerdv1.UpdateInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -208,13 +208,13 @@ func (h *instanceHandler) applyReferences(instance *instance.Spec, req *dicerdv1
 		instance.ImageRef = ref.String()
 	}
 	if v := req.KernelName; v != nil {
-		if _, err := h.definitions.Kernel(*v); err != nil {
+		if _, err := h.store.Kernel(*v); err != nil {
 			return errdefs.InvalidArgument("%v", err)
 		}
 		instance.KernelName = *v
 	}
 	if v := req.NetworkName; v != nil {
-		if _, err := h.definitions.Network(*v); err != nil {
+		if _, err := h.store.Network(*v); err != nil {
 			return errdefs.InvalidArgument("%v", err)
 		}
 		instance.NetworkName = *v
@@ -286,7 +286,7 @@ func applyLists(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) er
 func (h *instanceHandler) StartInstance(
 	ctx context.Context, req *dicerdv1.StartInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func (h *instanceHandler) StartInstance(
 func (h *instanceHandler) StopInstance(
 	ctx context.Context, req *dicerdv1.StopInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +318,7 @@ func (h *instanceHandler) StopInstance(
 func (h *instanceHandler) PauseInstance(
 	ctx context.Context, req *dicerdv1.PauseInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func (h *instanceHandler) PauseInstance(
 func (h *instanceHandler) StandbyInstance(
 	ctx context.Context, req *dicerdv1.StandbyInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func (h *instanceHandler) ResizeInstance(
 	if req.Vcpus == nil && req.MemoryBytes == nil {
 		return nil, errdefs.InvalidArgument("a resize needs vcpus, memory_bytes or both")
 	}
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +384,7 @@ func (h *instanceHandler) ResizeInstance(
 func (h *instanceHandler) ResumeInstance(
 	ctx context.Context, req *dicerdv1.ResumeInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (h *instanceHandler) ResumeInstance(
 func (h *instanceHandler) RenameInstance(
 	ctx context.Context, req *dicerdv1.RenameInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (h *instanceHandler) RenameInstance(
 func (h *instanceHandler) DeleteInstance(
 	ctx context.Context, req *dicerdv1.DeleteInstanceRequest,
 ) (*emptypb.Empty, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +434,7 @@ func (h *instanceHandler) DeleteInstance(
 func (h *instanceHandler) GetInstance(
 	_ context.Context, req *dicerdv1.GetInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.definitions.Instance(req.GetName())
+	instance, err := h.store.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func (h *instanceHandler) GetInstance(
 func (h *instanceHandler) ListInstances(
 	_ context.Context, _ *dicerdv1.ListInstancesRequest,
 ) (*dicerdv1.ListInstancesResponse, error) {
-	instances := h.definitions.Instances()
+	instances := h.store.Instances()
 
 	resp := &dicerdv1.ListInstancesResponse{
 		Instances: make([]*dicerdv1.Instance, 0, len(instances)),

@@ -98,11 +98,11 @@ func (m *Manager) CreateSnapshot(
 		return Snapshot{}, err
 	}
 	// Checked again as the snapshot is recorded; this spares taking it.
-	if _, err := m.definitions.Snapshot(name); err == nil {
+	if _, err := m.store.Snapshot(name); err == nil {
 		return Snapshot{}, errdefs.Exists("snapshot %q already exists", name)
 	}
 
-	staged, err := m.definitions.StageSnapshot()
+	staged, err := m.store.StageSnapshot()
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -116,7 +116,7 @@ func (m *Manager) CreateSnapshot(
 	}
 	snapshot.ID, snapshot.Name, snapshot.CreatedAt = cuid2.Generate(), name, started
 
-	if err := m.definitions.CreateSnapshot(snapshot, staged); err != nil {
+	if err := m.store.CreateSnapshot(snapshot, staged); err != nil {
 		return Snapshot{}, err
 	}
 	snapshot.SizeBytes, _ = diskfile.AllocatedBytesUnder(m.snapshotDir(snapshot))
@@ -295,7 +295,7 @@ func memoryTransferTimeout(memoryBytes int64) time.Duration {
 
 // Snapshots returns every snapshot, oldest first.
 func (m *Manager) Snapshots() []Snapshot {
-	snapshots := m.definitions.Snapshots()
+	snapshots := m.store.Snapshots()
 	for i := range snapshots {
 		snapshots[i].SizeBytes, _ = diskfile.AllocatedBytesUnder(m.snapshotDir(snapshots[i]))
 	}
@@ -307,7 +307,7 @@ func (m *Manager) Snapshots() []Snapshot {
 // Snapshot returns a snapshot by name or ID, or an errdefs.ErrNotFound error
 // if there is none.
 func (m *Manager) Snapshot(nameOrID string) (Snapshot, error) {
-	snapshot, err := m.definitions.Snapshot(nameOrID)
+	snapshot, err := m.store.Snapshot(nameOrID)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -326,7 +326,7 @@ func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot Snapshot) (err er
 	lock.Lock()
 	defer lock.Unlock()
 
-	if err := m.definitions.DeleteSnapshot(snapshot.ID); err != nil {
+	if err := m.store.DeleteSnapshot(snapshot.ID); err != nil {
 		return err
 	}
 
@@ -351,7 +351,7 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spe
 	lock.Lock()
 	defer lock.Unlock()
 
-	instance, err := m.definitions.Instance(snapshot.Instance.ID)
+	instance, err := m.store.Instance(snapshot.Instance.ID)
 	if errors.Is(err, errdefs.ErrNotFound) {
 		return Spec{}, errdefs.NotFound("instance %q, which snapshot %q was taken of, has been deleted",
 			snapshot.Instance.Name, snapshot.Name)

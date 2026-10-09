@@ -44,7 +44,7 @@ func (m *Manager) StandbyIdle(ctx context.Context) {
 func (m *Manager) standbyIdle(ctx context.Context, tracker *idleTracker, sample []Stats) {
 	sampled := make(map[string]bool, len(sample))
 	for _, stats := range sample {
-		instance, err := m.definitions.Instance(stats.InstanceID)
+		instance, err := m.store.Instance(stats.InstanceID)
 		if err != nil || instance.StandbyAfter == 0 {
 			continue
 		}

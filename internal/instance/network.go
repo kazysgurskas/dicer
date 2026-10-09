@@ -32,7 +32,7 @@ type networkSetup struct {
 // setupNetwork allocates an address and attaches a TAP device to the
 // network's bridge.
 func (m *Manager) setupNetwork(ctx context.Context, instance Spec) (*networkSetup, error) {
-	nw, err := m.definitions.Network(instance.NetworkName)
+	nw, err := m.store.Network(instance.NetworkName)
 	if err != nil {
 		return nil, fmt.Errorf("get network %q: %w", instance.NetworkName, err)
 	}
@@ -183,7 +183,7 @@ func (m *Manager) serveDNS(ctx context.Context, nw network.Network) bool {
 // the network's bridge if no other instance uses it. The address is kept.
 // Failures are logged.
 func (m *Manager) teardownNetwork(ctx context.Context, instance Spec) {
-	nw, err := m.definitions.Network(instance.NetworkName)
+	nw, err := m.store.Network(instance.NetworkName)
 	if err != nil {
 		m.logger.WarnContext(ctx, "network not found while tearing it down",
 			"instance", instance.Name, "network", instance.NetworkName, "error", err)
@@ -212,7 +212,7 @@ func (m *Manager) teardownNetwork(ctx context.Context, instance Spec) {
 // networkInUse reports whether any instance other than excludeID is active
 // on the network. It errs towards true.
 func (m *Manager) networkInUse(nw network.Network, excludeID string) bool {
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	for _, other := range instances {
 		if other.ID == excludeID || other.NetworkName != nw.Name {

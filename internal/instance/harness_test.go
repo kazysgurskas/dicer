@@ -26,15 +26,15 @@ const testHypervisorVersion = "v49.0.0"
 
 // newTestManager returns a Manager over in-memory definitions and a fake host
 // network, with nothing wired up to start a VMM; see newHarness for that.
-func newTestManager(t *testing.T) (*Manager, *fakeDefinitions, *fakeHostNetwork) {
+func newTestManager(t *testing.T) (*Manager, *fakeStore, *fakeHostNetwork) {
 	t.Helper()
 
 	dir := t.TempDir()
-	definitions := newFakeDefinitions(dir)
+	store := newFakeStore(dir)
 	hostNetwork := &fakeHostNetwork{}
 
 	manager := NewManager(Config{
-		Definitions: definitions,
+		Store:       store,
 		Networks:    newFakeNetworks(),
 		RunDir:      filepath.Join(dir, "run"),
 		HostNetwork: hostNetwork,
@@ -47,7 +47,7 @@ func newTestManager(t *testing.T) (*Manager, *fakeDefinitions, *fakeHostNetwork)
 		return nil, fmt.Errorf("process %d: %w", pid, errNotRunning)
 	}
 
-	return manager, definitions, hostNetwork
+	return manager, store, hostNetwork
 }
 
 // errNotRunning is what the test Manager's attach reports for every PID.
@@ -55,11 +55,11 @@ var errNotRunning = errors.New("not running")
 
 // seedInstance defines an instance on the default network, defining that too
 // if need be.
-func seedInstance(t *testing.T, definitions *fakeDefinitions, name string) Spec {
+func seedInstance(t *testing.T, store *fakeStore, name string) Spec {
 	t.Helper()
 
-	if _, ok := definitions.networks["default"]; !ok {
-		definitions.networks["default"] = network.Network{
+	if _, ok := store.networks["default"]; !ok {
+		store.networks["default"] = network.Network{
 			ID: "net-default", Name: "default",
 			Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
 		}
@@ -69,7 +69,7 @@ func seedInstance(t *testing.T, definitions *fakeDefinitions, name string) Spec 
 		ID: "id-" + name, Name: name,
 		ImageRef: "alpine:latest", KernelName: "k", NetworkName: "default", VCPUs: 1,
 	}
-	definitions.instances[name] = instance
+	store.instances[name] = instance
 
 	return instance
 }
@@ -80,7 +80,7 @@ func seedInstance(t *testing.T, definitions *fakeDefinitions, name string) Spec 
 type harness struct {
 	manager     *Manager
 	events      *fakeRecorder
-	definitions *fakeDefinitions
+	store       *fakeStore
 	hostNetwork *fakeHostNetwork
 	instance    Spec
 	starter     *fakeStarter
@@ -92,9 +92,9 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 
-	manager, definitions, hostNetwork := newTestManager(t)
-	instance := seedInstance(t, definitions, "web")
-	definitions.kernels["k"] = kernel.Kernel{Name: "k"}
+	manager, store, hostNetwork := newTestManager(t)
+	instance := seedInstance(t, store, "web")
+	store.kernels["k"] = kernel.Kernel{Name: "k"}
 
 	hv := newFakeHypervisor()
 	starter := &fakeStarter{version: testHypervisorVersion, hv: hv}
@@ -137,7 +137,7 @@ func newHarness(t *testing.T) *harness {
 	recorded := &fakeRecorder{}
 	manager.events = recorded
 
-	return &harness{manager: manager, events: recorded, definitions: definitions, hostNetwork: hostNetwork, instance: instance, starter: starter, hv: hv, agent: agent, overlay: overlay}
+	return &harness{manager: manager, events: recorded, store: store, hostNetwork: hostNetwork, instance: instance, starter: starter, hv: hv, agent: agent, overlay: overlay}
 }
 
 // running records the instance as running without starting anything, for
@@ -160,7 +160,7 @@ func (h *harness) running(t *testing.T) {
 	}
 
 	// A running guest holds an address on its network.
-	nw, err := h.definitions.Network(h.instance.NetworkName)
+	nw, err := h.store.Network(h.instance.NetworkName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func (h *harness) setRestart(t *testing.T, p RestartPolicy) {
 	t.Helper()
 
 	h.instance.Restart = p
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 }
 
 // exit ends the current guest as dicer-init does when its workload exits:

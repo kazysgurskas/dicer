@@ -42,7 +42,7 @@ func (m *Manager) admit(instance Spec, need Resources) error {
 
 	// The instance may have been deleted while the caller waited for the
 	// lock.
-	if _, err := m.definitions.Instance(instance.ID); err != nil {
+	if _, err := m.store.Instance(instance.ID); err != nil {
 		return err
 	}
 
@@ -101,7 +101,7 @@ func (m *Manager) checkRoom(instance Spec, need Resources) error {
 
 // allocated returns what the instances other than excludeID hold.
 func (m *Manager) allocated(excludeID string) (Resources, error) {
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	var total Resources
 	for _, instance := range instances {
@@ -126,7 +126,7 @@ func (m *Manager) checkPorts(instance Spec) error {
 		return nil
 	}
 
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	for _, other := range instances {
 		if other.ID == instance.ID || len(other.Ports) == 0 {
@@ -159,7 +159,7 @@ func (m *Manager) checkVolumes(instance Spec) error {
 		return nil
 	}
 
-	instances := m.definitions.Instances()
+	instances := m.store.Instances()
 
 	for _, other := range instances {
 		if other.ID == instance.ID || !slices.ContainsFunc(other.Mounts, isVolume) {

@@ -24,9 +24,9 @@ import (
 
 // kernelHandler handles kernel-related RPCs.
 type kernelHandler struct {
-	definitions *filestore.Manager
-	kernels     *kernel.Manager
-	events      recorder
+	store   *filestore.Store
+	kernels *kernel.Manager
+	events  recorder
 }
 
 // ImportKernel puts a kernel the client sends on the host, and records it
@@ -67,7 +67,7 @@ func (h *kernelHandler) ImportKernel(
 		_ = h.kernels.Delete(k.ID)
 		return err
 	}
-	if err := h.definitions.CreateKernel(k); err != nil {
+	if err := h.store.CreateKernel(k); err != nil {
 		_ = h.kernels.Delete(k.ID)
 		return err
 	}
@@ -114,7 +114,7 @@ func (h *kernelHandler) checkNewKernel(k kernel.Kernel) error {
 	if k.Name == kernel.DefaultName {
 		return errdefs.InvalidArgument("%q is the default kernel's name: import the kernel under another", k.Name)
 	}
-	if _, err := h.definitions.Kernel(k.Name); err == nil {
+	if _, err := h.store.Kernel(k.Name); err == nil {
 		return errdefs.Exists("kernel %q already exists", k.Name)
 	}
 	return nil
@@ -124,7 +124,7 @@ func (h *kernelHandler) checkNewKernel(k kernel.Kernel) error {
 func (h *kernelHandler) ListKernels(
 	_ context.Context, _ *dicerdv1.ListKernelsRequest,
 ) (*dicerdv1.ListKernelsResponse, error) {
-	kernels := h.definitions.Kernels()
+	kernels := h.store.Kernels()
 
 	resp := &dicerdv1.ListKernelsResponse{
 		Kernels: make([]*dicerdv1.Kernel, 0, len(kernels)),
@@ -140,7 +140,7 @@ func (h *kernelHandler) ListKernels(
 func (h *kernelHandler) GetKernel(
 	_ context.Context, req *dicerdv1.GetKernelRequest,
 ) (*dicerdv1.Kernel, error) {
-	k, err := h.definitions.Kernel(req.GetName())
+	k, err := h.store.Kernel(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (h *kernelHandler) GetKernel(
 func (h *kernelHandler) DeleteKernel(
 	_ context.Context, req *dicerdv1.DeleteKernelRequest,
 ) (*emptypb.Empty, error) {
-	k, err := h.definitions.Kernel(req.GetName())
+	k, err := h.store.Kernel(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -162,11 +162,11 @@ func (h *kernelHandler) DeleteKernel(
 	}
 
 	inUse := func(instance instance.Spec) bool { return instance.KernelName == k.Name }
-	if err := refuseInUse(h.definitions, fmt.Sprintf("kernel %q is in use", k.Name), inUse); err != nil {
+	if err := refuseInUse(h.store, fmt.Sprintf("kernel %q is in use", k.Name), inUse); err != nil {
 		return nil, err
 	}
 
-	if err := h.definitions.DeleteKernel(k.Name); err != nil {
+	if err := h.store.DeleteKernel(k.Name); err != nil {
 		return nil, err
 	}
 	h.record(k, events.ActionDeleted, "Deleted kernel and its copy on the host")

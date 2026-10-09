@@ -31,17 +31,17 @@ import (
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
-// The fakes below are why Definitions and Networks are interfaces declared in
-// this package: the lifecycle can be tested without a filesystem or the
-// storage implementation.
+// The fakes below are why Store and Networks are interfaces declared in this
+// package: the lifecycle can be tested without a filesystem or the storage
+// implementation.
 
-// fakeDefinitions is an in-memory Definitions.
+// fakeStore is an in-memory Store.
 //
 // The manager writes to it from the goroutines that supervise a guest -- an
 // instance started with --rm is deleted by the one that notices the VMM
 // exit -- while the test that is waiting reads it. So every method takes the
-// mutex, as filestore.Manager's own locking does.
-type fakeDefinitions struct {
+// mutex, as filestore.Store's own locking does.
+type fakeStore struct {
 	mu        sync.Mutex
 	instances map[string]Spec
 	snapshots map[string]Snapshot
@@ -51,8 +51,8 @@ type fakeDefinitions struct {
 	dir       string
 }
 
-func newFakeDefinitions(dir string) *fakeDefinitions {
-	return &fakeDefinitions{
+func newFakeStore(dir string) *fakeStore {
+	return &fakeStore{
 		instances: make(map[string]Spec),
 		snapshots: make(map[string]Snapshot),
 		networks:  make(map[string]network.Network),
@@ -62,7 +62,7 @@ func newFakeDefinitions(dir string) *fakeDefinitions {
 	}
 }
 
-func (f *fakeDefinitions) Instance(nameOrID string) (Spec, error) {
+func (f *fakeStore) Instance(nameOrID string) (Spec, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -71,7 +71,7 @@ func (f *fakeDefinitions) Instance(nameOrID string) (Spec, error) {
 
 // instance is Instance without the lock, for the methods that already
 // hold it.
-func (f *fakeDefinitions) instance(nameOrID string) (Spec, error) {
+func (f *fakeStore) instance(nameOrID string) (Spec, error) {
 	if instance, ok := f.instances[nameOrID]; ok {
 		return instance, nil
 	}
@@ -83,7 +83,7 @@ func (f *fakeDefinitions) instance(nameOrID string) (Spec, error) {
 	return Spec{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Instances() []Spec {
+func (f *fakeStore) Instances() []Spec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -95,7 +95,7 @@ func (f *fakeDefinitions) Instances() []Spec {
 	return out
 }
 
-func (f *fakeDefinitions) MatchingInstances(match func(Spec) bool) []Spec {
+func (f *fakeStore) MatchingInstances(match func(Spec) bool) []Spec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -108,7 +108,7 @@ func (f *fakeDefinitions) MatchingInstances(match func(Spec) bool) []Spec {
 	return out
 }
 
-func (f *fakeDefinitions) CreateInstance(instance Spec) error {
+func (f *fakeStore) CreateInstance(instance Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -119,7 +119,7 @@ func (f *fakeDefinitions) CreateInstance(instance Spec) error {
 	return nil
 }
 
-func (f *fakeDefinitions) UpdateInstance(instance Spec) error {
+func (f *fakeStore) UpdateInstance(instance Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -130,7 +130,7 @@ func (f *fakeDefinitions) UpdateInstance(instance Spec) error {
 	return nil
 }
 
-func (f *fakeDefinitions) RenameInstance(nameOrID string, renamed Spec) error {
+func (f *fakeStore) RenameInstance(nameOrID string, renamed Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -152,7 +152,7 @@ func (f *fakeDefinitions) RenameInstance(nameOrID string, renamed Spec) error {
 	return nil
 }
 
-func (f *fakeDefinitions) DeleteInstance(nameOrID string) error {
+func (f *fakeStore) DeleteInstance(nameOrID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -164,11 +164,11 @@ func (f *fakeDefinitions) DeleteInstance(nameOrID string) error {
 	return nil
 }
 
-func (f *fakeDefinitions) InstanceDir(name string) string {
+func (f *fakeStore) InstanceDir(name string) string {
 	return filepath.Join(f.dir, "instances", name)
 }
 
-func (f *fakeDefinitions) StageSnapshot() (string, error) {
+func (f *fakeStore) StageSnapshot() (string, error) {
 	dir := filepath.Join(f.dir, "snapshots")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
@@ -176,7 +176,7 @@ func (f *fakeDefinitions) StageSnapshot() (string, error) {
 	return os.MkdirTemp(dir, ".staging-")
 }
 
-func (f *fakeDefinitions) CreateSnapshot(snapshot Snapshot, staged string) error {
+func (f *fakeStore) CreateSnapshot(snapshot Snapshot, staged string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -190,14 +190,14 @@ func (f *fakeDefinitions) CreateSnapshot(snapshot Snapshot, staged string) error
 	return nil
 }
 
-func (f *fakeDefinitions) Snapshot(nameOrID string) (Snapshot, error) {
+func (f *fakeStore) Snapshot(nameOrID string) (Snapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	return f.snapshot(nameOrID)
 }
 
-func (f *fakeDefinitions) snapshot(nameOrID string) (Snapshot, error) {
+func (f *fakeStore) snapshot(nameOrID string) (Snapshot, error) {
 	for _, s := range f.snapshots {
 		if s.Name == nameOrID || s.ID == nameOrID {
 			return s, nil
@@ -206,7 +206,7 @@ func (f *fakeDefinitions) snapshot(nameOrID string) (Snapshot, error) {
 	return Snapshot{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Snapshots() []Snapshot {
+func (f *fakeStore) Snapshots() []Snapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -218,7 +218,7 @@ func (f *fakeDefinitions) Snapshots() []Snapshot {
 	return out
 }
 
-func (f *fakeDefinitions) DeleteSnapshot(nameOrID string) error {
+func (f *fakeStore) DeleteSnapshot(nameOrID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -230,11 +230,11 @@ func (f *fakeDefinitions) DeleteSnapshot(nameOrID string) error {
 	return os.RemoveAll(f.SnapshotDir(snapshot.Name))
 }
 
-func (f *fakeDefinitions) SnapshotDir(name string) string {
+func (f *fakeStore) SnapshotDir(name string) string {
 	return filepath.Join(f.dir, "snapshots", name)
 }
 
-func (f *fakeDefinitions) Network(nameOrID string) (network.Network, error) {
+func (f *fakeStore) Network(nameOrID string) (network.Network, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -244,7 +244,7 @@ func (f *fakeDefinitions) Network(nameOrID string) (network.Network, error) {
 	return network.Network{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Networks() []network.Network {
+func (f *fakeStore) Networks() []network.Network {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -256,7 +256,7 @@ func (f *fakeDefinitions) Networks() []network.Network {
 	return out
 }
 
-func (f *fakeDefinitions) Kernel(nameOrID string) (kernel.Kernel, error) {
+func (f *fakeStore) Kernel(nameOrID string) (kernel.Kernel, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -266,7 +266,7 @@ func (f *fakeDefinitions) Kernel(nameOrID string) (kernel.Kernel, error) {
 	return kernel.Kernel{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Volume(nameOrID string) (volume.Volume, error) {
+func (f *fakeStore) Volume(nameOrID string) (volume.Volume, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

@@ -27,7 +27,7 @@ func withAuthorization(ctx context.Context, header string) context.Context {
 }
 
 func TestAuthenticationLetsInOnlyAKnownToken(t *testing.T) {
-	h, definitions := newTokenHandler(t)
+	h, store := newTokenHandler(t)
 	issued, err := h.CreateToken(t.Context(), &dicerdv1.CreateTokenRequest{Name: "ci"})
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestAuthenticationLetsInOnlyAKnownToken(t *testing.T) {
 	stranger := token.Format(token.NewSecret(), testFingerprint)
 
 	var log bytes.Buffer
-	a := NewAuthentication(definitions, slog.New(slog.NewTextHandler(&log, nil)))
+	a := NewAuthentication(store, slog.New(slog.NewTextHandler(&log, nil)))
 	info := &grpc.UnaryServerInfo{FullMethod: "/dicerd.v1.DaemonService/GetHostInfo"}
 
 	// A refused caller is told no more than that; the log says why.
@@ -81,7 +81,7 @@ func TestAuthenticationLetsInOnlyAKnownToken(t *testing.T) {
 		})
 	}
 
-	used, err := definitions.Token("ci")
+	used, err := store.Token("ci")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,13 +91,13 @@ func TestAuthenticationLetsInOnlyAKnownToken(t *testing.T) {
 }
 
 func TestAuthenticationLetsInOnlyAStreamWithAKnownToken(t *testing.T) {
-	h, definitions := newTokenHandler(t)
+	h, store := newTokenHandler(t)
 	issued, err := h.CreateToken(t.Context(), &dicerdv1.CreateTokenRequest{Name: "ci"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	a := NewAuthentication(definitions, slog.New(slog.DiscardHandler))
+	a := NewAuthentication(store, slog.New(slog.DiscardHandler))
 	info := &grpc.StreamServerInfo{FullMethod: "/dicerd.v1.DaemonService/GetEvents"}
 
 	var name string

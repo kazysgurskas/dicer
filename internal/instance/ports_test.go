@@ -15,16 +15,16 @@ import (
 // withPorts gives the harness's instance ports, in its definition too.
 func (h *harness) withPorts(ports ...network.PortMapping) {
 	h.instance.Ports = ports
-	h.definitions.instances[h.instance.Name] = h.instance
+	h.store.instances[h.instance.Name] = h.instance
 }
 
 // seedRunning defines another instance, recorded as in state.
 func (h *harness) seedRunning(t *testing.T, name string, state State, ports ...network.PortMapping) Spec {
 	t.Helper()
 
-	other := seedInstance(t, h.definitions, name)
+	other := seedInstance(t, h.store, name)
 	other.Ports = ports
-	h.definitions.instances[name] = other
+	h.store.instances[name] = other
 
 	if err := h.manager.writeStatus(Status{InstanceID: other.ID, State: state}); err != nil {
 		t.Fatalf("writeStatus: %v", err)

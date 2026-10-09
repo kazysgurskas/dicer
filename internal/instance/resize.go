@@ -89,7 +89,7 @@ func (m *Manager) Resize(ctx context.Context, instance Spec, want Resources) (er
 	resized := instance
 	resized.VCPUs, resized.MemoryBytes = want.VCPUs, want.MemoryBytes
 	resized.UpdatedAt = time.Now()
-	if err := m.definitions.UpdateInstance(resized); err != nil {
+	if err := m.store.UpdateInstance(resized); err != nil {
 		return fmt.Errorf("update instance %q: %w", instance.Name, err)
 	}
 	if resizeErr != nil {

@@ -102,9 +102,9 @@ func TestStartWithoutDNSGivesTheUpstreamNameservers(t *testing.T) {
 	dnsServers, nameservers := withDNSServers(t, h)
 	dnsServers.serveErr = errors.New("address already in use")
 
-	nw := h.definitions.networks["default"]
+	nw := h.store.networks["default"]
 	nw.Nameservers = []string{"192.0.2.53"}
-	h.definitions.networks["default"] = nw
+	h.store.networks["default"] = nw
 
 	h.start(t)
 
@@ -124,7 +124,7 @@ func TestStartWithoutDNSGivesTheUpstreamNameservers(t *testing.T) {
 }
 
 func TestLookupFindsRunningInstancesByNameOrHostname(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	networks, ok := manager.networks.(*fakeNetworks)
 	if !ok {
 		t.Fatal("test manager's networks are not the fake")
@@ -132,13 +132,13 @@ func TestLookupFindsRunningInstancesByNameOrHostname(t *testing.T) {
 
 	place := func(name, hostname, networkName string, state State) netip.Addr {
 		t.Helper()
-		instance := seedInstance(t, definitions, name)
+		instance := seedInstance(t, store, name)
 		instance.Hostname, instance.NetworkName = hostname, networkName
-		definitions.instances[name] = instance
-		if _, ok := definitions.networks[networkName]; !ok {
-			definitions.networks[networkName] = network.Network{Name: networkName, Subnet: "10.1.0.0/24", Gateway: "10.1.0.1"}
+		store.instances[name] = instance
+		if _, ok := store.networks[networkName]; !ok {
+			store.networks[networkName] = network.Network{Name: networkName, Subnet: "10.1.0.0/24", Gateway: "10.1.0.1"}
 		}
-		alloc, err := networks.Allocate(definitions.networks[networkName], instance.ID, "")
+		alloc, err := networks.Allocate(store.networks[networkName], instance.ID, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -179,11 +179,11 @@ func TestLookupFindsRunningInstancesByNameOrHostname(t *testing.T) {
 }
 
 func TestRecoverServesTheNetworksOfAdoptedInstances(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	dnsServers := &fakeDNSServers{}
 	manager.dnsServers = dnsServers
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
 	if err := manager.writeStatus(Status{
@@ -192,10 +192,10 @@ func TestRecoverServesTheNetworksOfAdoptedInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A stopped instance on another network does not need its server.
-	stopped := seedInstance(t, definitions, "idle")
+	stopped := seedInstance(t, store, "idle")
 	stopped.NetworkName = "quiet"
-	definitions.instances["idle"] = stopped
-	definitions.networks["quiet"] = network.Network{Name: "quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
+	store.instances["idle"] = stopped
+	store.networks["quiet"] = network.Network{Name: "quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
 
 	manager.Recover(context.Background())
 

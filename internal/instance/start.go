@@ -149,13 +149,13 @@ func (m *Manager) boot(ctx context.Context, instance Spec, restarts int) error {
 // setStoppedByUser records whether a user last stopped an instance. It is
 // best effort. The caller must hold the instance lock.
 func (m *Manager) setStoppedByUser(ctx context.Context, instance Spec, stopped bool) {
-	current, err := m.definitions.Instance(instance.ID)
+	current, err := m.store.Instance(instance.ID)
 	if err != nil || current.StoppedByUser == stopped {
 		return
 	}
 
 	current.StoppedByUser = stopped
-	if err := m.definitions.UpdateInstance(current); err != nil {
+	if err := m.store.UpdateInstance(current); err != nil {
 		m.logger.WarnContext(ctx, "cannot record whether the instance was stopped by a user",
 			"instance", instance.Name, "error", err)
 	}
@@ -185,7 +185,7 @@ func (m *Manager) resolveBoot(ctx context.Context, instance Spec, starter hyperv
 		return b, fmt.Errorf("get image %q: %w", instance.ImageRef, err)
 	}
 
-	kernel, err := m.definitions.Kernel(instance.KernelName)
+	kernel, err := m.store.Kernel(instance.KernelName)
 	if err != nil {
 		return b, fmt.Errorf("get kernel %q: %w", instance.KernelName, err)
 	}
@@ -285,7 +285,7 @@ func (m *Manager) resolveMounts(instance Spec) ([]guest.Mount, []hypervisor.Disk
 
 // volumeDisk finds the disk of the named volume.
 func (m *Manager) volumeDisk(name string) (string, error) {
-	volume, err := m.definitions.Volume(name)
+	volume, err := m.store.Volume(name)
 	if err != nil {
 		return "", fmt.Errorf("get volume %q: %w", name, err)
 	}

@@ -43,10 +43,10 @@ func startAdoptable(t *testing.T, manager *Manager) *process.Process {
 }
 
 func TestRecoverAdoptsLiveInstance(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 	ctx := context.Background()
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
 
@@ -79,9 +79,9 @@ func TestRecoverAdoptsLiveInstance(t *testing.T) {
 // Recovery sets up the networks of adopted instances again, and only
 // theirs, so that the host network knows their bridges.
 func TestRecoverSetsUpTheNetworksOfAdoptedInstances(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
 	if err := manager.writeStatus(Status{
@@ -90,14 +90,14 @@ func TestRecoverSetsUpTheNetworksOfAdoptedInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A stopped instance on another network does not need its bridge.
-	stopped := seedInstance(t, definitions, "idle")
+	stopped := seedInstance(t, store, "idle")
 	stopped.NetworkName = "quiet"
-	definitions.instances["idle"] = stopped
-	definitions.networks["quiet"] = network.Network{Name: "quiet", Bridge: "dicer-quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
+	store.instances["idle"] = stopped
+	store.networks["quiet"] = network.Network{Name: "quiet", Bridge: "dicer-quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
 
 	manager.Recover(context.Background())
 
-	if want := []string{definitions.networks["default"].Bridge}; !slices.Equal(hostNetwork.setUpBridges, want) {
+	if want := []string{store.networks["default"].Bridge}; !slices.Equal(hostNetwork.setUpBridges, want) {
 		t.Errorf("bridges set up = %q, want %q", hostNetwork.setUpBridges, want)
 	}
 }
@@ -105,9 +105,9 @@ func TestRecoverSetsUpTheNetworksOfAdoptedInstances(t *testing.T) {
 // TestAdoptedVMMCrashFailsInstance checks that an adopted VMM is watched
 // like one the daemon started: its death is noticed when it happens.
 func TestAdoptedVMMCrashFailsInstance(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
 	if err := manager.writeStatus(Status{
@@ -133,9 +133,9 @@ func TestAdoptedVMMCrashFailsInstance(t *testing.T) {
 // through a stop: the VMM may still be running, and must not be adopted as
 // if nothing had happened.
 func TestRecoverKillsVMMOfInterruptedStop(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
 	if err := manager.writeStatus(Status{
@@ -165,10 +165,10 @@ func TestRecoverKillsVMMOfInterruptedStop(t *testing.T) {
 }
 
 func TestRecoverCleansUpDeadInstance(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 	ctx := context.Background()
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 
 	// A PID that is not running: the daemon and its VMM both died.
 	deadPID := deadPID(t)
@@ -207,10 +207,10 @@ func TestRecoverCleansUpDeadInstance(t *testing.T) {
 // TestRecoverCleansUpInterruptedStart covers a crash partway through Start:
 // the instance is recorded as Starting with no PID at all.
 func TestRecoverCleansUpInterruptedStart(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 	ctx := context.Background()
 
-	instance := seedInstance(t, definitions, "web")
+	instance := seedInstance(t, store, "web")
 	forceState(t, manager, instance.ID, StateStarting)
 
 	manager.Recover(ctx)
@@ -231,11 +231,11 @@ func TestRecoverCleansUpInterruptedStart(t *testing.T) {
 // clears the runtime directory, so everything reads as Stopped and recovery
 // must not go poking at host resources.
 func TestRecoverAfterReboot(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 	ctx := context.Background()
 
-	seedInstance(t, definitions, "web")
-	seedInstance(t, definitions, "db")
+	seedInstance(t, store, "web")
+	seedInstance(t, store, "db")
 
 	manager.Recover(ctx)
 
@@ -248,11 +248,11 @@ func TestRecoverAfterReboot(t *testing.T) {
 // TestRecoverKeepsBridgeWhileAnotherInstanceRuns guards against tearing a
 // bridge out from under a VM that is still using it.
 func TestRecoverKeepsBridgeWhileAnotherInstanceRuns(t *testing.T) {
-	manager, definitions, hostNetwork := newTestManager(t)
+	manager, store, hostNetwork := newTestManager(t)
 	ctx := context.Background()
 
-	dead := seedInstance(t, definitions, "dead")
-	live := seedInstance(t, definitions, "live")
+	dead := seedInstance(t, store, "dead")
+	live := seedInstance(t, store, "live")
 
 	deadPID := deadPID(t)
 	if err := manager.writeStatus(Status{
@@ -279,13 +279,13 @@ func TestRecoverKeepsBridgeWhileAnotherInstanceRuns(t *testing.T) {
 }
 
 func TestRecoverReleasesOrphanedAllocations(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	ctx := context.Background()
 
-	seedInstance(t, definitions, "web")
+	seedInstance(t, store, "web")
 
 	// An allocation left behind by an instance that no longer exists.
-	n, err := definitions.Network("default")
+	n, err := store.Network("default")
 	if err != nil {
 		t.Fatalf("get network: %v", err)
 	}
@@ -321,25 +321,25 @@ func deadPID(t *testing.T) int {
 }
 
 func TestStartOnBootOnlyStartsInstancesThatAskToBeRunning(t *testing.T) {
-	manager, definitions, _ := newTestManager(t)
+	manager, store, _ := newTestManager(t)
 	ctx := context.Background()
 
 	// None of these asks to be started at boot, so nothing should be
 	// attempted -- a start would fail here anyway, since there is no
 	// hypervisor, which is exactly what makes this assertion meaningful.
-	seedInstance(t, definitions, "web")
-	onFailure := seedInstance(t, definitions, "db")
+	seedInstance(t, store, "web")
+	onFailure := seedInstance(t, store, "db")
 	onFailure.Restart = RestartPolicy{Mode: RestartModeOnFailure}
-	definitions.instances[onFailure.Name] = onFailure
-	stopped := seedInstance(t, definitions, "cache")
+	store.instances[onFailure.Name] = onFailure
+	stopped := seedInstance(t, store, "cache")
 	stopped.Restart = RestartPolicy{Mode: RestartModeUnlessStopped}
 	stopped.StoppedByUser = true
-	definitions.instances[stopped.Name] = stopped
+	store.instances[stopped.Name] = stopped
 
 	manager.StartOnBoot(ctx)
 
 	for _, name := range []string{"web", "db", "cache"} {
-		instance, err := definitions.Instance(name)
+		instance, err := store.Instance(name)
 		if err != nil {
 			t.Fatalf("get instance: %v", err)
 		}
@@ -369,7 +369,7 @@ func TestStartOnBootStartsFailedInstance(t *testing.T) {
 			h := newHarness(t)
 			h.setRestart(t, RestartPolicy{Mode: tt.policy})
 			h.instance.StoppedByUser = tt.stoppedByUser
-			h.definitions.instances[h.instance.Name] = h.instance
+			h.store.instances[h.instance.Name] = h.instance
 
 			h.manager.fail(h.instance.ID, errors.New("hypervisor exited"))
 

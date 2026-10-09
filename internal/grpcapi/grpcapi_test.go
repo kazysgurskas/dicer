@@ -43,15 +43,15 @@ var testCapacity = instance.Capacity{
 	MemoryOvercommit:    1,
 }
 
-// newTestServer returns a Server over real definitions and a lifecycle
-// manager with testCapacity, and the definitions.
-func newTestServer(t *testing.T) (*Server, *filestore.Manager) {
+// newTestServer returns a Server over a real store and an instance manager
+// with testCapacity, and the store.
+func newTestServer(t *testing.T) (*Server, *filestore.Store) {
 	t.Helper()
 
 	logger := slog.New(slog.DiscardHandler)
 	dataDir := filepath.Join(t.TempDir(), "data")
 
-	definitions, err := filestore.NewManager(filestore.Config{DataDir: dataDir, Logger: logger})
+	store, err := filestore.New(filestore.Config{DataDir: dataDir, Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,18 +67,18 @@ func newTestServer(t *testing.T) (*Server, *filestore.Manager) {
 	}
 
 	instances := instance.NewManager(instance.Config{
-		Definitions: definitions,
-		RunDir:      filepath.Join(t.TempDir(), "run"),
-		Capacity:    testCapacity,
-		Logger:      logger,
+		Store:    store,
+		RunDir:   filepath.Join(t.TempDir(), "run"),
+		Capacity: testCapacity,
+		Logger:   logger,
 	})
 
 	return NewServer(Config{
-		Definitions: definitions,
-		Networks:    networks,
-		Instances:   instances,
-		Volumes:     volume.NewManager(volume.Config{DataDir: dataDir, Logger: logger}),
-		Kernels:     kernels,
-		DataDir:     dataDir,
-	}), definitions
+		Store:     store,
+		Networks:  networks,
+		Instances: instances,
+		Volumes:   volume.NewManager(volume.Config{DataDir: dataDir, Logger: logger}),
+		Kernels:   kernels,
+		DataDir:   dataDir,
+	}), store
 }

@@ -47,7 +47,7 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 		return err
 	}
 	if idleFor > 0 {
-		current, err := m.definitions.Instance(instance.ID)
+		current, err := m.store.Instance(instance.ID)
 		if err != nil || status.State != StateRunning ||
 			current.StandbyAfter == 0 || idleFor < current.StandbyAfter {
 			return nil

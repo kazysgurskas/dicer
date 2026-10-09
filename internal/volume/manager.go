@@ -28,7 +28,7 @@ type Config struct {
 }
 
 // Manager owns the disk files that back volumes. It records no metadata: the
-// Volume definition is kept with the others, by filestore.Manager, and its
+// Volume definition is kept with the others, by filestore.Store, and its
 // disk is found by ID.
 type Manager struct {
 	dataDir string

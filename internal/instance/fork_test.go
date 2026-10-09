@@ -120,7 +120,7 @@ func TestFailedForkLeavesNoInstance(t *testing.T) {
 			if err == nil || (tt.want != nil && !errors.Is(err, tt.want)) {
 				t.Errorf("ForkSnapshot = %v, want a failure (%v)", err, tt.want)
 			}
-			if _, err := h.definitions.Instance("copy"); !errors.Is(err, errdefs.ErrNotFound) {
+			if _, err := h.store.Instance("copy"); !errors.Is(err, errdefs.ErrNotFound) {
 				t.Errorf("the failed fork is still defined: %v", err)
 			}
 		})
@@ -181,7 +181,7 @@ func TestForkOfRunningInstanceRunsBesideIt(t *testing.T) {
 	if snapshots := h.manager.Snapshots(); len(snapshots) != 0 {
 		t.Errorf("forking kept snapshots %v", snapshots)
 	}
-	if staged, _ := os.ReadDir(filepath.Join(h.definitions.dir, "snapshots")); len(staged) != 0 {
+	if staged, _ := os.ReadDir(filepath.Join(h.store.dir, "snapshots")); len(staged) != 0 {
 		t.Errorf("forking left %d staged directories", len(staged))
 	}
 }
@@ -214,7 +214,7 @@ func TestRefusedForkOfInstanceDefinesNothing(t *testing.T) {
 	if !errors.Is(err, errdefs.ErrInvalidState) {
 		t.Errorf("ForkInstance of an instance that can write to a volume = %v, want ErrInvalidState", err)
 	}
-	if _, err := h.definitions.Instance("copy"); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := h.store.Instance("copy"); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("the refused fork is defined: %v", err)
 	}
 	if h.hv.paused != 0 {

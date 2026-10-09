@@ -17,8 +17,8 @@ import (
 // A definition that could never start is refused when it is written, not at
 // its first start.
 func TestCreateInstanceTooBigForTheHost(t *testing.T) {
-	s, definitions := newTestServer(t)
-	seedKernelAndNetwork(t, definitions)
+	s, store := newTestServer(t)
+	seedKernelAndNetwork(t, store)
 
 	for _, tc := range []struct {
 		name   string
@@ -33,7 +33,7 @@ func TestCreateInstanceTooBigForTheHost(t *testing.T) {
 			Vcpus: tc.vcpus, MemoryBytes: tc.memory, DiskBytes: 1 << 30,
 		})
 		wantClass(t, err, errdefs.ErrInvalidArgument)
-		if _, err := definitions.Instance("big"); err == nil {
+		if _, err := store.Instance("big"); err == nil {
 			t.Errorf("%s: the definition was recorded", tc.name)
 		}
 	}
@@ -41,13 +41,13 @@ func TestCreateInstanceTooBigForTheHost(t *testing.T) {
 
 // seedKernelAndNetwork defines the kernel k and the network default, which
 // an instance needs to be created.
-func seedKernelAndNetwork(t *testing.T, definitions *filestore.Manager) {
+func seedKernelAndNetwork(t *testing.T, store *filestore.Store) {
 	t.Helper()
 
-	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: "k"}); err != nil {
+	if err := store.CreateKernel(kernel.Kernel{ID: "k-1", Name: "k"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := definitions.CreateNetwork(network.Network{
+	if err := store.CreateNetwork(network.Network{
 		ID: "n-1", Name: "default", Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
 	}); err != nil {
 		t.Fatal(err)
@@ -57,8 +57,8 @@ func seedKernelAndNetwork(t *testing.T, definitions *filestore.Manager) {
 // An instance whose maximum the host could never give it is refused when it
 // is created.
 func TestCreateInstanceWithAMaximumTooBigForTheHost(t *testing.T) {
-	s, definitions := newTestServer(t)
-	seedKernelAndNetwork(t, definitions)
+	s, store := newTestServer(t)
+	seedKernelAndNetwork(t, store)
 
 	_, err := s.CreateInstance(t.Context(), &dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
@@ -68,9 +68,9 @@ func TestCreateInstanceWithAMaximumTooBigForTheHost(t *testing.T) {
 }
 
 func TestResizeInstanceRefusals(t *testing.T) {
-	s, definitions := newTestServer(t)
-	seedKernelAndNetwork(t, definitions)
-	if err := definitions.CreateInstance(instance.Spec{
+	s, store := newTestServer(t)
+	seedKernelAndNetwork(t, store)
+	if err := store.CreateInstance(instance.Spec{
 		ID: "i-1", Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
 		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30, MaxVCPUs: 4, MaxMemoryBytes: 4 << 30,
 	}); err != nil {
@@ -100,8 +100,8 @@ func TestResizeInstanceRefusals(t *testing.T) {
 // only the limits it sets, zero removing one, and a negative limit is
 // refused.
 func TestInstanceRateLimits(t *testing.T) {
-	s, definitions := newTestServer(t)
-	seedKernelAndNetwork(t, definitions)
+	s, store := newTestServer(t)
+	seedKernelAndNetwork(t, store)
 
 	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
@@ -132,9 +132,9 @@ func TestInstanceRateLimits(t *testing.T) {
 
 // An instance that names no kernel or network gets the default ones.
 func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
-	s, definitions := newTestServer(t)
-	seedKernelAndNetwork(t, definitions)
-	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-2", Name: kernel.DefaultName}); err != nil {
+	s, store := newTestServer(t)
+	seedKernelAndNetwork(t, store)
+	if err := store.CreateKernel(kernel.Kernel{ID: "k-2", Name: kernel.DefaultName}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -49,7 +49,7 @@ func (m *Manager) Delete(ctx context.Context, instance Spec, force bool) (err er
 			"instance", instance.Name, "error", err)
 	}
 
-	if err := m.definitions.DeleteInstance(instance.Name); err != nil {
+	if err := m.store.DeleteInstance(instance.Name); err != nil {
 		return fmt.Errorf("delete instance %q: %w", instance.Name, err)
 	}
 

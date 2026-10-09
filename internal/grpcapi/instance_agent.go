@@ -17,7 +17,7 @@ import (
 // name or ID, waiting for it if the guest is still booting. The returned
 // function closes the connection.
 func (h *instanceHandler) agent(ctx context.Context, nameOrID string) (diceragentv1.AgentServiceClient, func(), error) {
-	instance, err := h.definitions.Instance(nameOrID)
+	instance, err := h.store.Instance(nameOrID)
 	if err != nil {
 		return nil, nil, err
 	}

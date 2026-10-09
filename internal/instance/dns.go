@@ -57,7 +57,7 @@ type answerableInstance struct {
 // every query asks, most of them about names no instance has, and an
 // instance's state is read from disk.
 func (m *Manager) answerableInstances(network string, matches func(Spec) bool) []answerableInstance {
-	instances := m.definitions.MatchingInstances(func(instance Spec) bool {
+	instances := m.store.MatchingInstances(func(instance Spec) bool {
 		return instance.NetworkName == network && matches(instance)
 	})
 

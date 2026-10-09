@@ -86,10 +86,10 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 
 	api := grpcapi.NewServer(grpcapi.Config{
 		Hypervisors:   d.hypervisors,
-		Definitions:   d.definitions,
+		Store:         d.store,
 		ListenAddress: listenAddress,
 		HostAddresses: func() ([]netip.Addr, error) {
-			return d.hostNetwork.Addresses(d.definitions.Networks())
+			return d.hostNetwork.Addresses(d.store.Networks())
 		},
 		Fingerprint:      fingerprint,
 		TokenFingerprint: tokenFingerprint,
@@ -118,9 +118,9 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 	}
 
 	d.logger.Info("the API is served over TCP, to clients with a token",
-		"listen", listenAddress, "fingerprint", fingerprint, "tokens", len(d.definitions.Tokens()))
+		"listen", listenAddress, "fingerprint", fingerprint, "tokens", len(d.store.Tokens()))
 
-	authentication := grpcapi.NewAuthentication(d.definitions, d.logger)
+	authentication := grpcapi.NewAuthentication(d.store, d.logger)
 	return append(listeners, apiListener{
 		transport: transportTCP,
 		address:   listenAddress,
