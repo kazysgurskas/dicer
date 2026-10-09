@@ -7,17 +7,16 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // transition moves an instance to a new lifecycle state, rejecting moves the
 // state machine does not allow. The caller must hold the instance lock.
-func (m *Manager) transition(instance types.InstanceSpec, to types.InstanceState) error {
+func (m *Manager) transition(instance Spec, to State) error {
 	return m.transitionWith(instance, to, nil)
 }
 
 // transitionWith is transition that also applies update in the same write.
-func (m *Manager) transitionWith(instance types.InstanceSpec, to types.InstanceState, update func(*types.InstanceStatus)) error {
+func (m *Manager) transitionWith(instance Spec, to State, update func(*Status)) error {
 	status, err := m.Status(instance)
 	if err != nil {
 		return err
@@ -44,11 +43,11 @@ func (m *Manager) fail(instanceID string, cause error) {
 	status, err := m.readStatus(instanceID)
 	if err != nil {
 		m.logger.Warn("cannot read instance status", "instance_id", instanceID, "error", err)
-		status = types.InstanceStatus{InstanceID: instanceID}
+		status = Status{InstanceID: instanceID}
 	}
 
 	forgetProcess(&status)
-	status.State = types.InstanceStateFailed
+	status.State = StateFailed
 	status.StateError = cause.Error()
 
 	if err := m.writeStatus(status); err != nil {
@@ -57,7 +56,7 @@ func (m *Manager) fail(instanceID string, cause error) {
 }
 
 // forgetProcess clears a status's VMM and held resources.
-func forgetProcess(status *types.InstanceStatus) {
+func forgetProcess(status *Status) {
 	status.VMMPID = nil
 	status.HypervisorSocketPath = ""
 	status.VCPUs = 0

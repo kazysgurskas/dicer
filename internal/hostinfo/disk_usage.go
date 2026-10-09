@@ -7,19 +7,26 @@ import (
 	"fmt"
 
 	"golang.org/x/sys/unix"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
-// DiskUsage returns the size and free space of the filesystem holding path.
-func DiskUsage(path string) (*types.DiskUsage, error) {
+// DiskUsage is the size of a filesystem and how much of it is free.
+type DiskUsage struct {
+	// TotalBytes is the filesystem's size.
+	TotalBytes int64 `json:"total_bytes"`
+
+	// FreeBytes excludes blocks reserved for root.
+	FreeBytes int64 `json:"free_bytes"`
+}
+
+// DiskUsageOf returns the size and free space of the filesystem holding path.
+func DiskUsageOf(path string) (*DiskUsage, error) {
 	var st unix.Statfs_t
 	if err := unix.Statfs(path, &st); err != nil {
 		return nil, fmt.Errorf("statfs %s: %w", path, err)
 	}
 
 	blockSize := toInt64(st.Bsize)
-	return &types.DiskUsage{
+	return &DiskUsage{
 		TotalBytes: int64(st.Blocks) * blockSize,
 		FreeBytes:  int64(st.Bavail) * blockSize,
 	}, nil

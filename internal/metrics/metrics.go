@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 )
 
 // Metric groups: the sections of the reference.
@@ -64,7 +64,7 @@ const (
 // gauges are not exported.
 type Sources struct {
 	Instances     func() InstanceSummary
-	InstanceStats func() []types.InstanceStats
+	InstanceStats func() []instance.Stats
 	Networks      func() []NetworkSummary
 	Images        func() ImageSummary
 	Kernels       func() KernelSummary

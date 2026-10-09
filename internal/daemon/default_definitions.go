@@ -18,17 +18,16 @@ import (
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // ensureDefaultNetwork creates the default network on the configured subnet,
 // unless it already exists. An existing one is left as it is.
 func (d *daemon) ensureDefaultNetwork() error {
-	if _, err := d.definitions.Network(types.DefaultNetworkName); err == nil {
+	if _, err := d.definitions.Network(network.DefaultName); err == nil {
 		return nil
 	}
 
-	n, err := network.New(network.Spec{Name: types.DefaultNetworkName, Subnet: d.cfg.Network.DefaultSubnet})
+	n, err := network.New(network.Spec{Name: network.DefaultName, Subnet: d.cfg.Network.DefaultSubnet})
 	if err != nil {
 		return fmt.Errorf("create the default network: %w", err)
 	}
@@ -60,7 +59,7 @@ func (d *daemon) ensureDefaultNetwork() error {
 // Dicer carried.
 func (d *daemon) ensureDefaultKernel() error {
 	want := kernel.Default()
-	record := func(k types.Kernel, action events.Action, message string) {
+	record := func(k kernel.Kernel, action events.Action, message string) {
 		d.events.Record(events.Event{
 			Kind:       events.KindKernel,
 			ID:         k.ID,
@@ -71,7 +70,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		})
 	}
 
-	k, err := d.definitions.Kernel(types.DefaultKernelName)
+	k, err := d.definitions.Kernel(kernel.DefaultName)
 	switch {
 	case errors.Is(err, errdefs.ErrNotFound):
 		now := time.Now()

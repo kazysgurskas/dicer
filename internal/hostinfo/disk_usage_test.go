@@ -6,7 +6,7 @@ package hostinfo
 import "testing"
 
 func TestDiskUsageFitsFreeSpaceWithinSize(t *testing.T) {
-	usage, err := DiskUsage(t.TempDir())
+	usage, err := DiskUsageOf(t.TempDir())
 	if err != nil {
 		t.Fatalf("DiskUsage: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestDiskUsageFitsFreeSpaceWithinSize(t *testing.T) {
 }
 
 func TestDiskUsageFailsForMissingPath(t *testing.T) {
-	if _, err := DiskUsage("/does/not/exist"); err == nil {
+	if _, err := DiskUsageOf("/does/not/exist"); err == nil {
 		t.Error("expected an error for a missing path")
 	}
 }

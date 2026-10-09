@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -285,7 +285,7 @@ func TestResourcesDefaults(t *testing.T) {
 	}
 
 	// vCPUs shared four to a CPU; memory not overcommitted, less 1GiB.
-	want := types.Resources{VCPUs: 16, MemoryBytes: 31 << 30}
+	want := instance.Resources{VCPUs: 16, MemoryBytes: 31 << 30}
 	if got := capacity.Allocatable(); got != want {
 		t.Errorf("allocatable = %+v, want %+v", got, want)
 	}

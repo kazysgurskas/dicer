@@ -12,7 +12,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -44,9 +43,9 @@ func (f fakeStarter) Connect(string) (hypervisor.Hypervisor, error) {
 }
 
 func TestHypervisorInfosPutTheDefaultFirst(t *testing.T) {
-	h := &hostHandler{hypervisors: map[types.HypervisorType][]hypervisor.Starter{
-		types.HypervisorTypeFirecracker:     {fakeStarter{version: "v1.17.0"}},
-		types.HypervisorTypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}, fakeStarter{version: "v48.0.0"}},
+	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+		hypervisor.TypeFirecracker:     {fakeStarter{version: "v1.17.0"}},
+		hypervisor.TypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}, fakeStarter{version: "v48.0.0"}},
 	}}
 
 	got := h.hypervisorInfos()
@@ -70,11 +69,11 @@ func TestHypervisorInfosPutTheDefaultFirst(t *testing.T) {
 // TestHypervisorInfosDeprecateAllButTheDefault covers the deprecation
 // policy: every version but a hypervisor's default is deprecated.
 func TestHypervisorInfosDeprecateAllButTheDefault(t *testing.T) {
-	h := &hostHandler{hypervisors: map[types.HypervisorType][]hypervisor.Starter{
-		types.HypervisorTypeCloudHypervisor: {
+	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+		hypervisor.TypeCloudHypervisor: {
 			fakeStarter{version: "v53.0.0"}, fakeStarter{version: "v49.0.0"}, fakeStarter{version: "v48.0.0"},
 		},
-		types.HypervisorTypeFirecracker: {fakeStarter{version: "v1.17.0"}},
+		hypervisor.TypeFirecracker: {fakeStarter{version: "v1.17.0"}},
 	}}
 
 	got := h.hypervisorInfos()
@@ -92,8 +91,8 @@ func TestHypervisorInfosDeprecateAllButTheDefault(t *testing.T) {
 // TestHypervisorInfosOmitMissingDrivers covers a daemon that could not build
 // a starter: what it cannot start must not be advertised.
 func TestHypervisorInfosOmitMissingDrivers(t *testing.T) {
-	h := &hostHandler{hypervisors: map[types.HypervisorType][]hypervisor.Starter{
-		types.HypervisorTypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}},
+	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+		hypervisor.TypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}},
 	}}
 
 	got := h.hypervisorInfos()

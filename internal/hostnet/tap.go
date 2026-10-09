@@ -13,7 +13,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // CreateTAP creates the TAP device of an instance's network allocation,
@@ -21,7 +20,7 @@ import (
 // bridge and applies bw's limits. On failure the device may be left behind
 // for RemoveTAP.
 func (h *Host) CreateTAP(
-	ctx context.Context, nw *types.Network, allocation *types.NetworkAllocation, bw network.Bandwidth,
+	ctx context.Context, nw *network.Network, allocation *network.Allocation, bw network.Bandwidth,
 ) error {
 	tap := network.TAPName(allocation.InstanceID)
 	ifb := network.IFBName(allocation.InstanceID)
@@ -56,7 +55,7 @@ func (h *Host) CreateTAP(
 // DisconnectTAP detaches an instance's TAP device from its network's bridge,
 // so that nothing the guest sends reaches the network, nor anything reaches
 // it.
-func (h *Host) DisconnectTAP(_ context.Context, _ *types.Network, instanceID string) error {
+func (h *Host) DisconnectTAP(_ context.Context, _ *network.Network, instanceID string) error {
 	tap := network.TAPName(instanceID)
 	link, err := netlink.LinkByName(tap)
 	if err != nil {
@@ -70,7 +69,7 @@ func (h *Host) DisconnectTAP(_ context.Context, _ *types.Network, instanceID str
 
 // ConnectTAP attaches an instance's TAP device to its network's bridge, as
 // CreateTAP does.
-func (h *Host) ConnectTAP(_ context.Context, nw *types.Network, instanceID string) error {
+func (h *Host) ConnectTAP(_ context.Context, nw *network.Network, instanceID string) error {
 	tap := network.TAPName(instanceID)
 	link, err := netlink.LinkByName(tap)
 	if err != nil {
@@ -81,7 +80,7 @@ func (h *Host) ConnectTAP(_ context.Context, nw *types.Network, instanceID strin
 
 // RemoveTAP removes an instance's TAP device and its bandwidth limits.
 // Best-effort: it logs failures rather than returning them.
-func (h *Host) RemoveTAP(ctx context.Context, nw *types.Network, instanceID string) {
+func (h *Host) RemoveTAP(ctx context.Context, nw *network.Network, instanceID string) {
 	tap := network.TAPName(instanceID)
 	if err := removeUploadLimit(network.IFBName(instanceID)); err != nil {
 		h.logger.WarnContext(ctx, "failed to remove upload limit",

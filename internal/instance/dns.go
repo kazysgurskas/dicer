@@ -6,8 +6,6 @@ package instance
 import (
 	"net/netip"
 	"strings"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // The Manager is what a network's DNS server asks about the network: see
@@ -18,7 +16,7 @@ import (
 // are running, or starting, are found: a stopped one's address answers
 // nothing.
 func (m *Manager) LookupHost(network, name string) []netip.Addr {
-	found := m.answerableInstances(network, func(instance types.InstanceSpec) bool {
+	found := m.answerableInstances(network, func(instance Spec) bool {
 		return strings.EqualFold(instance.Name, name) || strings.EqualFold(instance.Hostname, name)
 	})
 	out := make([]netip.Addr, 0, len(found))
@@ -36,7 +34,7 @@ func (m *Manager) LookupAddr(network string, addr netip.Addr) []string {
 		return nil
 	}
 
-	found := m.answerableInstances(network, func(instance types.InstanceSpec) bool { return instance.ID == instanceID })
+	found := m.answerableInstances(network, func(instance Spec) bool { return instance.ID == instanceID })
 	if len(found) == 0 {
 		return nil
 	}
@@ -50,7 +48,7 @@ func (m *Manager) LookupAddr(network string, addr netip.Addr) []string {
 
 // answerableInstance is an instance a network's DNS server may give out.
 type answerableInstance struct {
-	spec types.InstanceSpec
+	spec Spec
 	addr netip.Addr
 }
 
@@ -58,15 +56,15 @@ type answerableInstance struct {
 // are running or starting, with their addresses. Matching comes first, as
 // every query asks, most of them about names no instance has, and an
 // instance's state is read from disk.
-func (m *Manager) answerableInstances(network string, matches func(types.InstanceSpec) bool) []answerableInstance {
-	instances := m.definitions.MatchingInstances(func(instance types.InstanceSpec) bool {
+func (m *Manager) answerableInstances(network string, matches func(Spec) bool) []answerableInstance {
+	instances := m.definitions.MatchingInstances(func(instance Spec) bool {
 		return instance.NetworkName == network && matches(instance)
 	})
 
 	var out []answerableInstance
 	for _, instance := range instances {
 		status, err := m.Status(instance)
-		if err != nil || (!status.State.IsActive() && status.State != types.InstanceStateStarting) {
+		if err != nil || (!status.State.IsActive() && status.State != StateStarting) {
 			continue
 		}
 		allocation, err := m.networks.Allocation(network, instance.ID)

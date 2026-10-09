@@ -9,7 +9,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/hypervisor"
 )
 
 // TestDriversCoverEverySupportedType guards the wiring: a hypervisor the API
@@ -17,13 +17,13 @@ import (
 func TestDriversCoverEverySupportedType(t *testing.T) {
 	d := drivers()
 
-	for _, hypervisorType := range types.HypervisorTypes() {
+	for _, hypervisorType := range hypervisor.Types() {
 		if _, ok := d[hypervisorType]; !ok {
 			t.Errorf("no driver for supported hypervisor %q", hypervisorType)
 		}
 	}
-	if len(d) != len(types.HypervisorTypes()) {
-		t.Errorf("drivers() has %d entries for %d supported types", len(d), len(types.HypervisorTypes()))
+	if len(d) != len(hypervisor.Types()) {
+		t.Errorf("drivers() has %d entries for %d supported types", len(d), len(hypervisor.Types()))
 	}
 }
 

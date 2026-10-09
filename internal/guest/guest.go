@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/konradasb/dicer/internal/naming"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // AgentPort is the vsock port dicer-agent listens on inside the guest.
@@ -47,7 +46,7 @@ type Config struct {
 	Workdir           string            `json:"workdir"`
 	Env               map[string]string `json:"env"`
 	Hostname          string            `json:"hostname,omitempty"`
-	Mode              types.InitMode    `json:"init_mode"`
+	Mode              InitMode          `json:"init_mode"`
 	Mounts            []Mount           `json:"mounts,omitempty"`
 	Network           NetworkConfig     `json:"network,omitzero"`
 	SkipKernelHeaders bool              `json:"skip_kernel_headers,omitempty"`
@@ -130,7 +129,7 @@ type NetworkRoute struct {
 // before Validate when deserialising config from JSON.
 func (c *Config) ApplyDefaults() {
 	if c.Mode == "" {
-		c.Mode = types.InitModeAuto
+		c.Mode = InitModeAuto
 	}
 	if c.Env == nil {
 		c.Env = make(map[string]string)
@@ -167,11 +166,11 @@ func (c *Config) Validate() error {
 // validateProcess checks the init mode and what it runs.
 func (c *Config) validateProcess() error {
 	switch c.Mode {
-	case types.InitModeExec:
+	case InitModeExec:
 		if len(c.Entrypoint) == 0 && len(c.Cmd) == 0 {
 			return errors.New("exec mode requires at least one of entrypoint or cmd")
 		}
-	case types.InitModeAuto, types.InitModeSystemd:
+	case InitModeAuto, InitModeSystemd:
 	default:
 		return fmt.Errorf("invalid init mode %q", c.Mode)
 	}

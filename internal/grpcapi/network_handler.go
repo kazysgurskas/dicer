@@ -13,8 +13,8 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -118,11 +118,11 @@ func (h *networkHandler) DeleteNetwork(
 	if err != nil {
 		return nil, err
 	}
-	if n.Name == types.DefaultNetworkName {
+	if n.Name == network.DefaultName {
 		return nil, errdefs.InvalidArgument("the default network cannot be deleted")
 	}
 
-	inUse := func(instance types.InstanceSpec) bool { return instance.NetworkName == n.Name }
+	inUse := func(instance instance.Spec) bool { return instance.NetworkName == n.Name }
 	if err := refuseInUse(h.definitions, fmt.Sprintf("network %q is in use", n.Name), inUse); err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (h *networkHandler) DeleteNetwork(
 
 // record records that action happened to n, with its subnet and gateway
 // among the attributes.
-func (h *networkHandler) record(n types.Network, action events.Action, message string) {
+func (h *networkHandler) record(n network.Network, action events.Action, message string) {
 	h.events.Record(events.Event{
 		Kind:       events.KindNetwork,
 		ID:         n.ID,

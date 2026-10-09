@@ -17,7 +17,8 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/kernel"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -84,7 +85,7 @@ func TestKernelImportedAndDeletedAreRecorded(t *testing.T) {
 		t.Fatal("ImportKernel of a name taken succeeded")
 	}
 
-	if err := definitions.CreateInstance(types.InstanceSpec{ID: "i-1", Name: "web", KernelName: "k"}); err != nil {
+	if err := definitions.CreateInstance(instance.Spec{ID: "i-1", Name: "web", KernelName: "k"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: "k"}); err == nil {
@@ -160,7 +161,7 @@ func TestImportKernelKeepsAKernelTheClientSends(t *testing.T) {
 
 func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
 	s, definitions := newTestServer(t)
-	if err := definitions.CreateKernel(types.Kernel{ID: "k-1", Name: "taken"}); err != nil {
+	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: "taken"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -176,7 +177,7 @@ func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
 		start *dicerdv1.ImportKernelStart
 	}{
 		{"a name another kernel has", x86Kernel("taken", "")},
-		{"the default kernel's name", x86Kernel(types.DefaultKernelName, "")},
+		{"the default kernel's name", x86Kernel(kernel.DefaultName, "")},
 		{"a checksum it fails", x86Kernel("bad", strings.Repeat("00", 32))},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,13 +202,13 @@ func TestImportKernelRefusesWhatItCannotKeep(t *testing.T) {
 // deleted, and that no kernel can be imported under its name.
 func TestDefaultKernelIsReserved(t *testing.T) {
 	s, definitions := newTestServer(t)
-	if err := definitions.CreateKernel(types.Kernel{ID: "k-1", Name: types.DefaultKernelName}); err != nil {
+	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: kernel.DefaultName}); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: types.DefaultKernelName})
+	_, err := s.DeleteKernel(t.Context(), &dicerdv1.DeleteKernelRequest{Name: kernel.DefaultName})
 	wantClass(t, err, errdefs.ErrInvalidArgument)
 
-	_, err = importKernel(t, s, x86Kernel(types.DefaultKernelName, ""), "vmlinux")
+	_, err = importKernel(t, s, x86Kernel(kernel.DefaultName, ""), "vmlinux")
 	wantClass(t, err, errdefs.ErrInvalidArgument)
 }

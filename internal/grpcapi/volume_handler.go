@@ -14,8 +14,8 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/humanize"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/naming"
-	"github.com/konradasb/dicer/internal/types"
 	volumepkg "github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -95,7 +95,7 @@ func (h *volumeHandler) DeleteVolume(
 		return nil, err
 	}
 
-	mounted := func(instance types.InstanceSpec) bool {
+	mounted := func(instance instance.Spec) bool {
 		_, ok := instance.VolumeMount(volume.Name)
 		return ok
 	}
@@ -117,7 +117,7 @@ func (h *volumeHandler) DeleteVolume(
 
 // record records that action happened to volume, with its size among the
 // attributes.
-func (h *volumeHandler) record(volume types.Volume, action events.Action, message string) {
+func (h *volumeHandler) record(volume volumepkg.Volume, action events.Action, message string) {
 	h.events.Record(events.Event{
 		Kind:       events.KindVolume,
 		ID:         volume.ID,

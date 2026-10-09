@@ -1,7 +1,10 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package types
+// Package health checks an instance's health. It asks the guest's agent to
+// run the instance's probe, and judges from the results whether the instance
+// is healthy.
+package health
 
 import (
 	"cmp"
@@ -10,18 +13,19 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/guest"
 )
 
 // The defaults an unset health check timing takes.
 const (
-	DefaultHealthCheckInterval = 10 * time.Second
-	DefaultHealthCheckTimeout  = 5 * time.Second
-	DefaultHealthCheckRetries  = 3
+	DefaultInterval = 10 * time.Second
+	DefaultTimeout  = 5 * time.Second
+	DefaultRetries  = 3
 )
 
-// HealthCheck is how an instance's health is checked: one probe, run inside
-// the guest by its agent, and when to run it.
-type HealthCheck struct {
+// Check is how an instance's health is checked: one probe, run inside the guest
+// by its agent, and when to run it.
+type Check struct {
 	// Exactly one probe is set, unless the check is Disabled.
 	Exec []string   `yaml:"exec,omitempty" json:"exec,omitempty"`
 	HTTP *HTTPProbe `yaml:"http,omitempty" json:"http,omitempty"`
@@ -59,7 +63,7 @@ type TCPProbe struct {
 
 // Validate returns an invalid argument error if the check is not one the
 // agent can run.
-func (c HealthCheck) Validate() error {
+func (c Check) Validate() error {
 	if c.Disabled {
 		return nil
 	}
@@ -70,7 +74,7 @@ func (c HealthCheck) Validate() error {
 	}
 	if c.HTTP != nil {
 		probes++
-		if err := validateHealthCheckPort(c.HTTP.Port); err != nil {
+		if err := validatePort(c.HTTP.Port); err != nil {
 			return err
 		}
 		if c.HTTP.Path != "" && !strings.HasPrefix(c.HTTP.Path, "/") {
@@ -79,7 +83,7 @@ func (c HealthCheck) Validate() error {
 	}
 	if c.TCP != nil {
 		probes++
-		if err := validateHealthCheckPort(c.TCP.Port); err != nil {
+		if err := validatePort(c.TCP.Port); err != nil {
 			return err
 		}
 	}
@@ -98,21 +102,21 @@ func (c HealthCheck) Validate() error {
 }
 
 // WithDefaults returns the check with its unset timings filled in.
-func (c HealthCheck) WithDefaults() HealthCheck {
+func (c Check) WithDefaults() Check {
 	if c.Interval == 0 {
-		c.Interval = DefaultHealthCheckInterval
+		c.Interval = DefaultInterval
 	}
 	if c.Timeout == 0 {
-		c.Timeout = DefaultHealthCheckTimeout
+		c.Timeout = DefaultTimeout
 	}
 	if c.Retries == 0 {
-		c.Retries = DefaultHealthCheckRetries
+		c.Retries = DefaultRetries
 	}
 
 	return c
 }
 
-func validateHealthCheckPort(port int) error {
+func validatePort(port int) error {
 	if port < 1 || port > 65535 {
 		return errdefs.InvalidArgument("health check port %d is not between 1 and 65535", port)
 	}
@@ -122,7 +126,7 @@ func validateHealthCheckPort(port int) error {
 
 // String describes the probe: "exec pg_isready", "http :3000/api/health",
 // "tcp :5432".
-func (c HealthCheck) String() string {
+func (c Check) String() string {
 	switch {
 	case c.Disabled:
 		return "disabled"
@@ -137,10 +141,9 @@ func (c HealthCheck) String() string {
 	}
 }
 
-// EffectiveHealthCheck returns the check an instance is run with: its own,
-// if it has one; none, if its own is Disabled; else its image's. Nil means
-// none.
-func EffectiveHealthCheck(instance, image *HealthCheck) *HealthCheck {
+// EffectiveCheck returns the check an instance is run with: its own, if it has
+// one; none, if its own is Disabled; else its image's. Nil means none.
+func EffectiveCheck(instance, image *Check) *Check {
 	chosen := instance
 	if chosen == nil {
 		chosen = image
@@ -154,31 +157,31 @@ func EffectiveHealthCheck(instance, image *HealthCheck) *HealthCheck {
 	return &c
 }
 
-// HealthStatus is what an instance's health check has found.
-type HealthStatus string
+// Status is what an instance's health check has found.
+type Status string
 
 const (
-	// HealthStatusStarting means the check has not yet reached a verdict: the
+	// StatusStarting means the check has not yet reached a verdict: the
 	// workload is still in its start period, or has not been probed.
-	HealthStatusStarting HealthStatus = "starting"
+	StatusStarting Status = "starting"
 
-	// HealthStatusHealthy means the last probe passed.
-	HealthStatusHealthy HealthStatus = "healthy"
+	// StatusHealthy means the last probe passed.
+	StatusHealthy Status = "healthy"
 
-	// HealthStatusUnhealthy means the check's retries have failed in a row.
-	HealthStatusUnhealthy HealthStatus = "unhealthy"
+	// StatusUnhealthy means the check's retries have failed in a row.
+	StatusUnhealthy Status = "unhealthy"
 )
 
-// HealthStatuses returns every health status.
-func HealthStatuses() []HealthStatus {
-	return []HealthStatus{
-		HealthStatusStarting, HealthStatusHealthy, HealthStatusUnhealthy,
+// Statuses returns every health status.
+func Statuses() []Status {
+	return []Status{
+		StatusStarting, StatusHealthy, StatusUnhealthy,
 	}
 }
 
 // Health is what the health check of a running instance has found.
 type Health struct {
-	Status HealthStatus `json:"status"`
+	Status Status `json:"status"`
 
 	// FailingStreak is how many probes in a row have failed, not counting
 	// failures in the start period.
@@ -190,6 +193,30 @@ type Health struct {
 	LastOutput string    `json:"last_output,omitempty"`
 }
 
-// NewHealth returns the health of a check that has not yet reached a
-// verdict.
-func NewHealth() Health { return Health{Status: HealthStatusStarting} }
+// New returns the health of a check that has not yet reached a verdict.
+func New() Health { return Health{Status: StatusStarting} }
+
+// After returns the health after a probe. Failures during the start period
+// do not count against the retries.
+func (h Health) After(c Check, r Result, sinceStart time.Duration) Health {
+	h.LastCheck = r.At
+	h.LastOutput = guest.TruncateProbeOutput(r.Output)
+
+	if r.Healthy {
+		h.Status = StatusHealthy
+		h.FailingStreak = 0
+
+		return h
+	}
+
+	if sinceStart < c.StartPeriod {
+		return h
+	}
+
+	h.FailingStreak++
+	if h.FailingStreak >= c.Retries {
+		h.Status = StatusUnhealthy
+	}
+
+	return h
+}

@@ -10,7 +10,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Recorder records what happens to instances.
@@ -24,7 +23,7 @@ type discardRecorder struct{}
 func (discardRecorder) Record(events.Event) {}
 
 // record records an event about instance.
-func (m *Manager) record(instance types.InstanceSpec, action events.Action, message string, attrs map[string]string) {
+func (m *Manager) record(instance Spec, action events.Action, message string, attrs map[string]string) {
 	m.events.Record(events.Event{
 		Kind:       events.KindInstance,
 		ID:         instance.ID,
@@ -36,7 +35,7 @@ func (m *Manager) record(instance types.InstanceSpec, action events.Action, mess
 }
 
 // recordSnapshot records an event of a snapshot.
-func (m *Manager) recordSnapshot(snapshot types.Snapshot, action events.Action, message string, attrs map[string]string) {
+func (m *Manager) recordSnapshot(snapshot Snapshot, action events.Action, message string, attrs map[string]string) {
 	m.events.Record(events.Event{
 		Kind:       events.KindSnapshot,
 		ID:         snapshot.ID,
@@ -49,7 +48,7 @@ func (m *Manager) recordSnapshot(snapshot types.Snapshot, action events.Action, 
 
 // recordEnd records how an instance ended and what its restart policy
 // decided.
-func (m *Manager) recordEnd(instance types.InstanceSpec, exit Exit, decision restartDecision, ranFor time.Duration) {
+func (m *Manager) recordEnd(instance Spec, exit Exit, decision restartDecision, ranFor time.Duration) {
 	attrs := map[string]string{}
 	if exit.Code != nil {
 		attrs["exit_code"] = strconv.Itoa(*exit.Code)
@@ -82,9 +81,9 @@ func (m *Manager) recordEnd(instance types.InstanceSpec, exit Exit, decision res
 
 // restartCount describes restart n under policy: "restart 1 of 3, policy
 // on-failure:3".
-func restartCount(policy types.RestartPolicy, n int) string {
+func restartCount(policy RestartPolicy, n int) string {
 	count := strconv.Itoa(n)
-	if policy.Mode == types.RestartModeOnFailure && policy.MaxRetries > 0 {
+	if policy.Mode == RestartModeOnFailure && policy.MaxRetries > 0 {
 		count += " of " + strconv.Itoa(policy.MaxRetries)
 	}
 	return fmt.Sprintf("restart %s, policy %s", count, policy)

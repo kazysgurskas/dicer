@@ -7,6 +7,7 @@ package network
 
 import (
 	"cmp"
+	"fmt"
 	"net"
 	"net/netip"
 	"slices"
@@ -15,8 +16,129 @@ import (
 	"github.com/nrednav/cuid2"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/naming"
 )
+
+// DefaultName is the name of the default network, which the daemon creates
+// itself and an instance joins when it names no network.
+const DefaultName = "default"
+
+// Network is a bridged network instances attach to, with an address pool of
+// its own.
+type Network struct {
+	ID          string   `yaml:"id"`
+	Name        string   `yaml:"name"`
+	Gateway     string   `yaml:"gateway"`
+	Subnet      string   `yaml:"subnet"`
+	Bridge      string   `yaml:"bridge"`
+	Nameservers []string `yaml:"nameservers,omitempty"`
+	MTU         int      `yaml:"mtu,omitempty"`
+	Isolated    bool     `yaml:"isolated,omitempty"`
+	// Internal stops the network's instances reaching anything beyond it:
+	// the outside, other networks, the host's services and upstream
+	// nameservers.
+	Internal  bool      `yaml:"internal,omitempty"`
+	CreatedAt time.Time `yaml:"created_at"`
+	UpdatedAt time.Time `yaml:"updated_at"`
+
+	// TotalIPs and FreeIPs count the addresses for instances. They are
+	// computed when the network is read and not stored.
+	TotalIPs int64 `yaml:"-"`
+	FreeIPs  int64 `yaml:"-"`
+}
+
+// Allocation is one instance's address on a network, held for as long as the
+// instance is defined.
+type Allocation struct {
+	NetworkID  string `yaml:"network_id"`
+	InstanceID string `yaml:"instance_id"`
+	IP         string `yaml:"ip"`
+	MAC        string `yaml:"mac"`
+
+	// InstanceName and TAPDevice are derived when the allocation is read
+	// and not stored.
+	InstanceName string `yaml:"-"`
+	TAPDevice    string `yaml:"-"`
+}
+
+// The MTU range a network may have.
+const (
+	MinMTU = 576
+	MaxMTU = 9000
+)
+
+// Validate returns an invalid argument error unless the network has a valid
+// name, an MTU in range and nameservers that are IP addresses, and its
+// settings agree with each other.
+func (n Network) Validate() error {
+	if err := naming.Validate(n.Name); err != nil {
+		return err
+	}
+	if n.MTU < MinMTU || n.MTU > MaxMTU {
+		return errdefs.InvalidArgument("MTU %d is out of range: want %d to %d", n.MTU, MinMTU, MaxMTU)
+	}
+	for _, nameserver := range n.Nameservers {
+		if net.ParseIP(nameserver) == nil {
+			return errdefs.InvalidArgument("nameserver %q is not an IP address", nameserver)
+		}
+	}
+	if n.Internal && len(n.Nameservers) > 0 {
+		return errdefs.InvalidArgument("an internal network cannot use nameservers, " +
+			"since its instances cannot reach them: leave the nameservers out")
+	}
+	return nil
+}
+
+// Netmask returns the network's subnet mask in dotted-quad form.
+func (n Network) Netmask() (string, error) {
+	subnet, err := n.subnet()
+	if err != nil {
+		return "", err
+	}
+
+	return net.IP(subnet.Mask).String(), nil
+}
+
+// PrefixLen returns the length of the network's subnet prefix.
+func (n Network) PrefixLen() (int, error) {
+	subnet, err := n.subnet()
+	if err != nil {
+		return 0, err
+	}
+
+	ones, _ := subnet.Mask.Size()
+
+	return ones, nil
+}
+
+// IPCounts returns how many addresses the network has for instances and how
+// many of them are free with allocated taken. The network, broadcast and
+// gateway addresses are excluded. Both are zero if the subnet is invalid.
+func (n Network) IPCounts(allocated int) (total, free int64) {
+	subnet, err := n.subnet()
+	if err != nil {
+		return 0, 0
+	}
+
+	ones, bits := subnet.Mask.Size()
+	if bits == 0 {
+		return 0, 0
+	}
+
+	total = max((int64(1)<<(bits-ones))-3, 0)
+	free = max(total-int64(allocated), 0)
+
+	return total, free
+}
+
+func (n Network) subnet() (*net.IPNet, error) {
+	_, subnet, err := net.ParseCIDR(n.Subnet)
+	if err != nil {
+		return nil, fmt.Errorf("invalid subnet CIDR in network %q: %w", n.ID, err)
+	}
+
+	return subnet, nil
+}
 
 // Defaults applied to a network that does not specify them.
 const (
@@ -85,17 +207,17 @@ type Spec struct {
 // New returns the network spec asks for, with a new ID, or an invalid
 // argument error. It does not check the subnet against other networks or the
 // host's: see CheckSubnetOverlap.
-func New(spec Spec) (types.Network, error) {
+func New(spec Spec) (Network, error) {
 	if spec.Subnet == "" {
-		return types.Network{}, errdefs.InvalidArgument("subnet is required")
+		return Network{}, errdefs.InvalidArgument("subnet is required")
 	}
 	subnet, err := ParseSubnet(spec.Subnet)
 	if err != nil {
-		return types.Network{}, err
+		return Network{}, err
 	}
 	gateway, err := gatewayOf(subnet, spec.Gateway)
 	if err != nil {
-		return types.Network{}, err
+		return Network{}, err
 	}
 
 	// An internal network gets no nameservers, since its instances cannot
@@ -106,7 +228,7 @@ func New(spec Spec) (types.Network, error) {
 	}
 
 	now := time.Now()
-	n := types.Network{
+	n := Network{
 		ID:          cuid2.Generate(),
 		Name:        spec.Name,
 		Subnet:      subnet.String(),
@@ -120,7 +242,7 @@ func New(spec Spec) (types.Network, error) {
 		UpdatedAt:   now,
 	}
 	if err := n.Validate(); err != nil {
-		return types.Network{}, err
+		return Network{}, err
 	}
 	return n, nil
 }
@@ -142,7 +264,7 @@ func gatewayOf(subnet *net.IPNet, want string) (string, error) {
 
 // CheckSubnetOverlap returns an ErrExists error if n's subnet overlaps one of
 // networks, or one of hostSubnets, whose addresses n's would hide.
-func CheckSubnetOverlap(n types.Network, networks []types.Network, hostSubnets []netip.Prefix) error {
+func CheckSubnetOverlap(n Network, networks []Network, hostSubnets []netip.Prefix) error {
 	want, err := netip.ParsePrefix(n.Subnet)
 	if err != nil {
 		return errdefs.InvalidArgument("invalid subnet %q", n.Subnet)

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // fakeRecorder remembers the events it is given.
@@ -101,7 +100,7 @@ func TestRemovalsAreRecorded(t *testing.T) {
 }
 
 func TestGCMessage(t *testing.T) {
-	image := &types.Image{
+	image := &Image{
 		Name: "docker.io/library/alpine:3", Digest: "sha256:1cfa4e2b09e1aaaaaaaaaaaa", SizeBytes: 5 << 20,
 		LastUsedAt: time.Date(2026, 8, 23, 10, 0, 0, 0, time.Local),
 	}

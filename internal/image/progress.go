@@ -7,15 +7,14 @@ import (
 	"sync/atomic"
 
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // ProgressFunc receives progress as a pull runs. It may be nil, and is
 // called from the goroutine doing the pull, so it should not block for long.
-type ProgressFunc func(types.PullProgress)
+type ProgressFunc func(PullProgress)
 
 // report passes p to f, unless f is nil.
-func (f ProgressFunc) report(p types.PullProgress) {
+func (f ProgressFunc) report(p PullProgress) {
 	if f != nil {
 		f(p)
 	}
@@ -31,13 +30,13 @@ func (f ProgressFunc) fromRegistry() registry.ProgressFunc {
 	return func(p registry.Progress) {
 		switch p.Phase {
 		case registry.PhaseDownloading:
-			f(types.PullProgress{
-				Stage:           types.PullStageDownloading,
+			f(PullProgress{
+				Stage:           PullStageDownloading,
 				DownloadedBytes: p.Downloaded,
 				TotalBytes:      p.Total,
 			})
 		case registry.PhaseUnpacking:
-			f(types.PullProgress{Stage: types.PullStageUnpacking})
+			f(PullProgress{Stage: PullStageUnpacking})
 		}
 	}
 }

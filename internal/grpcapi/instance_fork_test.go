@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -17,10 +18,10 @@ import (
 // its source but for what two instances cannot share: an ID, a name, a
 // static address and host ports.
 func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
-	source := types.InstanceSpec{
+	source := instance.Spec{
 		ID: "source-id", Name: "web", ImageRef: "docker.io/library/nginx:1.27", KernelName: "k",
 		VCPUs: 2, MemoryBytes: 512 << 20, DiskBytes: 1 << 30, NetworkName: "default", StaticIP: "10.0.0.5",
-		Ports:         []types.PortMapping{{HostPort: 8080, GuestPort: 80, Protocol: "tcp"}},
+		Ports:         []network.PortMapping{{HostPort: 8080, GuestPort: 80, Protocol: "tcp"}},
 		Env:           map[string]string{"A": "1"},
 		StoppedByUser: true,
 	}
@@ -30,7 +31,7 @@ func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
 		req         *dicerdv1.ForkInstanceRequest
 		wantNetwork string
 		wantIP      string
-		wantPorts   []types.PortMapping
+		wantPorts   []network.PortMapping
 	}{
 		{
 			name:        "nothing given",
@@ -45,7 +46,7 @@ func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
 			},
 			wantNetwork: "lan",
 			wantIP:      "10.1.0.9",
-			wantPorts:   []types.PortMapping{{HostPort: 8081, GuestPort: 80, Protocol: types.ProtocolTCP}},
+			wantPorts:   []network.PortMapping{{HostPort: 8081, GuestPort: 80, Protocol: network.ProtocolTCP}},
 		},
 	}
 	for _, tt := range tests {

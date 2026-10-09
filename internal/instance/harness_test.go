@@ -16,8 +16,9 @@ import (
 
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // testHypervisorVersion is the version the fake hypervisor reports.
@@ -54,17 +55,17 @@ var errNotRunning = errors.New("not running")
 
 // seedInstance defines an instance on the default network, defining that too
 // if need be.
-func seedInstance(t *testing.T, definitions *fakeDefinitions, name string) types.InstanceSpec {
+func seedInstance(t *testing.T, definitions *fakeDefinitions, name string) Spec {
 	t.Helper()
 
 	if _, ok := definitions.networks["default"]; !ok {
-		definitions.networks["default"] = types.Network{
+		definitions.networks["default"] = network.Network{
 			ID: "net-default", Name: "default",
 			Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
 		}
 	}
 
-	instance := types.InstanceSpec{
+	instance := Spec{
 		ID: "id-" + name, Name: name,
 		ImageRef: "alpine:latest", KernelName: "k", NetworkName: "default", VCPUs: 1,
 	}
@@ -81,7 +82,7 @@ type harness struct {
 	events      *fakeRecorder
 	definitions *fakeDefinitions
 	hostNetwork *fakeHostNetwork
-	instance    types.InstanceSpec
+	instance    Spec
 	starter     *fakeStarter
 	hv          *fakeHypervisor
 	agent       *fakeGuestAgent
@@ -93,14 +94,14 @@ func newHarness(t *testing.T) *harness {
 
 	manager, definitions, hostNetwork := newTestManager(t)
 	instance := seedInstance(t, definitions, "web")
-	definitions.kernels["k"] = types.Kernel{Name: "k"}
+	definitions.kernels["k"] = kernel.Kernel{Name: "k"}
 
 	hv := newFakeHypervisor()
 	starter := &fakeStarter{version: testHypervisorVersion, hv: hv}
 	// A VMM asked to shut down exits, as a real one does.
 	hv.onShutdown = func() { _ = starter.vmm().Kill() }
-	manager.starters = map[types.HypervisorType][]hypervisor.Starter{
-		types.HypervisorTypeCloudHypervisor: {starter},
+	manager.starters = map[hypervisor.Type][]hypervisor.Starter{
+		hypervisor.TypeCloudHypervisor: {starter},
 	}
 	// Stop watching before the VMMs are killed, so that killing them at the
 	// end of the test is not mistaken for a crash.
@@ -145,9 +146,9 @@ func (h *harness) running(t *testing.T) {
 	t.Helper()
 
 	pid := os.Getpid()
-	err := h.manager.writeStatus(types.InstanceStatus{
+	err := h.manager.writeStatus(Status{
 		InstanceID:        h.instance.ID,
-		State:             types.InstanceStateRunning,
+		State:             StateRunning,
 		VMMPID:            &pid,
 		HypervisorVersion: testHypervisorVersion,
 		VCPUs:             h.instance.VCPUs,
@@ -171,7 +172,7 @@ func (h *harness) running(t *testing.T) {
 // status reads the instance's status under its lock. Taking the lock
 // orders the read after any supervision work in progress, which is what
 // makes the host-layer fakes safe to inspect afterwards.
-func (h *harness) status(t *testing.T) types.InstanceStatus {
+func (h *harness) status(t *testing.T) Status {
 	t.Helper()
 
 	lock := h.manager.lock(h.instance.ID)
@@ -186,7 +187,7 @@ func (h *harness) status(t *testing.T) types.InstanceStatus {
 }
 
 // waitForState polls until the instance reaches want.
-func (h *harness) waitForState(t *testing.T, want types.InstanceState) types.InstanceStatus {
+func (h *harness) waitForState(t *testing.T, want State) Status {
 	t.Helper()
 
 	deadline := time.Now().Add(10 * time.Second)
@@ -226,7 +227,7 @@ func (h *harness) crash(t *testing.T) {
 
 // setRestart gives the harness instance a restart policy, in the definition
 // the manager reads as well as the harness's copy.
-func (h *harness) setRestart(t *testing.T, p types.RestartPolicy) {
+func (h *harness) setRestart(t *testing.T, p RestartPolicy) {
 	t.Helper()
 
 	h.instance.Restart = p
@@ -274,7 +275,7 @@ func (h *harness) waitForVMMs(t *testing.T, n int) {
 
 // forceState records an instance as being in state, bypassing the state
 // machine, for tests that begin part way through a lifecycle.
-func forceState(t *testing.T, manager *Manager, instanceID string, state types.InstanceState) {
+func forceState(t *testing.T, manager *Manager, instanceID string, state State) {
 	t.Helper()
 
 	status, err := manager.readStatus(instanceID)

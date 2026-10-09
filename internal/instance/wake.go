@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // An instance with a StandbyAfter is woken by a connection to one of its
@@ -33,8 +33,8 @@ type waker struct {
 // wakeListener listens on one of an instance's published TCP ports.
 type wakeListener struct {
 	net.Listener
-	instance types.InstanceSpec
-	port     types.PortMapping
+	instance Spec
+	port     network.PortMapping
 }
 
 // syncWaker starts an instance's waker while the instance is on standby
@@ -65,10 +65,10 @@ func (m *Manager) syncWaker(ctx context.Context, instanceID string) {
 
 // startWaker listens on each of an instance's published TCP ports. A port
 // something else on the host holds is skipped, and logged.
-func (m *Manager) startWaker(ctx context.Context, instance types.InstanceSpec) *waker {
+func (m *Manager) startWaker(ctx context.Context, instance Spec) *waker {
 	w := &waker{}
 	for _, port := range instance.Ports {
-		if port.EffectiveProtocol() != types.ProtocolTCP {
+		if port.EffectiveProtocol() != network.ProtocolTCP {
 			continue
 		}
 		address := net.JoinHostPort(port.HostIP, strconv.Itoa(int(port.HostPort)))

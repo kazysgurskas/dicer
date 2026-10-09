@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // chainDicerDNAT, in the nat table, holds the DNAT rules of every published
@@ -45,7 +45,7 @@ func portComment(instanceID string) string { return "dicer-port-" + instanceID }
 // PublishPorts forwards each host port to the instance's address, replacing
 // the instance's existing rules. A host port already in use is refused.
 func (h *Host) PublishPorts(
-	ctx context.Context, nw *types.Network, allocation *types.NetworkAllocation, ports []types.PortMapping,
+	ctx context.Context, nw *network.Network, allocation *network.Allocation, ports []network.PortMapping,
 ) error {
 	h.rulesMu.Lock()
 	defer h.rulesMu.Unlock()
@@ -156,7 +156,7 @@ func chainExists(ctx context.Context, table, chain string) bool {
 
 // checkHostPortFree refuses a host port a process is listening on, by
 // briefly listening on it.
-func checkHostPortFree(ctx context.Context, p types.PortMapping) error {
+func checkHostPortFree(ctx context.Context, p network.PortMapping) error {
 	addr := net.JoinHostPort(p.HostIP, strconv.Itoa(int(p.HostPort)))
 
 	var (
@@ -164,7 +164,7 @@ func checkHostPortFree(ctx context.Context, p types.PortMapping) error {
 		err error
 	)
 	switch p.EffectiveProtocol() {
-	case types.ProtocolUDP:
+	case network.ProtocolUDP:
 		var conn net.PacketConn
 		if conn, err = lc.ListenPacket(ctx, "udp4", addr); err == nil {
 			_ = conn.Close()

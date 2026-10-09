@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // TestWarnDeprecatedHypervisorVersionsNamesWhatMustMove covers the warnings the
@@ -20,7 +19,7 @@ import (
 func TestWarnDeprecatedHypervisorVersionsNamesWhatMustMove(t *testing.T) {
 	h := newHarness(t)
 	// A newer default makes the harness's version deprecated.
-	h.manager.starters[types.HypervisorTypeCloudHypervisor] = []hypervisor.Starter{
+	h.manager.starters[hypervisor.TypeCloudHypervisor] = []hypervisor.Starter{
 		&fakeStarter{version: "v53.0.0"}, h.starter,
 	}
 	var logs bytes.Buffer
@@ -31,13 +30,13 @@ func TestWarnDeprecatedHypervisorVersionsNamesWhatMustMove(t *testing.T) {
 	h.definitions.instances[pinned.Name] = pinned
 	seedInstance(t, h.definitions, "fresh")
 	h.running(t)
-	h.definitions.snapshots["old"] = types.Snapshot{
-		Name: "old", Kind: types.SnapshotKindMemory,
-		HypervisorType: types.HypervisorTypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
+	h.definitions.snapshots["old"] = Snapshot{
+		Name: "old", Kind: SnapshotKindMemory,
+		HypervisorType: hypervisor.TypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
 	}
-	h.definitions.snapshots["disk"] = types.Snapshot{
-		Name: "disk", Kind: types.SnapshotKindDisk,
-		HypervisorType: types.HypervisorTypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
+	h.definitions.snapshots["disk"] = Snapshot{
+		Name: "disk", Kind: SnapshotKindDisk,
+		HypervisorType: hypervisor.TypeCloudHypervisor, HypervisorVersion: testHypervisorVersion,
 	}
 
 	h.manager.WarnDeprecatedHypervisorVersions(t.Context())
@@ -65,7 +64,7 @@ func TestWarnDeprecatedHypervisorVersionsNamesWhatMustMove(t *testing.T) {
 // when it boots an instance on a deprecated version.
 func TestBootWarnsOfDeprecatedHypervisorVersion(t *testing.T) {
 	h := newHarness(t)
-	h.manager.starters[types.HypervisorTypeCloudHypervisor] = []hypervisor.Starter{
+	h.manager.starters[hypervisor.TypeCloudHypervisor] = []hypervisor.Starter{
 		&fakeStarter{version: "v53.0.0"}, h.starter,
 	}
 	var logs bytes.Buffer

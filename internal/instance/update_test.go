@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestUpdateReleasesTheAddressOfAMovedInstance(t *testing.T) {
@@ -56,7 +55,7 @@ func TestUpdateChangesTheRestartPolicyOfARunningInstance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed.Restart = types.RestartPolicy{Mode: types.RestartModeAlways}
+	changed.Restart = RestartPolicy{Mode: RestartModeAlways}
 	changed.UpdatedAt = changed.UpdatedAt.Add(time.Second)
 	if err := h.manager.Update(t.Context(), changed); err != nil {
 		t.Fatalf("Update = %v, want the restart policy changed", err)
@@ -64,7 +63,7 @@ func TestUpdateChangesTheRestartPolicyOfARunningInstance(t *testing.T) {
 
 	h.crash(t)
 	h.waitForVMMs(t, 2)
-	h.waitForState(t, types.InstanceStateRunning)
+	h.waitForState(t, StateRunning)
 }
 
 // An overlay disk grows to a larger disk_bytes at the next start, but cannot

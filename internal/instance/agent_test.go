@@ -16,7 +16,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
@@ -55,8 +54,8 @@ func TestAgentStopsWaitingForStoppedInstance(t *testing.T) {
 	go func() {
 		defer close(stopped)
 		time.Sleep(300 * time.Millisecond)
-		if err := manager.writeStatus(types.InstanceStatus{
-			InstanceID: instance.ID, State: types.InstanceStateStopped,
+		if err := manager.writeStatus(Status{
+			InstanceID: instance.ID, State: StateStopped,
 		}); err != nil {
 			t.Errorf("writeStatus: %v", err)
 		}
@@ -74,12 +73,12 @@ func TestAgentStopsWaitingForStoppedInstance(t *testing.T) {
 
 // writeRunningStatus records instance running, with a vsock socket that
 // nothing listens on yet, and returns the socket's path.
-func writeRunningStatus(t *testing.T, manager *Manager, instance types.InstanceSpec) string {
+func writeRunningStatus(t *testing.T, manager *Manager, instance Spec) string {
 	t.Helper()
 
 	vsockPath := filepath.Join(t.TempDir(), "sock") // short: macOS caps a socket path at 104 bytes
-	if err := manager.writeStatus(types.InstanceStatus{
-		InstanceID: instance.ID, State: types.InstanceStateRunning, VsockPath: vsockPath,
+	if err := manager.writeStatus(Status{
+		InstanceID: instance.ID, State: StateRunning, VsockPath: vsockPath,
 	}); err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}

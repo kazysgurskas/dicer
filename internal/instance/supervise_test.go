@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestVMMCrashFailsInstance(t *testing.T) {
@@ -20,7 +18,7 @@ func TestVMMCrashFailsInstance(t *testing.T) {
 	h.start(t)
 
 	h.crash(t)
-	status := h.waitForState(t, types.InstanceStateFailed)
+	status := h.waitForState(t, StateFailed)
 
 	if !strings.Contains(status.StateError, "exited unexpectedly") ||
 		!strings.Contains(status.StateError, "signal: killed") {
@@ -56,7 +54,7 @@ func TestVMMCrashFailsInstance(t *testing.T) {
 	}
 
 	h.start(t)
-	if status := h.status(t); status.State != types.InstanceStateRunning {
+	if status := h.status(t); status.State != StateRunning {
 		t.Errorf("state after restart = %s, want Running", status.State)
 	}
 	for _, path := range stale {
@@ -74,7 +72,7 @@ func TestPausedVMMCrashFailsInstance(t *testing.T) {
 	}
 
 	h.crash(t)
-	h.waitForState(t, types.InstanceStateFailed)
+	h.waitForState(t, StateFailed)
 }
 
 func TestStopIsNotACrash(t *testing.T) {
@@ -94,7 +92,7 @@ func TestStopIsNotACrash(t *testing.T) {
 
 	// Give a watcher that wrongly took the exit for a crash time to act.
 	time.Sleep(50 * time.Millisecond)
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s (%s), want Stopped", status.State, status.StateError)
 	}
 }
@@ -117,7 +115,7 @@ func TestStopKillsVMMThatIgnoresShutdown(t *testing.T) {
 	default:
 		t.Error("Stop returned while the VMM was still running")
 	}
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s, want Stopped", status.State)
 	}
 }
@@ -138,7 +136,7 @@ func TestForcedDeleteIsNotACrash(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s (%s), want no status left", status.State, status.StateError)
 	}
 }
@@ -155,7 +153,7 @@ func TestOldVMMExitDoesNotTouchNewOne(t *testing.T) {
 	h.start(t)
 
 	time.Sleep(50 * time.Millisecond)
-	if status := h.status(t); status.State != types.InstanceStateRunning {
+	if status := h.status(t); status.State != StateRunning {
 		t.Errorf("state = %s (%s), want Running", status.State, status.StateError)
 	}
 	if h.manager.vmm(h.instance.ID) != h.starter.vmm() {
@@ -176,7 +174,7 @@ func TestRestoredVMMCrashFailsInstance(t *testing.T) {
 	}
 
 	h.crash(t)
-	h.waitForState(t, types.InstanceStateFailed)
+	h.waitForState(t, StateFailed)
 }
 
 // TestCloseStopsWatching checks that the daemon shutting down leaves its VMMs
@@ -190,7 +188,7 @@ func TestCloseStopsWatching(t *testing.T) {
 	<-h.starter.vmm().Done()
 
 	time.Sleep(50 * time.Millisecond)
-	if status := h.status(t); status.State != types.InstanceStateRunning {
+	if status := h.status(t); status.State != StateRunning {
 		t.Errorf("state = %s, want Running: a closed manager watches nothing", status.State)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/hypervisor/cloudhypervisor"
 	"github.com/konradasb/dicer/internal/hypervisor/firecracker"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // driver is one hypervisor implementation: the versions of it dicerd
@@ -30,9 +29,9 @@ type driver struct {
 }
 
 // drivers returns the hypervisors dicerd supports.
-func drivers() map[types.HypervisorType]driver {
-	return map[types.HypervisorType]driver{
-		types.HypervisorTypeCloudHypervisor: {
+func drivers() map[hypervisor.Type]driver {
+	return map[hypervisor.Type]driver{
+		hypervisor.TypeCloudHypervisor: {
 			binary:   "cloud-hypervisor",
 			versions: versions(cloudhypervisor.SupportedVersions(), cloudhypervisor.DefaultVersion),
 			extract: func(dstPath, version string) (string, error) {
@@ -42,7 +41,7 @@ func drivers() map[types.HypervisorType]driver {
 				return cloudhypervisor.NewStarter(binaryPath)
 			},
 		},
-		types.HypervisorTypeFirecracker: {
+		hypervisor.TypeFirecracker: {
 			binary:   "firecracker",
 			versions: versions(firecracker.SupportedVersions(), firecracker.DefaultVersion),
 			extract: func(dstPath, version string) (string, error) {
@@ -58,8 +57,8 @@ func drivers() map[types.HypervisorType]driver {
 // buildStarters extracts every embedded hypervisor binary and returns the
 // starters for each type, that type's default version first -- which is the
 // one an instance gets when it names no version.
-func buildStarters(dataDir string) (map[types.HypervisorType][]hypervisor.Starter, error) {
-	starters := make(map[types.HypervisorType][]hypervisor.Starter)
+func buildStarters(dataDir string) (map[hypervisor.Type][]hypervisor.Starter, error) {
+	starters := make(map[hypervisor.Type][]hypervisor.Starter)
 
 	for hypervisorType, d := range drivers() {
 		for _, version := range d.versions {

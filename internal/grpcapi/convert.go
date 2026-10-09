@@ -11,13 +11,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/guest"
+	"github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/token"
+	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // instanceToProto flattens an instance's spec and status into one message.
-func instanceToProto(instance types.Instance) *dicerdv1.Instance {
+func instanceToProto(instance instance.Instance) *dicerdv1.Instance {
 	spec, status := instance.Spec, instance.Status
 
 	out := &dicerdv1.Instance{
@@ -46,7 +51,7 @@ func instanceToProto(instance types.Instance) *dicerdv1.Instance {
 		Labels:                 spec.Labels,
 		RestartPolicy:          restartPolicyToProto(spec.Restart),
 		HealthCheck:            healthCheckToProto(spec.HealthCheck),
-		InitMode:               initModes.toProto(cmp.Or(spec.InitMode, types.InitModeAuto)),
+		InitMode:               initModes.toProto(cmp.Or(spec.InitMode, guest.InitModeAuto)),
 		CreateTime:             timestamppb.New(spec.CreatedAt),
 		UpdateTime:             timestamppb.New(spec.UpdatedAt),
 
@@ -104,16 +109,16 @@ func instanceToProto(instance types.Instance) *dicerdv1.Instance {
 }
 
 // restartPolicyToProto converts a restart policy; unset is "no".
-func restartPolicyToProto(p types.RestartPolicy) *dicerdv1.RestartPolicy {
+func restartPolicyToProto(p instance.RestartPolicy) *dicerdv1.RestartPolicy {
 	mode := p.Mode
 	if mode == "" {
-		mode = types.RestartModeNo
+		mode = instance.RestartModeNo
 	}
 	return &dicerdv1.RestartPolicy{Mode: restartModes.toProto(mode), MaxRetries: int32(p.MaxRetries)}
 }
 
 // networkToProto converts a network with its address usage.
-func networkToProto(n types.Network, allocated int) *dicerdv1.Network {
+func networkToProto(n network.Network, allocated int) *dicerdv1.Network {
 	total, free := n.IPCounts(allocated)
 
 	return &dicerdv1.Network{
@@ -134,7 +139,7 @@ func networkToProto(n types.Network, allocated int) *dicerdv1.Network {
 }
 
 // allocationToProto converts an allocation, deriving its TAP device name.
-func allocationToProto(a types.NetworkAllocation, instanceName string) *dicerdv1.NetworkAllocation {
+func allocationToProto(a network.Allocation, instanceName string) *dicerdv1.NetworkAllocation {
 	return &dicerdv1.NetworkAllocation{
 		InstanceId:   a.InstanceID,
 		InstanceName: instanceName,
@@ -146,7 +151,7 @@ func allocationToProto(a types.NetworkAllocation, instanceName string) *dicerdv1
 
 // snapshotToProto converts a snapshot of the instance now named
 // instanceName.
-func snapshotToProto(snapshot types.Snapshot, instanceName string) *dicerdv1.Snapshot {
+func snapshotToProto(snapshot instance.Snapshot, instanceName string) *dicerdv1.Snapshot {
 	return &dicerdv1.Snapshot{
 		Id:                snapshot.ID,
 		Name:              snapshot.Name,
@@ -162,7 +167,7 @@ func snapshotToProto(snapshot types.Snapshot, instanceName string) *dicerdv1.Sna
 	}
 }
 
-func volumeToProto(v types.Volume) *dicerdv1.Volume {
+func volumeToProto(v volume.Volume) *dicerdv1.Volume {
 	return &dicerdv1.Volume{
 		Id:         v.ID,
 		Name:       v.Name,
@@ -172,7 +177,7 @@ func volumeToProto(v types.Volume) *dicerdv1.Volume {
 	}
 }
 
-func kernelToProto(k types.Kernel) *dicerdv1.Kernel {
+func kernelToProto(k kernel.Kernel) *dicerdv1.Kernel {
 	return &dicerdv1.Kernel{
 		Id:         k.ID,
 		Name:       k.Name,
@@ -184,7 +189,7 @@ func kernelToProto(k types.Kernel) *dicerdv1.Kernel {
 }
 
 // tokenToProto converts a token, without the SHA-256 of its secret.
-func tokenToProto(t types.Token) *dicerdv1.Token {
+func tokenToProto(t token.Token) *dicerdv1.Token {
 	scopes := make([]string, 0, len(t.Scopes))
 	for _, scope := range t.Scopes {
 		scopes = append(scopes, string(scope))
@@ -203,7 +208,7 @@ func tokenToProto(t types.Token) *dicerdv1.Token {
 	return out
 }
 
-func imageToProto(image *types.Image) *dicerdv1.Image {
+func imageToProto(image *image.Image) *dicerdv1.Image {
 	out := &dicerdv1.Image{
 		Name:        image.Name,
 		Digest:      image.Digest,
@@ -220,17 +225,17 @@ func imageToProto(image *types.Image) *dicerdv1.Image {
 
 // restartPolicyFromProto converts and validates a restart policy. Unset is
 // "no".
-func restartPolicyFromProto(p *dicerdv1.RestartPolicy) (types.RestartPolicy, error) {
+func restartPolicyFromProto(p *dicerdv1.RestartPolicy) (instance.RestartPolicy, error) {
 	mode, err := restartModes.fromProto(p.GetMode())
 	if err != nil {
-		return types.RestartPolicy{}, err
+		return instance.RestartPolicy{}, err
 	}
-	policy := types.RestartPolicy{Mode: mode, MaxRetries: int(p.GetMaxRetries())}
+	policy := instance.RestartPolicy{Mode: mode, MaxRetries: int(p.GetMaxRetries())}
 	if policy.Mode == "" {
-		policy.Mode = types.RestartModeNo
+		policy.Mode = instance.RestartModeNo
 	}
 	if err := policy.Validate(); err != nil {
-		return types.RestartPolicy{}, errdefs.InvalidArgument("%v", err)
+		return instance.RestartPolicy{}, errdefs.InvalidArgument("%v", err)
 	}
 	return policy, nil
 }
@@ -238,12 +243,12 @@ func restartPolicyFromProto(p *dicerdv1.RestartPolicy) (types.RestartPolicy, err
 // mountsFromProto converts what an instance wants mounted, cleaning the
 // targets. InstanceSpec.Validate checks them, and checkMounts what needs the
 // host.
-func mountsFromProto(in []*dicerdv1.Mount) ([]types.Mount, error) {
+func mountsFromProto(in []*dicerdv1.Mount) ([]instance.Mount, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
 
-	mounts := make([]types.Mount, 0, len(in))
+	mounts := make([]instance.Mount, 0, len(in))
 	for _, m := range in {
 		mountType, err := mountTypes.fromProto(m.GetType())
 		if err != nil {
@@ -255,7 +260,7 @@ func mountsFromProto(in []*dicerdv1.Mount) ([]types.Mount, error) {
 		if target != "" {
 			target = path.Clean(target)
 		}
-		mounts = append(mounts, types.Mount{
+		mounts = append(mounts, instance.Mount{
 			Type:     mountType,
 			Source:   m.GetSource(),
 			Target:   target,
@@ -270,12 +275,12 @@ func mountsFromProto(in []*dicerdv1.Mount) ([]types.Mount, error) {
 // portMappingsFromProto converts the ports an instance wants published.
 // InstanceSpec.Validate checks them, and their clashes with other instances
 // are checked at start.
-func portMappingsFromProto(in []*dicerdv1.PortMapping) ([]types.PortMapping, error) {
+func portMappingsFromProto(in []*dicerdv1.PortMapping) ([]network.PortMapping, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
 
-	out := make([]types.PortMapping, 0, len(in))
+	out := make([]network.PortMapping, 0, len(in))
 	for _, p := range in {
 		if p.GetHostPort() > 65535 || p.GetGuestPort() > 65535 {
 			return nil, errdefs.InvalidArgument(
@@ -287,11 +292,11 @@ func portMappingsFromProto(in []*dicerdv1.PortMapping) ([]types.PortMapping, err
 			return nil, err
 		}
 
-		out = append(out, types.PortMapping{
+		out = append(out, network.PortMapping{
 			HostIP:    canonicalHostIP(p.GetHostIp()),
 			HostPort:  uint16(p.GetHostPort()),
 			GuestPort: uint16(p.GetGuestPort()),
-			Protocol:  cmp.Or(protocol, types.ProtocolTCP),
+			Protocol:  cmp.Or(protocol, network.ProtocolTCP),
 		})
 	}
 

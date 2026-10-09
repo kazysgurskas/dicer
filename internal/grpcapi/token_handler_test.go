@@ -13,7 +13,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/token"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -58,7 +57,7 @@ func TestCreateTokenKeepsOnlyTheSecretsSHA256(t *testing.T) {
 	if strings.Contains(stored.SecretSHA256, secret) {
 		t.Error("the secret is stored")
 	}
-	if got := issued.GetToken().GetScopes(); !slices.Equal(got, []string{string(types.ScopeAll)}) {
+	if got := issued.GetToken().GetScopes(); !slices.Equal(got, []string{string(token.ScopeAll)}) {
 		t.Errorf("scopes = %v, want everything by default", got)
 	}
 }
@@ -207,7 +206,7 @@ func TestATokenCannotManageOneThatCanDoMore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ci := types.Token{Name: "ci", Scopes: []types.Scope{types.ScopeInstancesWrite, types.ScopeTokensWrite}}
+	ci := token.Token{Name: "ci", Scopes: []token.Scope{token.ScopeInstancesWrite, token.ScopeTokensWrite}}
 	ctx := context.WithValue(t.Context(), tokenKey{}, ci)
 
 	_, err := h.CreateToken(ctx, &dicerdv1.CreateTokenRequest{Name: "root"})

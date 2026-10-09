@@ -1,7 +1,7 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package types
+package kernel
 
 import (
 	"crypto/sha256"
@@ -18,9 +18,9 @@ const (
 	ArchitectureAArch64 = "aarch64"
 )
 
-// DefaultKernelName is the name of the default kernel, which the daemon
-// defines itself and an instance boots when it names no kernel.
-const DefaultKernelName = "default"
+// DefaultName is the name of the default kernel, which the daemon defines
+// itself and an instance boots when it names no kernel.
+const DefaultName = "default"
 
 // Kernel is a guest kernel image an instance can boot from, kept on the
 // host.

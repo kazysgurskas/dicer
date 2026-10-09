@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // A network's guests may reach its gateway, the host's address on the
@@ -27,7 +27,7 @@ import (
 // the host but the gateway's DNS server. A firewalld without firewalldZone is
 // logged, not returned: the guests still run, but firewalld turns their
 // traffic away, to the host and beyond it.
-func (h *Host) ensureGatewayAccess(ctx context.Context, nw *types.Network) error {
+func (h *Host) ensureGatewayAccess(ctx context.Context, nw *network.Network) error {
 	h.rulesMu.Lock()
 	err := ensureInputRules(ctx, nw.Bridge, nw.Gateway, h.config.ListenerPort, nw.Internal)
 	h.rulesMu.Unlock()
@@ -48,7 +48,7 @@ func (h *Host) ensureGatewayAccess(ctx context.Context, nw *types.Network) error
 }
 
 // removeGatewayAccess undoes ensureGatewayAccess. Failures are logged.
-func (h *Host) removeGatewayAccess(ctx context.Context, nw *types.Network) {
+func (h *Host) removeGatewayAccess(ctx context.Context, nw *network.Network) {
 	if h.firewalld != nil {
 		if err := h.firewalld.unbind(ctx, nw.Bridge); err != nil {
 			h.logger.WarnContext(ctx, "failed to unbind bridge from firewalld",

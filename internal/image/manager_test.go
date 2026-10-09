@@ -16,7 +16,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // discardLogger keeps expected failures out of the test output.
@@ -406,7 +405,7 @@ func TestManager_LoadExistingImages(t *testing.T) {
 	}
 
 	m := newTestManager(testDir)
-	image := &types.Image{
+	image := &Image{
 		Name:      "docker.io/library/alpine:latest",
 		Digest:    "sha256:" + digestHex,
 		DiskPath:  diskPath,
@@ -499,7 +498,7 @@ func TestManager_Pull_LoadFromDisk(t *testing.T) {
 	}
 
 	m := newTestManager(testDir)
-	image := &types.Image{
+	image := &Image{
 		Name:      "docker.io/library/alpine:latest",
 		Digest:    "sha256:" + digestHex,
 		DiskPath:  diskPath,
@@ -603,7 +602,7 @@ func TestManager_Pull_MissingDiskFile(t *testing.T) {
 
 	diskPath := filepath.Join(imageDir, "disk.img")
 	m := newTestManager(testDir)
-	image := &types.Image{
+	image := &Image{
 		Name:      "docker.io/library/alpine:latest",
 		Digest:    "sha256:" + digestHex,
 		DiskPath:  diskPath,
@@ -741,17 +740,17 @@ func TestManager_DeleteAfterTagMoved(t *testing.T) {
 func TestEnsureFollowsThePullPolicy(t *testing.T) {
 	tests := []struct {
 		name         string
-		policy       types.PullPolicy
+		policy       PullPolicy
 		held         bool
 		wantRegistry bool
 		wantErr      error
 	}{
-		{name: "missing pulls an image the host lacks", policy: types.PullPolicyMissing, wantRegistry: true},
-		{name: "missing uses the image held", policy: types.PullPolicyMissing, held: true},
+		{name: "missing pulls an image the host lacks", policy: PullPolicyMissing, wantRegistry: true},
+		{name: "missing uses the image held", policy: PullPolicyMissing, held: true},
 		{name: "unset is missing", policy: "", held: true},
-		{name: "always asks the registry for an image held", policy: types.PullPolicyAlways, held: true, wantRegistry: true},
-		{name: "never uses the image held", policy: types.PullPolicyNever, held: true},
-		{name: "never refuses an image the host lacks", policy: types.PullPolicyNever, wantErr: errdefs.ErrNotFound},
+		{name: "always asks the registry for an image held", policy: PullPolicyAlways, held: true, wantRegistry: true},
+		{name: "never uses the image held", policy: PullPolicyNever, held: true},
+		{name: "never refuses an image the host lacks", policy: PullPolicyNever, wantErr: errdefs.ErrNotFound},
 	}
 
 	for _, tt := range tests {
@@ -796,7 +795,7 @@ func TestEnsureFollowsThePullPolicy(t *testing.T) {
 // TestEnsureMarksTheImageUsed checks that an image held is marked used, so
 // that garbage collection spares it until the instance it is for is defined.
 func TestEnsureMarksTheImageUsed(t *testing.T) {
-	for _, policy := range []types.PullPolicy{types.PullPolicyMissing, types.PullPolicyAlways, types.PullPolicyNever} {
+	for _, policy := range []PullPolicy{PullPolicyMissing, PullPolicyAlways, PullPolicyNever} {
 		t.Run(string(policy), func(t *testing.T) {
 			manager, err := NewManager(Config{DataDir: t.TempDir(), Logger: discardLogger})
 			if err != nil {

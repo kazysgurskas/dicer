@@ -22,7 +22,6 @@ import (
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -33,7 +32,7 @@ type Config struct {
 	Networks    *network.Manager
 	Instances   *instance.Manager
 
-	Hypervisors map[types.HypervisorType][]hypervisor.Starter
+	Hypervisors map[hypervisor.Type][]hypervisor.Starter
 	Images      *image.Manager
 	Kernels     *kernel.Manager
 	Volumes     *volume.Manager
@@ -164,7 +163,7 @@ func (s *Server) Register(gs *grpc.Server) {
 
 // refuseInUse returns an ErrInvalidState error naming the first instance
 // for which inUse is true, or nil. what reads like `kernel "k" is in use`.
-func refuseInUse(definitions *filestore.Manager, what string, inUse func(types.InstanceSpec) bool) error {
+func refuseInUse(definitions *filestore.Manager, what string, inUse func(instance.Spec) bool) error {
 	for _, instance := range definitions.Instances() {
 		if inUse(instance) {
 			return errdefs.InvalidState("%s by instance %q", what, instance.Name)

@@ -6,8 +6,6 @@ package instance
 import (
 	"errors"
 	"io/fs"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // ImagesInUse returns the digests of images that must be kept: those
@@ -26,11 +24,11 @@ func (m *Manager) ImagesInUse() (map[string]struct{}, error) {
 			return nil, err
 		}
 		switch {
-		case status.State.HoldsResources() || status.State == types.InstanceStateStopping:
+		case status.State.HoldsResources() || status.State == StateStopping:
 			if status.ImageDigest != "" {
 				inUse[status.ImageDigest] = struct{}{}
 			}
-		case status.State == types.InstanceStateStandby:
+		case status.State == StateStandby:
 			// Standby leaves no runtime status, so the image is read from
 			// what was frozen. Resuming needs that image, whatever the
 			// definition now names.

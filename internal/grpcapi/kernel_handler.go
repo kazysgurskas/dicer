@@ -17,8 +17,8 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/humanize"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -48,7 +48,7 @@ func (h *kernelHandler) ImportKernel(
 	}
 
 	now := time.Now()
-	k := types.Kernel{
+	k := kernel.Kernel{
 		ID:           cuid2.Generate(),
 		Name:         start.GetName(),
 		Architecture: arch,
@@ -107,11 +107,11 @@ func (r *importKernelReader) Read(p []byte) (int, error) {
 
 // checkNewKernel returns an error unless k is valid and can be added: it
 // does not take the default kernel's name, or another kernel's.
-func (h *kernelHandler) checkNewKernel(k types.Kernel) error {
+func (h *kernelHandler) checkNewKernel(k kernel.Kernel) error {
 	if err := k.Validate(); err != nil {
 		return err
 	}
-	if k.Name == types.DefaultKernelName {
+	if k.Name == kernel.DefaultName {
 		return errdefs.InvalidArgument("%q is the default kernel's name: import the kernel under another", k.Name)
 	}
 	if _, err := h.definitions.Kernel(k.Name); err == nil {
@@ -157,11 +157,11 @@ func (h *kernelHandler) DeleteKernel(
 	if err != nil {
 		return nil, err
 	}
-	if k.Name == types.DefaultKernelName {
+	if k.Name == kernel.DefaultName {
 		return nil, errdefs.InvalidArgument("the default kernel cannot be deleted")
 	}
 
-	inUse := func(instance types.InstanceSpec) bool { return instance.KernelName == k.Name }
+	inUse := func(instance instance.Spec) bool { return instance.KernelName == k.Name }
 	if err := refuseInUse(h.definitions, fmt.Sprintf("kernel %q is in use", k.Name), inUse); err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (h *kernelHandler) DeleteKernel(
 
 // record records that action happened to k, with its architecture among
 // the attributes.
-func (h *kernelHandler) record(k types.Kernel, action events.Action, message string) {
+func (h *kernelHandler) record(k kernel.Kernel, action events.Action, message string) {
 	h.events.Record(events.Event{
 		Kind:       events.KindKernel,
 		ID:         k.ID,

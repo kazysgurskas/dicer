@@ -13,7 +13,8 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
+	"github.com/konradasb/dicer/internal/volume"
 )
 
 // TestStandbyFreesTheHostAndStartResumes checks that standby ends the VMM,
@@ -29,10 +30,10 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 	}
 
 	status := h.status(t)
-	if status.State != types.InstanceStateStandby {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateStandby)
+	if status.State != StateStandby {
+		t.Errorf("state = %s, want %s", status.State, StateStandby)
 	}
-	if held := status.HeldResources(); held != (types.Resources{}) {
+	if held := status.HeldResources(); held != (Resources{}) {
 		t.Errorf("an instance on standby holds %s, want nothing", held)
 	}
 	select {
@@ -56,8 +57,8 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 	if len(h.starter.restoredFrom) != 1 || h.starter.restoredFrom[0] != h.manager.standbyDir(h.instance) {
 		t.Errorf("restored from %v, want the standby directory", h.starter.restoredFrom)
 	}
-	if status := h.status(t); status.State != types.InstanceStateRunning {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateRunning)
+	if status := h.status(t); status.State != StateRunning {
+		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
 	if _, err := os.Stat(h.manager.standbyDir(h.instance)); !errors.Is(err, fs.ErrNotExist) {
 		t.Error("the standby is still there after the instance resumed")
@@ -80,8 +81,8 @@ func TestStandbyOutlivesTheRuntimeStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if status := h.status(t); status.State != types.InstanceStateStandby {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateStandby)
+	if status := h.status(t); status.State != StateStandby {
+		t.Errorf("state = %s, want %s", status.State, StateStandby)
 	}
 }
 
@@ -90,13 +91,13 @@ func TestStandbyOutlivesTheRuntimeStatus(t *testing.T) {
 func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 	tests := []struct {
 		name  string
-		share func(*types.InstanceSpec)
+		share func(*Spec)
 	}{
-		{"host port", func(s *types.InstanceSpec) {
-			s.Ports = []types.PortMapping{{HostPort: 8080, GuestPort: 80}}
+		{"host port", func(s *Spec) {
+			s.Ports = []network.PortMapping{{HostPort: 8080, GuestPort: 80}}
 		}},
-		{"writable volume", func(s *types.InstanceSpec) {
-			s.Mounts = []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}}
+		{"writable volume", func(s *Spec) {
+			s.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 		}},
 	}
 	for _, tt := range tests {
@@ -104,7 +105,7 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 			h := newHarness(t)
 			volumes := fakeVolumes{dir: t.TempDir()}
 			h.manager.volumes = volumes
-			h.definitions.volumes["data"] = types.Volume{ID: "vol-data", Name: "data"}
+			h.definitions.volumes["data"] = volume.Volume{ID: "vol-data", Name: "data"}
 			disk := volumes.Path("vol-data")
 			if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 				t.Fatal(err)
@@ -142,8 +143,8 @@ func TestStopDiscardsStandby(t *testing.T) {
 	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if status := h.status(t); status.State != types.InstanceStateStopped {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateStopped)
+	if status := h.status(t); status.State != StateStopped {
+		t.Errorf("state = %s, want %s", status.State, StateStopped)
 	}
 
 	if err := h.manager.Start(t.Context(), h.instance); err != nil {
@@ -199,8 +200,8 @@ func TestFailedStandbyKeepsTheGuestRunning(t *testing.T) {
 		t.Fatal("Standby succeeded despite the hypervisor failing")
 	}
 
-	if status := h.status(t); status.State != types.InstanceStateRunning {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateRunning)
+	if status := h.status(t); status.State != StateRunning {
+		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
 	if h.hv.paused != 1 || h.hv.resumed != 1 {
 		t.Errorf("paused %d times and resumed %d, want 1 and 1", h.hv.paused, h.hv.resumed)

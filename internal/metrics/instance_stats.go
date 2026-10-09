@@ -6,7 +6,7 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 )
 
 // instanceStatsLabels identify the instance a series is of. The ID stays the
@@ -18,7 +18,7 @@ var instanceStatsLabels = []string{"instance_id", "name"}
 // begin again each time an instance starts, as Prometheus expects of a
 // counter whose process restarts.
 type instanceStatsCollector struct {
-	source func() []types.InstanceStats
+	source func() []instance.Stats
 
 	cpu                    *prometheus.Desc
 	vcpus                  *prometheus.Desc
@@ -36,7 +36,7 @@ type instanceStatsCollector struct {
 	networkTransmitErrors  *prometheus.Desc
 }
 
-func (m *Metrics) newInstanceStatsCollector(source func() []types.InstanceStats) *instanceStatsCollector {
+func (m *Metrics) newInstanceStatsCollector(source func() []instance.Stats) *instanceStatsCollector {
 	return &instanceStatsCollector{
 		source: source,
 		cpu: m.descriptor(Description{

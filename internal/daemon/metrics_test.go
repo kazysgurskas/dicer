@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // newTestDaemon returns a daemon with metrics built but no services, which is
@@ -156,7 +156,7 @@ func TestNetworkSummariesJoinsDefinitionsAndAllocations(t *testing.T) {
 	// A /24 has 256 addresses, of which the network, broadcast and gateway
 	// addresses are not assignable: 253 can be handed out.
 	const subnet = "172.20.0.0/24"
-	nw := types.Network{
+	nw := network.Network{
 		ID: "n-1", Name: "default", Subnet: subnet, Gateway: "172.20.0.1", Bridge: "dicer0",
 	}
 	if err := d.definitions.CreateNetwork(nw); err != nil {

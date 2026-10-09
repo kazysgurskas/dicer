@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // A workload that exits 0 is a clean end: the instance is Stopped, not
@@ -20,7 +18,7 @@ func TestCleanExitStopsInstance(t *testing.T) {
 	h.start(t)
 
 	h.exit(t, 0)
-	status := h.waitForState(t, types.InstanceStateStopped)
+	status := h.waitForState(t, StateStopped)
 
 	if status.ExitCode == nil || *status.ExitCode != 0 {
 		t.Errorf("exit code = %v, want 0", status.ExitCode)
@@ -38,7 +36,7 @@ func TestNonZeroExitFailsInstance(t *testing.T) {
 	h.start(t)
 
 	h.exit(t, 3)
-	status := h.waitForState(t, types.InstanceStateFailed)
+	status := h.waitForState(t, StateFailed)
 
 	if status.ExitCode == nil || *status.ExitCode != 3 {
 		t.Errorf("exit code = %v, want 3", status.ExitCode)
@@ -50,7 +48,7 @@ func TestNonZeroExitFailsInstance(t *testing.T) {
 
 func TestOnFailureRestartsCrashedInstance(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeOnFailure})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure})
 	h.restartAtOnce()
 	metrics := &fakeMetrics{}
 	h.manager.metrics = metrics
@@ -58,7 +56,7 @@ func TestOnFailureRestartsCrashedInstance(t *testing.T) {
 
 	h.crash(t)
 	h.waitForVMMs(t, 2)
-	status := h.waitForState(t, types.InstanceStateRunning)
+	status := h.waitForState(t, StateRunning)
 
 	if status.RestartCount != 1 {
 		t.Errorf("restart count = %d, want 1", status.RestartCount)
@@ -73,12 +71,12 @@ func TestOnFailureRestartsCrashedInstance(t *testing.T) {
 
 func TestOnFailureLeavesCleanExitStopped(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeOnFailure})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure})
 	h.restartAtOnce()
 	h.start(t)
 
 	h.exit(t, 0)
-	h.waitForState(t, types.InstanceStateStopped)
+	h.waitForState(t, StateStopped)
 
 	time.Sleep(50 * time.Millisecond)
 	if n := h.starter.vmmCount(); n != 1 {
@@ -88,27 +86,27 @@ func TestOnFailureLeavesCleanExitStopped(t *testing.T) {
 
 func TestAlwaysRestartsCleanExit(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeAlways})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
 	h.restartAtOnce()
 	h.start(t)
 
 	h.exit(t, 0)
 	h.waitForVMMs(t, 2)
-	h.waitForState(t, types.InstanceStateRunning)
+	h.waitForState(t, StateRunning)
 }
 
 func TestOnFailureGivesUpAfterMaxRetries(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeOnFailure, MaxRetries: 1})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure, MaxRetries: 1})
 	h.restartAtOnce()
 	h.start(t)
 
 	h.exit(t, 1)
 	h.waitForVMMs(t, 2)
-	h.waitForState(t, types.InstanceStateRunning)
+	h.waitForState(t, StateRunning)
 
 	h.exit(t, 1)
-	status := h.waitForState(t, types.InstanceStateFailed)
+	status := h.waitForState(t, StateFailed)
 
 	if !strings.Contains(status.StateError, "gave up after 1 restart:") ||
 		!strings.Contains(status.StateError, "exit code 1") {
@@ -121,13 +119,13 @@ func TestOnFailureGivesUpAfterMaxRetries(t *testing.T) {
 // abandoned at the first try.
 func TestFailedRestartIsRetried(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeOnFailure, MaxRetries: 2})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure, MaxRetries: 2})
 	h.restartAtOnce()
 	h.start(t)
 
 	h.starter.startErr = errors.New("no hypervisor today")
 	h.crash(t)
-	status := h.waitForState(t, types.InstanceStateFailed)
+	status := h.waitForState(t, StateFailed)
 
 	if status.RestartCount != 2 {
 		t.Errorf("restart count = %d, want both retries used", status.RestartCount)
@@ -144,12 +142,12 @@ func restartingHarness(t *testing.T) *harness {
 	t.Helper()
 
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeAlways})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
 	h.manager.restartWait = func(time.Time) time.Duration { return time.Hour }
 	h.start(t)
 
 	h.crash(t)
-	status := h.waitForState(t, types.InstanceStateRestarting)
+	status := h.waitForState(t, StateRestarting)
 	if status.NextRestartAt.IsZero() || status.StateError == "" {
 		t.Fatalf("status = %+v, want when it restarts and why", status)
 	}
@@ -163,7 +161,7 @@ func TestStopCancelsPendingRestart(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s, want Stopped", status.State)
 	}
 	if len(h.manager.restarts) != 0 {
@@ -182,7 +180,7 @@ func TestStartDuringRestartStartsNow(t *testing.T) {
 	h.start(t)
 
 	status := h.status(t)
-	if status.State != types.InstanceStateRunning || status.RestartCount != 0 {
+	if status.State != StateRunning || status.RestartCount != 0 {
 		t.Errorf("status = %s with %d restarts, want Running with none", status.State, status.RestartCount)
 	}
 	if len(h.manager.restarts) != 0 {
@@ -207,17 +205,17 @@ func TestCloseLeavesRestartForNextDaemon(t *testing.T) {
 
 	h.manager.Close()
 
-	if status := h.status(t); status.State != types.InstanceStateRestarting {
+	if status := h.status(t); status.State != StateRestarting {
 		t.Errorf("state = %s, want Restarting", status.State)
 	}
 }
 
 func TestRecoverReschedulesRestart(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeAlways})
-	err := h.manager.writeStatus(types.InstanceStatus{
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
+	err := h.manager.writeStatus(Status{
 		InstanceID:    h.instance.ID,
-		State:         types.InstanceStateRestarting,
+		State:         StateRestarting,
 		RestartCount:  2,
 		NextRestartAt: time.Now().Add(-time.Second),
 	})
@@ -228,7 +226,7 @@ func TestRecoverReschedulesRestart(t *testing.T) {
 	h.manager.Recover(context.Background())
 
 	h.waitForVMMs(t, 1)
-	status := h.waitForState(t, types.InstanceStateRunning)
+	status := h.waitForState(t, StateRunning)
 	if status.RestartCount != 2 {
 		t.Errorf("restart count = %d, want the count carried over", status.RestartCount)
 	}
@@ -238,13 +236,13 @@ func TestRecoverReschedulesRestart(t *testing.T) {
 // as if it had been seen to happen.
 func TestRecoverAppliesPolicyToInstanceThatEnded(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeOnFailure})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure})
 	h.restartAtOnce()
 
 	dead := deadPID(t)
-	err := h.manager.writeStatus(types.InstanceStatus{
+	err := h.manager.writeStatus(Status{
 		InstanceID: h.instance.ID,
-		State:      types.InstanceStateRunning,
+		State:      StateRunning,
 		VMMPID:     &dead,
 		StartedAt:  time.Now().Add(-time.Minute),
 	})
@@ -255,5 +253,5 @@ func TestRecoverAppliesPolicyToInstanceThatEnded(t *testing.T) {
 	h.manager.Recover(context.Background())
 
 	h.waitForVMMs(t, 1)
-	h.waitForState(t, types.InstanceStateRunning)
+	h.waitForState(t, StateRunning)
 }

@@ -9,13 +9,12 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // testCapacity is a host with 4 CPUs and 8GiB, overcommitted as the daemon
 // does by default: 16 vCPUs, and 7GiB once 1GiB is reserved.
-var testCapacity = types.Capacity{
-	Host:                types.Resources{VCPUs: 4, MemoryBytes: 8 << 30},
+var testCapacity = Capacity{
+	Host:                Resources{VCPUs: 4, MemoryBytes: 8 << 30},
 	ReservedMemoryBytes: 1 << 30,
 	CPUOvercommit:       4,
 	MemoryOvercommit:    1,
@@ -23,7 +22,7 @@ var testCapacity = types.Capacity{
 
 // admitHarness is a harness on a host with testCapacity, and a second
 // instance to compete with.
-func admitHarness(t *testing.T) (*harness, types.InstanceSpec) {
+func admitHarness(t *testing.T) (*harness, Spec) {
 	t.Helper()
 
 	h := newHarness(t)
@@ -39,10 +38,10 @@ func admitHarness(t *testing.T) (*harness, types.InstanceSpec) {
 }
 
 // holding records instance as in state, holding r, as admission would have.
-func holding(t *testing.T, manager *Manager, instance types.InstanceSpec, state types.InstanceState, r types.Resources) {
+func holding(t *testing.T, manager *Manager, instance Spec, state State, r Resources) {
 	t.Helper()
 
-	if err := manager.writeStatus(types.InstanceStatus{
+	if err := manager.writeStatus(Status{
 		InstanceID: instance.ID, State: state, VCPUs: r.VCPUs, MemoryBytes: r.MemoryBytes,
 	}); err != nil {
 		t.Fatal(err)
@@ -54,7 +53,7 @@ func TestStartRefusedWhenTheHostIsFull(t *testing.T) {
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
 
 	// 6 of the 7GiB are held: 2 more do not fit.
-	holding(t, h.manager, other, types.InstanceStateRunning, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	err := h.manager.Start(t.Context(), h.instance)
 	if !errors.Is(err, errdefs.ErrResourceExhausted) {
@@ -63,7 +62,7 @@ func TestStartRefusedWhenTheHostIsFull(t *testing.T) {
 
 	// A refusal changes nothing: the instance was never started, so it is
 	// not Failed either.
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state after a refused start = %s, want Stopped", status.State)
 	}
 	if h.starter.vmmCount() != 0 {
@@ -75,7 +74,7 @@ func TestStartAdmittedWhenItFits(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
 
-	holding(t, h.manager, other, types.InstanceStateRunning, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	if err := h.manager.Start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -91,20 +90,20 @@ func TestStartAdmittedWhenItFits(t *testing.T) {
 // Only instances with a VMM, or about to have one, hold anything.
 func TestWhatHoldsResources(t *testing.T) {
 	for _, tt := range []struct {
-		state types.InstanceState
+		state State
 		holds bool
 	}{
-		{types.InstanceStateStarting, true},
-		{types.InstanceStateRunning, true},
-		{types.InstanceStatePaused, true},
-		{types.InstanceStateStopping, false},
-		{types.InstanceStateStopped, false},
-		{types.InstanceStateFailed, false},
+		{StateStarting, true},
+		{StateRunning, true},
+		{StatePaused, true},
+		{StateStopping, false},
+		{StateStopped, false},
+		{StateFailed, false},
 	} {
 		t.Run(string(tt.state), func(t *testing.T) {
 			h, other := admitHarness(t)
 			h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
-			holding(t, h.manager, other, tt.state, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+			holding(t, h.manager, other, tt.state, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 			err := h.manager.Start(t.Context(), h.instance)
 			if refused := errors.Is(err, errdefs.ErrResourceExhausted); refused != tt.holds {
@@ -133,7 +132,7 @@ func TestRestoreAdmittedOnTheSnapshotsMemory(t *testing.T) {
 	snapshot := h.definitions.snapshots["big"]
 	snapshot.MemoryBytes = 4 << 30
 	h.definitions.snapshots["big"] = snapshot
-	holding(t, h.manager, other, types.InstanceStateRunning, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	_, err := h.manager.RestoreSnapshot(t.Context(), snapshot)
 	if !errors.Is(err, errdefs.ErrResourceExhausted) {
@@ -149,13 +148,13 @@ func TestConcurrentStartsCannotBothTakeTheLastRoom(t *testing.T) {
 
 	definitions, _ := h.manager.definitions.(*fakeDefinitions)
 	third := seedInstance(t, definitions, "third")
-	holding(t, h.manager, third, types.InstanceStateRunning, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+	holding(t, h.manager, third, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	// The two starts never boot: admission is all that is under test, so
 	// each is refused or admitted and then left Starting.
 	var wg sync.WaitGroup
 	results := make([]error, 2)
-	for i, instance := range []types.InstanceSpec{h.instance, other} {
+	for i, instance := range []Spec{h.instance, other} {
 		wg.Go(func() {
 			lock := h.manager.lock(instance.ID)
 			lock.Lock()
@@ -183,21 +182,21 @@ func TestCheckResources(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 	manager.capacity = testCapacity
 
-	if err := manager.CheckResources(types.Resources{VCPUs: 4, MemoryBytes: 7 << 30}); err != nil {
+	if err := manager.CheckResources(Resources{VCPUs: 4, MemoryBytes: 7 << 30}); err != nil {
 		t.Errorf("the whole host: %v", err)
 	}
 	// More vCPUs than CPUs is never useful to one instance, overcommit or
 	// not.
-	if err := manager.CheckResources(types.Resources{VCPUs: 5, MemoryBytes: 1 << 30}); !errors.Is(err, errdefs.ErrInvalidArgument) {
+	if err := manager.CheckResources(Resources{VCPUs: 5, MemoryBytes: 1 << 30}); !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("5 vCPUs on 4 CPUs: %v, want ErrInvalidArgument", err)
 	}
-	if err := manager.CheckResources(types.Resources{VCPUs: 1, MemoryBytes: 8 << 30}); !errors.Is(err, errdefs.ErrInvalidArgument) {
+	if err := manager.CheckResources(Resources{VCPUs: 1, MemoryBytes: 8 << 30}); !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("more memory than allocatable: %v, want ErrInvalidArgument", err)
 	}
 
 	// Without a capacity, nothing is refused.
-	manager.capacity = types.Capacity{}
-	if err := manager.CheckResources(types.Resources{VCPUs: 1000, MemoryBytes: 1 << 50}); err != nil {
+	manager.capacity = Capacity{}
+	if err := manager.CheckResources(Resources{VCPUs: 1000, MemoryBytes: 1 << 50}); err != nil {
 		t.Errorf("unlimited: %v", err)
 	}
 }
@@ -207,7 +206,7 @@ func TestCheckResources(t *testing.T) {
 func TestRefusalExplainsItself(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
-	holding(t, h.manager, other, types.InstanceStateRunning, types.Resources{VCPUs: 1, MemoryBytes: 6 << 30})
+	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
 	err := h.manager.Start(t.Context(), h.instance)
 
@@ -219,20 +218,20 @@ func TestRefusalExplainsItself(t *testing.T) {
 }
 
 // dataMount mounts the volume data at /data.
-func dataMount(readOnly bool) []types.Mount {
-	return []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data", ReadOnly: readOnly}}
+func dataMount(readOnly bool) []Mount {
+	return []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data", ReadOnly: readOnly}}
 }
 
 // seedVolumeHolder defines another instance mounting data, recorded as in
 // state.
-func (h *harness) seedVolumeHolder(t *testing.T, state types.InstanceState, readOnly bool) {
+func (h *harness) seedVolumeHolder(t *testing.T, state State, readOnly bool) {
 	t.Helper()
 
 	other := seedInstance(t, h.definitions, "other")
 	other.Mounts = dataMount(readOnly)
 	h.definitions.instances[other.Name] = other
 
-	if err := h.manager.writeStatus(types.InstanceStatus{InstanceID: other.ID, State: state}); err != nil {
+	if err := h.manager.writeStatus(Status{InstanceID: other.ID, State: state}); err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}
 }
@@ -243,17 +242,17 @@ func TestAdmitVolumeSharing(t *testing.T) {
 		name    string
 		mine    bool // read-only
 		theirs  bool
-		state   types.InstanceState
+		state   State
 		refused bool
 	}{
-		{"read-write beside running read-write", rw, rw, types.InstanceStateRunning, true},
-		{"read-write beside starting read-write", rw, rw, types.InstanceStateStarting, true},
-		{"read-write beside stopping read-write", rw, rw, types.InstanceStateStopping, true},
-		{"read-write beside running read-only", rw, ro, types.InstanceStateRunning, true},
-		{"read-only beside paused read-write", ro, rw, types.InstanceStatePaused, true},
-		{"read-only beside running read-only", ro, ro, types.InstanceStateRunning, false},
-		{"read-write beside stopped read-write", rw, rw, types.InstanceStateStopped, false},
-		{"read-write beside failed read-write", rw, rw, types.InstanceStateFailed, false},
+		{"read-write beside running read-write", rw, rw, StateRunning, true},
+		{"read-write beside starting read-write", rw, rw, StateStarting, true},
+		{"read-write beside stopping read-write", rw, rw, StateStopping, true},
+		{"read-write beside running read-only", rw, ro, StateRunning, true},
+		{"read-only beside paused read-write", ro, rw, StatePaused, true},
+		{"read-only beside running read-only", ro, ro, StateRunning, false},
+		{"read-write beside stopped read-write", rw, rw, StateStopped, false},
+		{"read-write beside failed read-write", rw, rw, StateFailed, false},
 	}
 
 	for _, tt := range tests {
@@ -268,8 +267,8 @@ func TestAdmitVolumeSharing(t *testing.T) {
 				t.Fatalf("admit = %v, want refused %v", err, tt.refused)
 			}
 			if tt.refused {
-				if status := h.status(t); status.State != types.InstanceStateStopped {
-					t.Errorf("state = %s, want a refused instance left %s", status.State, types.InstanceStateStopped)
+				if status := h.status(t); status.State != StateStopped {
+					t.Errorf("state = %s, want a refused instance left %s", status.State, StateStopped)
 				}
 			}
 		})

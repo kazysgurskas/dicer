@@ -11,7 +11,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -136,9 +135,9 @@ func (h *snapshotHandler) ForkSnapshot(
 }
 
 // snapshot resolves the snapshot a request names.
-func (h *snapshotHandler) snapshot(nameOrID string) (types.Snapshot, error) {
+func (h *snapshotHandler) snapshot(nameOrID string) (instance.Snapshot, error) {
 	if nameOrID == "" {
-		return types.Snapshot{}, errdefs.InvalidArgument("snapshot name is required")
+		return instance.Snapshot{}, errdefs.InvalidArgument("snapshot name is required")
 	}
 
 	return h.instances.Snapshot(nameOrID)
@@ -146,7 +145,7 @@ func (h *snapshotHandler) snapshot(nameOrID string) (types.Snapshot, error) {
 
 // instanceName returns the name a snapshot's instance has now, or, if it
 // has been deleted, the name it had.
-func (h *snapshotHandler) instanceName(snapshot types.Snapshot) string {
+func (h *snapshotHandler) instanceName(snapshot instance.Snapshot) string {
 	if instance, err := h.definitions.Instance(snapshot.Instance.ID); err == nil {
 		return instance.Name
 	}

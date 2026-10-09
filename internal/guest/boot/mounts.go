@@ -21,7 +21,6 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 
 	"github.com/konradasb/dicer/internal/guest"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // filesDir is a tmpfs in the initramfs that holds the contents of file
@@ -32,12 +31,12 @@ const filesDir = "/dicer/files"
 // mountAll mounts the guest's mount table inside the overlay root, parents
 // before children, so a mount can go inside another. A mount that fails is
 // logged and skipped rather than aborting boot.
-func mountAll(log *slog.Logger, mounts []guest.Mount, mode types.InitMode) {
+func mountAll(log *slog.Logger, mounts []guest.Mount, mode guest.InitMode) {
 	if len(mounts) == 0 {
 		return
 	}
 
-	if mode == types.InitModeSystemd && slices.ContainsFunc(mounts, underRun) {
+	if mode == guest.InitModeSystemd && slices.ContainsFunc(mounts, underRun) {
 		// systemd mounts a tmpfs on /run only if nothing is mounted there
 		// yet. Mounting it first, as an initrd would, keeps the mounts
 		// beneath it from being hidden.

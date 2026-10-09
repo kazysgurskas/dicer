@@ -7,18 +7,16 @@ import (
 	"slices"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 var gcNow = time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
 
 // usedAgo is an image last used d before gcNow.
-func usedAgo(digest string, d time.Duration) *types.Image {
-	return &types.Image{Name: "img-" + digest, Digest: digest, LastUsedAt: gcNow.Add(-d), SizeBytes: 100}
+func usedAgo(digest string, d time.Duration) *Image {
+	return &Image{Name: "img-" + digest, Digest: digest, LastUsedAt: gcNow.Add(-d), SizeBytes: 100}
 }
 
-func digests(images []*types.Image) []string {
+func digests(images []*Image) []string {
 	out := make([]string, 0, len(images))
 	for _, image := range images {
 		out = append(out, image.Digest)
@@ -27,7 +25,7 @@ func digests(images []*types.Image) []string {
 }
 
 func TestGCPolicyExpiredImages(t *testing.T) {
-	images := []*types.Image{
+	images := []*Image{
 		usedAgo("old", 30*24*time.Hour),
 		usedAgo("week", 8*24*time.Hour),
 		usedAgo("fresh", time.Hour),
@@ -46,7 +44,7 @@ func TestGCPolicyExpiredImages(t *testing.T) {
 }
 
 func TestCollectableImages(t *testing.T) {
-	images := []*types.Image{
+	images := []*Image{
 		usedAgo("b", 2*time.Hour),
 		usedAgo("a", 3*time.Hour),
 		usedAgo("in-use", 5*time.Hour),

@@ -9,7 +9,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestRename(t *testing.T) {
@@ -73,7 +72,7 @@ func TestRenameAllowsAFailedInstance(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
 	h.exit(t, 1)
-	h.waitForState(t, types.InstanceStateFailed)
+	h.waitForState(t, StateFailed)
 
 	if _, err := h.manager.Rename(t.Context(), h.instance, "web-2"); err != nil {
 		t.Fatalf("Rename of a failed instance: %v", err)

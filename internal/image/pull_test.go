@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // newBlockingManager returns a manager whose pulls wait for release, and
@@ -52,7 +51,7 @@ func TestPullSurvivesAWaiterGivingUp(t *testing.T) {
 	first, cancelFirst := context.WithCancel(t.Context())
 	firstErr := make(chan error, 1)
 	go func() {
-		_, err := m.Pull(first, "alpine:latest", func(types.PullProgress) {})
+		_, err := m.Pull(first, "alpine:latest", func(PullProgress) {})
 		firstErr <- err
 	}()
 	<-started
@@ -100,14 +99,14 @@ func TestPullEveryoneAbandonsIsCancelled(t *testing.T) {
 
 func TestProgressRelayStopsAtRemove(t *testing.T) {
 	var r progressRelay
-	var got []types.PullStage
-	id := r.add(func(p types.PullProgress) { got = append(got, p.Stage) })
+	var got []PullStage
+	id := r.add(func(p PullProgress) { got = append(got, p.Stage) })
 
-	r.report(types.PullProgress{Stage: types.PullStageDownloading})
+	r.report(PullProgress{Stage: PullStageDownloading})
 	r.remove(id)
-	r.report(types.PullProgress{Stage: types.PullStageConverting})
+	r.report(PullProgress{Stage: PullStageConverting})
 
-	if len(got) != 1 || got[0] != types.PullStageDownloading {
+	if len(got) != 1 || got[0] != PullStageDownloading {
 		t.Errorf("listener heard %v, want only what was sent before it was removed", got)
 	}
 }

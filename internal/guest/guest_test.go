@@ -7,24 +7,22 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestConfig_ApplyDefaults(t *testing.T) {
 	t.Run("empty mode defaults to auto", func(t *testing.T) {
 		c := Config{}
 		c.ApplyDefaults()
-		if c.Mode != types.InitModeAuto {
-			t.Errorf("Mode = %q, want %q", c.Mode, types.InitModeAuto)
+		if c.Mode != InitModeAuto {
+			t.Errorf("Mode = %q, want %q", c.Mode, InitModeAuto)
 		}
 	})
 
 	t.Run("mode already set is preserved", func(t *testing.T) {
-		c := Config{Mode: types.InitModeSystemd}
+		c := Config{Mode: InitModeSystemd}
 		c.ApplyDefaults()
-		if c.Mode != types.InitModeSystemd {
-			t.Errorf("Mode = %q, want %q", c.Mode, types.InitModeSystemd)
+		if c.Mode != InitModeSystemd {
+			t.Errorf("Mode = %q, want %q", c.Mode, InitModeSystemd)
 		}
 	})
 
@@ -77,55 +75,55 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name:    "exec mode without entrypoint or cmd",
-			cfg:     Config{Mode: types.InitModeExec},
+			cfg:     Config{Mode: InitModeExec},
 			wantErr: "exec mode requires at least one of entrypoint or cmd",
 		},
 		{
 			name: "exec mode with entrypoint only",
-			cfg:  Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}},
+			cfg:  Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}},
 		},
 		{
 			name: "exec mode with cmd only",
-			cfg:  Config{Mode: types.InitModeExec, Cmd: []string{"echo", "hi"}},
+			cfg:  Config{Mode: InitModeExec, Cmd: []string{"echo", "hi"}},
 		},
 		{
 			name: "systemd mode without entrypoint",
-			cfg:  Config{Mode: types.InitModeSystemd},
+			cfg:  Config{Mode: InitModeSystemd},
 		},
 		{
 			// It boots the machine's init.
 			name: "auto mode without entrypoint",
-			cfg:  Config{Mode: types.InitModeAuto},
+			cfg:  Config{Mode: InitModeAuto},
 		},
 
 		{
 			name: "power off",
-			cfg:  Config{Mode: types.InitModeSystemd, Halt: HaltPowerOff},
+			cfg:  Config{Mode: InitModeSystemd, Halt: HaltPowerOff},
 		},
 		{
 			name: "reset",
-			cfg:  Config{Mode: types.InitModeSystemd, Halt: HaltReset},
+			cfg:  Config{Mode: InitModeSystemd, Halt: HaltReset},
 		},
 		{
 			name:    "invalid halt",
-			cfg:     Config{Mode: types.InitModeSystemd, Halt: "explode"},
+			cfg:     Config{Mode: InitModeSystemd, Halt: "explode"},
 			wantErr: "invalid halt",
 		},
 
 		{
 			name:    "relative workdir",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Workdir: "relative"},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Workdir: "relative"},
 			wantErr: "workdir",
 		},
 		{
 			name: "absolute workdir",
-			cfg:  Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Workdir: "/app"},
+			cfg:  Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Workdir: "/app"},
 		},
 
 		{
 			name: "mount without target",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{{Tmpfs: &TmpfsSource{}}},
 			},
 			wantErr: "target not set",
@@ -133,7 +131,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "mount with relative target",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{{Target: "data", Tmpfs: &TmpfsSource{}}},
 			},
 			wantErr: "must be absolute",
@@ -141,7 +139,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "mount without source",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{{Target: "/data"}},
 			},
 			wantErr: "exactly one",
@@ -149,7 +147,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "mount with two sources",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{{
 					Target: "/data", Tmpfs: &TmpfsSource{}, File: &FileSource{Data: []byte("x")},
 				}},
@@ -159,7 +157,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "volume without device",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{{Target: "/data", Volume: &VolumeSource{}}},
 			},
 			wantErr: "device not set",
@@ -167,7 +165,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid mounts",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Mounts: []Mount{
 					{Target: "/data", ReadOnly: true, Volume: &VolumeSource{Device: "/dev/vde"}},
 					{Target: "/etc/app.conf", File: &FileSource{Data: []byte("k=v"), Mode: 0o644}},
@@ -180,7 +178,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "interface without name",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Network: NetworkConfig{
 					Interfaces: []NetworkInterface{{Addresses: []string{"10.0.0.2/24"}}},
 				},
@@ -190,7 +188,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "interface without addresses",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Network: NetworkConfig{
 					Interfaces: []NetworkInterface{{Name: "eth0"}},
 				},
@@ -200,7 +198,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid interface",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Network: NetworkConfig{
 					Interfaces: []NetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.2/24"}}},
 				},
@@ -210,7 +208,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "route without destination",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Network: NetworkConfig{
 					Routes: []NetworkRoute{{Gateway: "10.0.0.1"}},
 				},
@@ -220,7 +218,7 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid route",
 			cfg: Config{
-				Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
 				Network: NetworkConfig{
 					Routes: []NetworkRoute{{Destination: "default", Gateway: "10.0.0.1"}},
 				},
@@ -229,46 +227,46 @@ func TestConfig_Validate(t *testing.T) {
 
 		{
 			name: "valid simple hostname",
-			cfg:  Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "myhost"},
+			cfg:  Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "myhost"},
 		},
 		{
 			name: "valid fqdn hostname",
-			cfg:  Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "my-host.example.com"},
+			cfg:  Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "my-host.example.com"},
 		},
 		{
 			name: "empty hostname is allowed",
-			cfg:  Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: ""},
+			cfg:  Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: ""},
 		},
 		{
 			name:    "hostname starts with hyphen",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "-bad"},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "-bad"},
 			wantErr: "invalid hostname \"-bad\"",
 		},
 		{
 			name:    "hostname ends with hyphen",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "bad-"},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "bad-"},
 			wantErr: "invalid hostname \"bad-\"",
 		},
 		{
 			name:    "hostname label starts with hyphen",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "good.-bad.com"},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "good.-bad.com"},
 			wantErr: "invalid hostname \"good.-bad.com\"",
 		},
 		{
 			name:    "hostname contains invalid character",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "bad_host"},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: "bad_host"},
 			wantErr: "invalid hostname \"bad_host\"",
 		},
 		{
 			name:    "hostname too long",
-			cfg:     Config{Mode: types.InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: strings.Repeat("a", 254)},
+			cfg:     Config{Mode: InitModeExec, Entrypoint: []string{"/bin/sh"}, Hostname: strings.Repeat("a", 254)},
 			wantErr: "exceeds 253 characters",
 		},
 
 		{
 			name: "full valid config",
 			cfg: Config{
-				Mode:       types.InitModeExec,
+				Mode:       InitModeExec,
 				Entrypoint: []string{"/bin/sh"},
 				Cmd:        []string{"-c", "echo hello"},
 				Workdir:    "/app",

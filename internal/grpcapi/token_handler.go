@@ -14,7 +14,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/token"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -42,16 +41,16 @@ func (h *tokenHandler) CreateToken(ctx context.Context, req *dicerdv1.CreateToke
 		return nil, err
 	}
 
-	scopes := make([]types.Scope, 0, len(req.GetScopes()))
+	scopes := make([]token.Scope, 0, len(req.GetScopes()))
 	for _, scope := range req.GetScopes() {
-		scopes = append(scopes, types.Scope(scope))
+		scopes = append(scopes, token.Scope(scope))
 	}
 	if len(scopes) == 0 {
-		scopes = []types.Scope{types.ScopeAll}
+		scopes = []token.Scope{token.ScopeAll}
 	}
 
 	now := time.Now()
-	t := types.Token{
+	t := token.Token{
 		ID:           cuid2.Generate(),
 		Name:         req.GetName(),
 		SecretSHA256: token.SecretSHA256(secret),
@@ -137,7 +136,7 @@ func (h *tokenHandler) DeleteToken(ctx context.Context, req *dicerdv1.DeleteToke
 // token allows every scope t has, so that no token makes, rotates or
 // deletes one that can do more than it can. A call over the socket has no
 // token, and may.
-func checkCallerAllows(ctx context.Context, t types.Token) error {
+func checkCallerAllows(ctx context.Context, t token.Token) error {
 	caller, ok := tokenFrom(ctx)
 	if ok && !caller.AllowsAll(t.Scopes) {
 		return errdefs.PermissionDenied("token %q lacks some of the scopes of token %q", caller.Name, t.Name)

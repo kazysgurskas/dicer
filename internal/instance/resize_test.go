@@ -9,7 +9,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // resizable makes the harness's instance one with 1 vCPU and 1GiB that can
@@ -32,7 +31,7 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 	h := newHarness(t)
 	resizable(t, h)
 
-	want := types.Resources{VCPUs: 2, MemoryBytes: 2 << 30}
+	want := Resources{VCPUs: 2, MemoryBytes: 2 << 30}
 	if err := h.manager.Resize(t.Context(), h.instance, want); err != nil {
 		t.Fatalf("Resize: %v", err)
 	}
@@ -61,11 +60,11 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 func TestResizeShrinksToo(t *testing.T) {
 	h := newHarness(t)
 	resizable(t, h)
-	if err := h.manager.Resize(t.Context(), h.instance, types.Resources{VCPUs: 4, MemoryBytes: 4 << 30}); err != nil {
+	if err := h.manager.Resize(t.Context(), h.instance, Resources{VCPUs: 4, MemoryBytes: 4 << 30}); err != nil {
 		t.Fatalf("growing: %v", err)
 	}
 
-	want := types.Resources{VCPUs: 1, MemoryBytes: 1 << 30}
+	want := Resources{VCPUs: 1, MemoryBytes: 1 << 30}
 	if err := h.manager.Resize(t.Context(), h.instance, want); err != nil {
 		t.Fatalf("shrinking: %v", err)
 	}
@@ -78,41 +77,41 @@ func TestResizeRefusals(t *testing.T) {
 	tests := []struct {
 		name    string
 		prepare func(h *harness)
-		want    types.Resources
+		want    Resources
 		err     error
 	}{
 		{
 			name:    "stopped",
 			prepare: func(h *harness) { _ = h.manager.removeRuntimeDir(h.instance.ID) },
-			want:    types.Resources{VCPUs: 2, MemoryBytes: 1 << 30},
+			want:    Resources{VCPUs: 2, MemoryBytes: 1 << 30},
 			err:     errdefs.ErrInvalidState,
 		},
 		{
 			name:    "vCPUs without a maximum",
 			prepare: func(h *harness) { h.instance.MaxVCPUs = 0 },
-			want:    types.Resources{VCPUs: 2, MemoryBytes: 1 << 30},
+			want:    Resources{VCPUs: 2, MemoryBytes: 1 << 30},
 			err:     errdefs.ErrInvalidArgument,
 		},
 		{
 			name: "vCPUs beyond the maximum",
-			want: types.Resources{VCPUs: 5, MemoryBytes: 1 << 30},
+			want: Resources{VCPUs: 5, MemoryBytes: 1 << 30},
 			err:  errdefs.ErrInvalidArgument,
 		},
 		{
 			name:    "memory without a maximum",
 			prepare: func(h *harness) { h.instance.MaxMemoryBytes = 0 },
-			want:    types.Resources{VCPUs: 1, MemoryBytes: 2 << 30},
+			want:    Resources{VCPUs: 1, MemoryBytes: 2 << 30},
 			err:     errdefs.ErrInvalidArgument,
 		},
 		{
 			name: "memory beyond the maximum",
-			want: types.Resources{VCPUs: 1, MemoryBytes: 5 << 30},
+			want: Resources{VCPUs: 1, MemoryBytes: 5 << 30},
 			err:  errdefs.ErrInvalidArgument,
 		},
 		{
 			name:    "vCPUs on a hypervisor that cannot",
 			prepare: func(h *harness) { h.hv.capabilities.SupportsHotplugCPU = false },
-			want:    types.Resources{VCPUs: 2, MemoryBytes: 1 << 30},
+			want:    Resources{VCPUs: 2, MemoryBytes: 1 << 30},
 			err:     errors.ErrUnsupported,
 		},
 		{
@@ -122,7 +121,7 @@ func TestResizeRefusals(t *testing.T) {
 				h.manager.capacity = testCapacity
 				h.instance.MaxMemoryBytes = 8 << 30
 			},
-			want: types.Resources{VCPUs: 1, MemoryBytes: 8 << 30},
+			want: Resources{VCPUs: 1, MemoryBytes: 8 << 30},
 			err:  errdefs.ErrResourceExhausted,
 		},
 	}
@@ -156,7 +155,7 @@ func TestFailedResizeKeepsTheLargerReservation(t *testing.T) {
 	resizable(t, h)
 	h.hv.resizeErr = errors.New("the guest did not plug the memory in time")
 
-	want := types.Resources{VCPUs: 1, MemoryBytes: 2 << 30}
+	want := Resources{VCPUs: 1, MemoryBytes: 2 << 30}
 	if err := h.manager.Resize(t.Context(), h.instance, want); err == nil {
 		t.Fatal("Resize succeeded")
 	}
@@ -215,7 +214,7 @@ func TestRefusedResizeChangesNothing(t *testing.T) {
 	resizable(t, h)
 	h.hv.resizeErr = errdefs.InvalidArgument("memory can be resized only in steps of 2 MiB")
 
-	err := h.manager.Resize(t.Context(), h.instance, types.Resources{VCPUs: 1, MemoryBytes: 1<<30 + 1<<20})
+	err := h.manager.Resize(t.Context(), h.instance, Resources{VCPUs: 1, MemoryBytes: 1<<30 + 1<<20})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Fatalf("Resize = %v, want the hypervisor's refusal", err)
 	}

@@ -8,18 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 )
 
 func TestInstanceStatsAreReadPerScrape(t *testing.T) {
-	stats := []types.InstanceStats{{
+	stats := []instance.Stats{{
 		InstanceID:             "i-web",
 		Name:                   "web",
 		CPUTime:                1500 * time.Millisecond,
 		ResidentMemoryBytes:    1 << 20,
 		DiskReadBytes:          10,
 		DiskWrittenBytes:       20,
-		Committed:              types.Resources{VCPUs: 2, MemoryBytes: 1 << 30},
+		Committed:              instance.Resources{VCPUs: 2, MemoryBytes: 1 << 30},
 		NetworkReceiveBytes:    30,
 		NetworkTransmitBytes:   40,
 		NetworkReceivePackets:  3,
@@ -32,7 +32,7 @@ func TestInstanceStatsAreReadPerScrape(t *testing.T) {
 	reads := 0
 
 	m := New(Options{Sources: Sources{
-		InstanceStats: func() []types.InstanceStats {
+		InstanceStats: func() []instance.Stats {
 			reads++
 			return stats
 		},
@@ -75,7 +75,7 @@ func TestInstanceStatsAreReadPerScrape(t *testing.T) {
 // TestInstanceStatsTotalsAreCounters checks that what only grows while an
 // instance runs is a counter, and what is resident or committed, a gauge.
 func TestInstanceStatsTotalsAreCounters(t *testing.T) {
-	m := New(Options{Sources: Sources{InstanceStats: func() []types.InstanceStats { return nil }}})
+	m := New(Options{Sources: Sources{InstanceStats: func() []instance.Stats { return nil }}})
 
 	byName := map[string]string{}
 	for _, d := range m.Reference() {

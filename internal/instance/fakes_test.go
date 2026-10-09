@@ -21,10 +21,13 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/volume"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
@@ -40,26 +43,26 @@ import (
 // mutex, as filestore.Manager's own locking does.
 type fakeDefinitions struct {
 	mu        sync.Mutex
-	instances map[string]types.InstanceSpec
-	snapshots map[string]types.Snapshot
-	networks  map[string]types.Network
-	kernels   map[string]types.Kernel
-	volumes   map[string]types.Volume
+	instances map[string]Spec
+	snapshots map[string]Snapshot
+	networks  map[string]network.Network
+	kernels   map[string]kernel.Kernel
+	volumes   map[string]volume.Volume
 	dir       string
 }
 
 func newFakeDefinitions(dir string) *fakeDefinitions {
 	return &fakeDefinitions{
-		instances: make(map[string]types.InstanceSpec),
-		snapshots: make(map[string]types.Snapshot),
-		networks:  make(map[string]types.Network),
-		kernels:   make(map[string]types.Kernel),
-		volumes:   make(map[string]types.Volume),
+		instances: make(map[string]Spec),
+		snapshots: make(map[string]Snapshot),
+		networks:  make(map[string]network.Network),
+		kernels:   make(map[string]kernel.Kernel),
+		volumes:   make(map[string]volume.Volume),
 		dir:       dir,
 	}
 }
 
-func (f *fakeDefinitions) Instance(nameOrID string) (types.InstanceSpec, error) {
+func (f *fakeDefinitions) Instance(nameOrID string) (Spec, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -68,7 +71,7 @@ func (f *fakeDefinitions) Instance(nameOrID string) (types.InstanceSpec, error) 
 
 // instance is Instance without the lock, for the methods that already
 // hold it.
-func (f *fakeDefinitions) instance(nameOrID string) (types.InstanceSpec, error) {
+func (f *fakeDefinitions) instance(nameOrID string) (Spec, error) {
 	if instance, ok := f.instances[nameOrID]; ok {
 		return instance, nil
 	}
@@ -77,26 +80,26 @@ func (f *fakeDefinitions) instance(nameOrID string) (types.InstanceSpec, error) 
 			return instance, nil
 		}
 	}
-	return types.InstanceSpec{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
+	return Spec{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Instances() []types.InstanceSpec {
+func (f *fakeDefinitions) Instances() []Spec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	names := slices.Sorted(maps.Keys(f.instances))
-	out := make([]types.InstanceSpec, 0, len(names))
+	out := make([]Spec, 0, len(names))
 	for _, n := range names {
 		out = append(out, f.instances[n])
 	}
 	return out
 }
 
-func (f *fakeDefinitions) MatchingInstances(match func(types.InstanceSpec) bool) []types.InstanceSpec {
+func (f *fakeDefinitions) MatchingInstances(match func(Spec) bool) []Spec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	var out []types.InstanceSpec
+	var out []Spec
 	for _, instance := range f.instances {
 		if match(instance) {
 			out = append(out, instance)
@@ -105,7 +108,7 @@ func (f *fakeDefinitions) MatchingInstances(match func(types.InstanceSpec) bool)
 	return out
 }
 
-func (f *fakeDefinitions) CreateInstance(instance types.InstanceSpec) error {
+func (f *fakeDefinitions) CreateInstance(instance Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -116,7 +119,7 @@ func (f *fakeDefinitions) CreateInstance(instance types.InstanceSpec) error {
 	return nil
 }
 
-func (f *fakeDefinitions) UpdateInstance(instance types.InstanceSpec) error {
+func (f *fakeDefinitions) UpdateInstance(instance Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -127,7 +130,7 @@ func (f *fakeDefinitions) UpdateInstance(instance types.InstanceSpec) error {
 	return nil
 }
 
-func (f *fakeDefinitions) RenameInstance(nameOrID string, renamed types.InstanceSpec) error {
+func (f *fakeDefinitions) RenameInstance(nameOrID string, renamed Spec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -173,7 +176,7 @@ func (f *fakeDefinitions) StageSnapshot() (string, error) {
 	return os.MkdirTemp(dir, ".staging-")
 }
 
-func (f *fakeDefinitions) CreateSnapshot(snapshot types.Snapshot, staged string) error {
+func (f *fakeDefinitions) CreateSnapshot(snapshot Snapshot, staged string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -187,28 +190,28 @@ func (f *fakeDefinitions) CreateSnapshot(snapshot types.Snapshot, staged string)
 	return nil
 }
 
-func (f *fakeDefinitions) Snapshot(nameOrID string) (types.Snapshot, error) {
+func (f *fakeDefinitions) Snapshot(nameOrID string) (Snapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	return f.snapshot(nameOrID)
 }
 
-func (f *fakeDefinitions) snapshot(nameOrID string) (types.Snapshot, error) {
+func (f *fakeDefinitions) snapshot(nameOrID string) (Snapshot, error) {
 	for _, s := range f.snapshots {
 		if s.Name == nameOrID || s.ID == nameOrID {
 			return s, nil
 		}
 	}
-	return types.Snapshot{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
+	return Snapshot{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Snapshots() []types.Snapshot {
+func (f *fakeDefinitions) Snapshots() []Snapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	names := slices.Sorted(maps.Keys(f.snapshots))
-	out := make([]types.Snapshot, 0, len(names))
+	out := make([]Snapshot, 0, len(names))
 	for _, n := range names {
 		out = append(out, f.snapshots[n])
 	}
@@ -231,61 +234,61 @@ func (f *fakeDefinitions) SnapshotDir(name string) string {
 	return filepath.Join(f.dir, "snapshots", name)
 }
 
-func (f *fakeDefinitions) Network(nameOrID string) (types.Network, error) {
+func (f *fakeDefinitions) Network(nameOrID string) (network.Network, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if n, ok := f.networks[nameOrID]; ok {
 		return n, nil
 	}
-	return types.Network{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
+	return network.Network{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Networks() []types.Network {
+func (f *fakeDefinitions) Networks() []network.Network {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	names := slices.Sorted(maps.Keys(f.networks))
-	out := make([]types.Network, 0, len(names))
+	out := make([]network.Network, 0, len(names))
 	for _, n := range names {
 		out = append(out, f.networks[n])
 	}
 	return out
 }
 
-func (f *fakeDefinitions) Kernel(nameOrID string) (types.Kernel, error) {
+func (f *fakeDefinitions) Kernel(nameOrID string) (kernel.Kernel, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if k, ok := f.kernels[nameOrID]; ok {
 		return k, nil
 	}
-	return types.Kernel{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
+	return kernel.Kernel{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
-func (f *fakeDefinitions) Volume(nameOrID string) (types.Volume, error) {
+func (f *fakeDefinitions) Volume(nameOrID string) (volume.Volume, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if v, ok := f.volumes[nameOrID]; ok {
 		return v, nil
 	}
-	return types.Volume{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
+	return volume.Volume{}, fmt.Errorf("%q: %w", nameOrID, errdefs.ErrNotFound)
 }
 
 // fakeNetworks is an in-memory Networks. It is safe for concurrent use, as
 // a restart the manager schedules allocates from another goroutine.
 type fakeNetworks struct {
 	mu        sync.Mutex
-	byNetwork map[string][]types.NetworkAllocation
+	byNetwork map[string][]network.Allocation
 	next      int
 }
 
 func newFakeNetworks() *fakeNetworks {
-	return &fakeNetworks{byNetwork: make(map[string][]types.NetworkAllocation)}
+	return &fakeNetworks{byNetwork: make(map[string][]network.Allocation)}
 }
 
-func (f *fakeNetworks) Allocate(n types.Network, instanceID, staticIP string) (types.NetworkAllocation, error) {
+func (f *fakeNetworks) Allocate(n network.Network, instanceID, staticIP string) (network.Allocation, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -301,7 +304,7 @@ func (f *fakeNetworks) Allocate(n types.Network, instanceID, staticIP string) (t
 		ip = fmt.Sprintf("10.0.0.%d", f.next+1)
 	}
 
-	allocation := types.NetworkAllocation{
+	allocation := network.Allocation{
 		NetworkID:  n.ID,
 		InstanceID: instanceID,
 		IP:         ip,
@@ -311,7 +314,7 @@ func (f *fakeNetworks) Allocate(n types.Network, instanceID, staticIP string) (t
 	return allocation, nil
 }
 
-func (f *fakeNetworks) Allocation(networkName, instanceID string) (types.NetworkAllocation, error) {
+func (f *fakeNetworks) Allocation(networkName, instanceID string) (network.Allocation, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -320,7 +323,7 @@ func (f *fakeNetworks) Allocation(networkName, instanceID string) (types.Network
 			return allocation, nil
 		}
 	}
-	return types.NetworkAllocation{}, fmt.Errorf("%q: %w", instanceID, errdefs.ErrNotFound)
+	return network.Allocation{}, fmt.Errorf("%q: %w", instanceID, errdefs.ErrNotFound)
 }
 
 func (f *fakeNetworks) InstanceAt(networkName, ip string) (string, bool) {
@@ -350,7 +353,7 @@ func (f *fakeNetworks) Release(networkName, instanceID string) error {
 }
 
 // allocations returns a copy of the network's allocations.
-func (f *fakeNetworks) allocations(networkName string) []types.NetworkAllocation {
+func (f *fakeNetworks) allocations(networkName string) []network.Allocation {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -363,7 +366,7 @@ func (f *fakeNetworks) Reconcile(networks []string, live map[string]struct{}) (i
 
 	var released int
 	for _, n := range networks {
-		kept := make([]types.NetworkAllocation, 0, len(f.byNetwork[n]))
+		kept := make([]network.Allocation, 0, len(f.byNetwork[n]))
 		for _, allocation := range f.byNetwork[n] {
 			if _, ok := live[allocation.InstanceID]; ok {
 				kept = append(kept, allocation)
@@ -403,26 +406,26 @@ type fakeHostNetwork struct {
 
 type publishedPorts struct {
 	ip    string
-	ports []types.PortMapping
+	ports []network.PortMapping
 }
 
-func (f *fakeHostNetwork) SetupBridge(_ context.Context, nw *types.Network) error {
+func (f *fakeHostNetwork) SetupBridge(_ context.Context, nw *network.Network) error {
 	f.setUpBridges = append(f.setUpBridges, nw.Bridge)
 	return nil
 }
 
 func (f *fakeHostNetwork) CreateTAP(
-	_ context.Context, _ *types.Network, _ *types.NetworkAllocation, bandwidth network.Bandwidth,
+	_ context.Context, _ *network.Network, _ *network.Allocation, bandwidth network.Bandwidth,
 ) error {
 	f.bandwidth = bandwidth
 	return nil
 }
 
-func (f *fakeHostNetwork) RemoveTAP(_ context.Context, _ *types.Network, instanceID string) {
+func (f *fakeHostNetwork) RemoveTAP(_ context.Context, _ *network.Network, instanceID string) {
 	f.removedTAPs = append(f.removedTAPs, instanceID)
 }
 
-func (f *fakeHostNetwork) DisconnectTAP(_ context.Context, _ *types.Network, instanceID string) error {
+func (f *fakeHostNetwork) DisconnectTAP(_ context.Context, _ *network.Network, instanceID string) error {
 	if f.disconnected == nil {
 		f.disconnected = make(map[string]bool)
 	}
@@ -430,13 +433,13 @@ func (f *fakeHostNetwork) DisconnectTAP(_ context.Context, _ *types.Network, ins
 	return nil
 }
 
-func (f *fakeHostNetwork) ConnectTAP(_ context.Context, _ *types.Network, instanceID string) error {
+func (f *fakeHostNetwork) ConnectTAP(_ context.Context, _ *network.Network, instanceID string) error {
 	delete(f.disconnected, instanceID)
 	return nil
 }
 
 func (f *fakeHostNetwork) PublishPorts(
-	ctx context.Context, _ *types.Network, allocation *types.NetworkAllocation, ports []types.PortMapping,
+	ctx context.Context, _ *network.Network, allocation *network.Allocation, ports []network.PortMapping,
 ) error {
 	if f.publishErr != nil {
 		return f.publishErr
@@ -468,7 +471,7 @@ func (f *fakeHostNetwork) UnpublishPorts(ctx context.Context, instanceID string)
 	delete(f.published, instanceID)
 }
 
-func (f *fakeHostNetwork) TeardownBridge(ctx context.Context, nw *types.Network) {
+func (f *fakeHostNetwork) TeardownBridge(ctx context.Context, nw *network.Network) {
 	if ctx.Err() != nil {
 		f.cancelledTeardowns.Add(1)
 	}
@@ -481,26 +484,26 @@ type fakeImages struct {
 	pulls    int
 
 	// held, if set, is the image the host already has for every reference.
-	held *types.Image
+	held *image.Image
 }
 
-func (f *fakeImages) Image(ref string) (*types.Image, error) {
+func (f *fakeImages) Image(ref string) (*image.Image, error) {
 	if f.held == nil {
 		return nil, errdefs.NotFound("no image %q", ref)
 	}
 	return f.held, nil
 }
 
-func (f *fakeImages) Ensure(_ context.Context, ref string, policy types.PullPolicy) (*types.Image, error) {
-	if f.held != nil && policy != types.PullPolicyAlways {
+func (f *fakeImages) Ensure(_ context.Context, ref string, policy image.PullPolicy) (*image.Image, error) {
+	if f.held != nil && policy != image.PullPolicyAlways {
 		return f.held, nil
 	}
-	if policy == types.PullPolicyNever {
+	if policy == image.PullPolicyNever {
 		return nil, errdefs.NotFound("no image %q", ref)
 	}
 
 	f.pulls++
-	return &types.Image{
+	return &image.Image{
 		Name:       "docker.io/library/alpine:3.21",
 		Digest:     "sha256:aaaa",
 		DiskPath:   f.diskPath,
@@ -710,7 +713,7 @@ func (f *fakeStarter) terminateAll() {
 // fakeKernels resolves every kernel to the same path.
 type fakeKernels struct{ path string }
 
-func (f fakeKernels) Path(types.Kernel) (string, error) { return f.path, nil }
+func (f fakeKernels) Path(kernel.Kernel) (string, error) { return f.path, nil }
 
 // fakeInitrds prepares nothing and returns a fixed path.
 type fakeInitrds struct{ path string }
@@ -750,19 +753,19 @@ type fakeProbe struct {
 	probes  int
 }
 
-func (f *fakeProbe) probe(context.Context, string, types.HealthCheck) (probeResult, error) {
+func (f *fakeProbe) probe(context.Context, string, health.Check) (health.Result, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	f.probes++
 	if f.err != nil {
-		return probeResult{Output: f.err.Error(), At: time.Now()}, f.err
+		return health.Result{Output: f.err.Error(), At: time.Now()}, f.err
 	}
 	output := "ok"
 	if !f.healthy {
 		output = "connection refused"
 	}
-	return probeResult{Healthy: f.healthy, Output: output, At: time.Now()}, nil
+	return health.Result{Healthy: f.healthy, Output: output, At: time.Now()}, nil
 }
 
 func (f *fakeProbe) set(healthy bool, err error) {

@@ -17,7 +17,7 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/kernel"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // newDefinitionsDaemon returns a daemon with only what creating the default
@@ -56,7 +56,7 @@ func TestDefaultNetworkIsCreatedOnce(t *testing.T) {
 	if err := d.ensureDefaultNetwork(); err != nil {
 		t.Fatalf("ensureDefaultNetwork: %v", err)
 	}
-	n, err := d.definitions.Network(types.DefaultNetworkName)
+	n, err := d.definitions.Network(network.DefaultName)
 	if err != nil || n.Subnet != "10.250.0.0/16" || n.Gateway != "10.250.0.1" {
 		t.Fatalf("default network = %+v, %v; want it on 10.250.0.0/16", n, err)
 	}
@@ -67,14 +67,14 @@ func TestDefaultNetworkIsCreatedOnce(t *testing.T) {
 	if err := d.ensureDefaultNetwork(); err != nil {
 		t.Fatalf("ensureDefaultNetwork again: %v", err)
 	}
-	if again, _ := d.definitions.Network(types.DefaultNetworkName); again.ID != n.ID || again.Subnet != n.Subnet {
+	if again, _ := d.definitions.Network(network.DefaultName); again.ID != n.ID || again.Subnet != n.Subnet {
 		t.Errorf("default network = %+v after a second start, want %+v", again, n)
 	}
 }
 
 func TestDefaultNetworkRefusesATakenSubnet(t *testing.T) {
 	d := newDefinitionsDaemon(t)
-	if err := d.definitions.CreateNetwork(types.Network{ID: "n-1", Name: "lan", Subnet: "10.250.1.0/24"}); err != nil {
+	if err := d.definitions.CreateNetwork(network.Network{ID: "n-1", Name: "lan", Subnet: "10.250.1.0/24"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,7 +88,7 @@ func TestDefaultNetworkRefusesATakenSubnet(t *testing.T) {
 func defaultKernelBinary(t *testing.T, d *daemon) (string, []byte) {
 	t.Helper()
 
-	k, err := d.definitions.Kernel(types.DefaultKernelName)
+	k, err := d.definitions.Kernel(kernel.DefaultName)
 	if err != nil {
 		t.Fatalf("the default kernel is not defined: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestDefaultKernelIsExtractedBeforeItIsDefined(t *testing.T) {
 	if err := d.ensureDefaultKernel(); err != nil {
 		t.Fatalf("ensureDefaultKernel: %v", err)
 	}
-	k, err := d.definitions.Kernel(types.DefaultKernelName)
+	k, err := d.definitions.Kernel(kernel.DefaultName)
 	if err != nil || k.SHA256 != kernel.Default().SHA256 {
 		t.Fatalf("default kernel = %+v, %v; want the one this binary carries", k, err)
 	}
@@ -139,7 +139,7 @@ func TestDefaultKernelIsExtractedAgainIfItsCopyIsGoneOrDamaged(t *testing.T) {
 			if err := d.ensureDefaultKernel(); err != nil {
 				t.Fatal(err)
 			}
-			k, _ := d.definitions.Kernel(types.DefaultKernelName)
+			k, _ := d.definitions.Kernel(kernel.DefaultName)
 			if again, _ := defaultKernelBinary(t, d); again != path {
 				t.Errorf("the default kernel moved from %s to %s", path, again)
 			}
@@ -158,7 +158,7 @@ func TestDefaultKernelAnOlderVersionCarriedIsReplaced(t *testing.T) {
 	if err := d.ensureDefaultKernel(); err != nil {
 		t.Fatal(err)
 	}
-	k, _ := d.definitions.Kernel(types.DefaultKernelName)
+	k, _ := d.definitions.Kernel(kernel.DefaultName)
 	path, _ := defaultKernelBinary(t, d)
 
 	// What an older version would have left.
@@ -173,7 +173,7 @@ func TestDefaultKernelAnOlderVersionCarriedIsReplaced(t *testing.T) {
 	if err := d.ensureDefaultKernel(); err != nil {
 		t.Fatalf("ensureDefaultKernel after an upgrade: %v", err)
 	}
-	updated, _ := d.definitions.Kernel(types.DefaultKernelName)
+	updated, _ := d.definitions.Kernel(kernel.DefaultName)
 	if updated.ID != k.ID || updated.SHA256 != kernel.Default().SHA256 {
 		t.Errorf("default kernel = %+v, want the one this binary carries under the same ID", updated)
 	}

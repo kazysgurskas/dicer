@@ -10,7 +10,7 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -128,11 +128,11 @@ func TestNetworkCreatedAndDeletedAreRecorded(t *testing.T) {
 func TestDefaultNetworkCannotBeDeleted(t *testing.T) {
 	s, _ := newTestServer(t)
 	if _, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{
-		Name: types.DefaultNetworkName, Subnet: "10.9.0.0/24",
+		Name: network.DefaultName, Subnet: "10.9.0.0/24",
 	}); err != nil {
 		t.Fatalf("CreateNetwork: %v", err)
 	}
 
-	_, err := s.DeleteNetwork(t.Context(), &dicerdv1.DeleteNetworkRequest{Name: types.DefaultNetworkName})
+	_, err := s.DeleteNetwork(t.Context(), &dicerdv1.DeleteNetworkRequest{Name: network.DefaultName})
 	wantClass(t, err, errdefs.ErrInvalidArgument)
 }

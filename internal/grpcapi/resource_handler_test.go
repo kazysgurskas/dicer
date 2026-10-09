@@ -9,15 +9,16 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func TestGetResources(t *testing.T) {
 	s, definitions := newTestServer(t)
 
-	for _, instance := range []types.InstanceSpec{
+	for _, instance := range []instance.Spec{
 		{ID: "i-1", Name: "web", VCPUs: 2, MemoryBytes: 1 << 30, DiskBytes: 10 << 30},
 		{ID: "i-2", Name: "db", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 20 << 30},
 	} {
@@ -25,7 +26,7 @@ func TestGetResources(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := definitions.CreateVolume(types.Volume{ID: "v-1", Name: "data", SizeBytes: 5 << 30}); err != nil {
+	if err := definitions.CreateVolume(volume.Volume{ID: "v-1", Name: "data", SizeBytes: 5 << 30}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/metrics"
-	"github.com/konradasb/dicer/internal/types"
 	"github.com/konradasb/dicer/internal/version"
 )
 
@@ -83,7 +83,7 @@ func (d *daemon) instanceSummary() metrics.InstanceSummary {
 
 // instanceStats reads what each instance uses of the host for a scrape. It
 // reports nothing before the instance manager exists.
-func (d *daemon) instanceStats() []types.InstanceStats {
+func (d *daemon) instanceStats() []instance.Stats {
 	if d.instances == nil {
 		return nil
 	}

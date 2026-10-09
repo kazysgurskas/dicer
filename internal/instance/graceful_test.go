@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // gracefulHarness returns a harness whose guest answers a request to shut
@@ -51,7 +49,7 @@ func TestStopShutsTheGuestDownGracefully(t *testing.T) {
 		t.Errorf("asked %d times, forced %d times; want the guest asked once and nothing forced",
 			asked.Load(), forced.Load())
 	}
-	if status := h.status(t); status.State != types.InstanceStateStopped {
+	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s, want Stopped", status.State)
 	}
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/grpcapi"
 	"github.com/konradasb/dicer/internal/token"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // serveDaemon serves the API on loopback, as dicerd does with server.listen
@@ -49,8 +48,8 @@ func serveDaemon(t *testing.T) (address, value string) {
 
 	cert, fingerprint := newTestCertificate(t)
 	secret := token.NewSecret()
-	err = definitions.CreateToken(types.Token{
-		ID: "id-laptop", Name: "laptop", SecretSHA256: token.SecretSHA256(secret), Scopes: []types.Scope{types.ScopeAll},
+	err = definitions.CreateToken(token.Token{
+		ID: "id-laptop", Name: "laptop", SecretSHA256: token.SecretSHA256(secret), Scopes: []token.Scope{token.ScopeAll},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -10,13 +10,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/health"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // healthCheckFromProto converts and validates a health check. Nil means the
 // image's check applies.
-func healthCheckFromProto(p *dicerdv1.HealthCheck) (*types.HealthCheck, error) {
+func healthCheckFromProto(p *dicerdv1.HealthCheck) (*health.Check, error) {
 	if p == nil {
 		return nil, nil //nolint:nilnil // no check is a valid answer, not a missing one
 	}
@@ -26,10 +26,10 @@ func healthCheckFromProto(p *dicerdv1.HealthCheck) (*types.HealthCheck, error) {
 			p.GetStartPeriod() != nil || p.GetRetries() != 0 {
 			return nil, errdefs.InvalidArgument("a disabled health check takes nothing else")
 		}
-		return &types.HealthCheck{Disabled: true}, nil
+		return &health.Check{Disabled: true}, nil
 	}
 
-	c := &types.HealthCheck{
+	c := &health.Check{
 		Interval:    p.GetInterval().AsDuration(),
 		Timeout:     p.GetTimeout().AsDuration(),
 		StartPeriod: p.GetStartPeriod().AsDuration(),
@@ -39,9 +39,9 @@ func healthCheckFromProto(p *dicerdv1.HealthCheck) (*types.HealthCheck, error) {
 	case *dicerdv1.HealthCheck_Exec:
 		c.Exec = probe.Exec.GetCommand()
 	case *dicerdv1.HealthCheck_Http:
-		c.HTTP = &types.HTTPProbe{Port: int(probe.Http.GetPort()), Path: probe.Http.GetPath()}
+		c.HTTP = &health.HTTPProbe{Port: int(probe.Http.GetPort()), Path: probe.Http.GetPath()}
 	case *dicerdv1.HealthCheck_Tcp:
-		c.TCP = &types.TCPProbe{Port: int(probe.Tcp.GetPort())}
+		c.TCP = &health.TCPProbe{Port: int(probe.Tcp.GetPort())}
 	}
 
 	if err := c.Validate(); err != nil {
@@ -51,7 +51,7 @@ func healthCheckFromProto(p *dicerdv1.HealthCheck) (*types.HealthCheck, error) {
 }
 
 // healthCheckToProto converts a health check; nil stays unset.
-func healthCheckToProto(c *types.HealthCheck) *dicerdv1.HealthCheck {
+func healthCheckToProto(c *health.Check) *dicerdv1.HealthCheck {
 	if c == nil {
 		return nil
 	}
@@ -80,7 +80,7 @@ func healthCheckToProto(c *types.HealthCheck) *dicerdv1.HealthCheck {
 
 // healthToProto converts what an instance's health check has found, and the
 // check it is being run with.
-func healthToProto(check types.HealthCheck, state types.Health) *dicerdv1.Health {
+func healthToProto(check health.Check, state health.Health) *dicerdv1.Health {
 	out := &dicerdv1.Health{
 		Status:        healthStatuses.toProto(state.Status),
 		FailingStreak: int32(state.FailingStreak),

@@ -17,15 +17,16 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/guest"
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/image"
 )
 
 // Start boots a defined instance, or resumes one on standby where it was. It
 // cancels any pending restart, resets the restart count and clears
 // StoppedByUser.
-func (m *Manager) Start(ctx context.Context, instance types.InstanceSpec) (err error) {
+func (m *Manager) Start(ctx context.Context, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationStart, started, err) }()
 
@@ -63,7 +64,7 @@ func (m *Manager) Start(ctx context.Context, instance types.InstanceSpec) (err e
 // boot starts the VMM of an instance admission has moved to Starting and
 // records it running. On failure everything acquired is undone and the caller
 // records the error. The caller must hold the instance lock.
-func (m *Manager) boot(ctx context.Context, instance types.InstanceSpec, restarts int) error {
+func (m *Manager) boot(ctx context.Context, instance Spec, restarts int) error {
 	booting := time.Now()
 	starter, err := m.resolveStarter(instance, instance.HypervisorVersion)
 	if err != nil {
@@ -119,7 +120,7 @@ func (m *Manager) boot(ctx context.Context, instance types.InstanceSpec, restart
 		held:              instance.Resources(),
 		imageDigest:       boot.image.Digest,
 		restarts:          restarts,
-		healthCheck:       types.EffectiveHealthCheck(instance.HealthCheck, boot.image.HealthCheck),
+		healthCheck:       health.EffectiveCheck(instance.HealthCheck, boot.image.HealthCheck),
 	}
 	status, err := m.recordRunning(instance, vmm, run)
 	if err != nil {
@@ -147,7 +148,7 @@ func (m *Manager) boot(ctx context.Context, instance types.InstanceSpec, restart
 
 // setStoppedByUser records whether a user last stopped an instance. It is
 // best effort. The caller must hold the instance lock.
-func (m *Manager) setStoppedByUser(ctx context.Context, instance types.InstanceSpec, stopped bool) {
+func (m *Manager) setStoppedByUser(ctx context.Context, instance Spec, stopped bool) {
 	current, err := m.definitions.Instance(instance.ID)
 	if err != nil || current.StoppedByUser == stopped {
 		return
@@ -162,7 +163,7 @@ func (m *Manager) setStoppedByUser(ctx context.Context, instance types.InstanceS
 
 // bootAssets is what an instance boots from, resolved at start.
 type bootAssets struct {
-	image       *types.Image
+	image       *image.Image
 	kernelPath  string
 	kernelArgs  string
 	initrdPath  string
@@ -172,7 +173,7 @@ type bootAssets struct {
 
 // resolveBoot resolves the image, kernel, initrd and mounts instance boots
 // from, fetching what is missing.
-func (m *Manager) resolveBoot(ctx context.Context, instance types.InstanceSpec, starter hypervisor.Starter) (bootAssets, error) {
+func (m *Manager) resolveBoot(ctx context.Context, instance Spec, starter hypervisor.Starter) (bootAssets, error) {
 	b := bootAssets{kernelArgs: instance.KernelArgs}
 	if b.kernelArgs == "" {
 		b.kernelArgs = starter.DefaultKernelArgs()
@@ -180,7 +181,7 @@ func (m *Manager) resolveBoot(ctx context.Context, instance types.InstanceSpec, 
 
 	// Pulled only if it is not held, so a start needs no registry.
 	var err error
-	if b.image, err = m.images.Ensure(ctx, instance.ImageRef, types.PullPolicyMissing); err != nil {
+	if b.image, err = m.images.Ensure(ctx, instance.ImageRef, image.PullPolicyMissing); err != nil {
 		return b, fmt.Errorf("get image %q: %w", instance.ImageRef, err)
 	}
 
@@ -213,7 +214,7 @@ const MaxVolumeMounts = 'z' - 'e' + 1
 // rate limits. The instance's own files are named relative to its runtime
 // directory, where the VMM runs; the image and volumes, which are not the
 // instance's alone, by their absolute paths.
-func (m *Manager) vmSpec(instance types.InstanceSpec, b bootAssets, nic hypervisor.NetworkInterfaceConfig) hypervisor.VMSpec {
+func (m *Manager) vmSpec(instance Spec, b bootAssets, nic hypervisor.NetworkInterfaceConfig) hypervisor.VMSpec {
 	disks := append([]hypervisor.DiskConfig{
 		{Path: b.image.DiskPath, ReadOnly: true},
 		{Path: overlayDiskFile},
@@ -248,7 +249,7 @@ func (m *Manager) vmSpec(instance types.InstanceSpec, b bootAssets, nic hypervis
 
 // resolveMounts turns instance's mounts into the guest's mount table and the
 // disks behind its volumes, which follow the four fixed disks in order.
-func (m *Manager) resolveMounts(instance types.InstanceSpec) ([]guest.Mount, []hypervisor.DiskConfig, error) {
+func (m *Manager) resolveMounts(instance Spec) ([]guest.Mount, []hypervisor.DiskConfig, error) {
 	if len(instance.Mounts) == 0 {
 		return nil, nil, nil
 	}
@@ -261,16 +262,16 @@ func (m *Manager) resolveMounts(instance types.InstanceSpec) ([]guest.Mount, []h
 		guestMount := guest.Mount{Target: mount.Target, ReadOnly: mount.ReadOnly}
 
 		switch mount.Type {
-		case types.MountTypeVolume:
+		case MountTypeVolume:
 			path, err := m.volumeDisk(mount.Source)
 			if err != nil {
 				return nil, nil, err
 			}
 			guestMount.Volume = &guest.VolumeSource{Device: fmt.Sprintf("/dev/vd%c", 'e'+len(disks))}
 			disks = append(disks, hypervisor.DiskConfig{Path: path, ReadOnly: mount.ReadOnly})
-		case types.MountTypeFile:
+		case MountTypeFile:
 			guestMount.File = &guest.FileSource{Data: mount.Content, Mode: mount.FileMode()}
-		case types.MountTypeTmpfs:
+		case MountTypeTmpfs:
 			guestMount.Tmpfs = &guest.TmpfsSource{}
 		default:
 			return nil, nil, fmt.Errorf("mount on %s: unknown type %q", mount.Target, mount.Type)
@@ -299,8 +300,8 @@ func (m *Manager) volumeDisk(name string) (string, error) {
 // writeGuestDisks builds the config disk and writes guestStatus to the status
 // disk.
 func (m *Manager) writeGuestDisks(
-	ctx context.Context, instance types.InstanceSpec, starter hypervisor.Starter,
-	image *types.Image, mounts []guest.Mount, setup *networkSetup, guestStatus guest.Status,
+	ctx context.Context, instance Spec, starter hypervisor.Starter,
+	image *image.Image, mounts []guest.Mount, setup *networkSetup, guestStatus guest.Status,
 ) error {
 	cfg := buildInitConfig(instance, image, mounts, setup, guestHalt(starter))
 	if err := cfg.Validate(); err != nil {
@@ -325,7 +326,7 @@ func guestHalt(starter hypervisor.Starter) guest.Halt {
 // buildInitConfig assembles the configuration handed to dicer-init in the
 // guest.
 func buildInitConfig(
-	instance types.InstanceSpec, image *types.Image, mounts []guest.Mount, setup *networkSetup, halt guest.Halt,
+	instance Spec, image *image.Image, mounts []guest.Mount, setup *networkSetup, halt guest.Halt,
 ) *guest.Config {
 	cfg := &guest.Config{
 		Hostname:     instance.Hostname,
@@ -333,7 +334,7 @@ func buildInitConfig(
 		Cmd:          image.Cmd,
 		Workdir:      image.WorkingDir,
 		Env:          mergeEnv(image.Env, instance.Env),
-		Mode:         cmp.Or(instance.InitMode, types.InitModeAuto),
+		Mode:         cmp.Or(instance.InitMode, guest.InitModeAuto),
 		Mounts:       mounts,
 		StatusDevice: statusDevice,
 		Halt:         halt,

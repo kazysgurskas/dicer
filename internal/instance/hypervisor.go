@@ -9,12 +9,11 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // resolveStarter returns the starter for an instance's hypervisor at version,
 // or the default version if it is empty.
-func (m *Manager) resolveStarter(instance types.InstanceSpec, version string) (hypervisor.Starter, error) {
+func (m *Manager) resolveStarter(instance Spec, version string) (hypervisor.Starter, error) {
 	hypervisorType := instance.EffectiveHypervisorType()
 
 	starters := m.starters[hypervisorType]
@@ -37,7 +36,7 @@ func (m *Manager) resolveStarter(instance types.InstanceSpec, version string) (h
 
 // snapshotStarter returns the hypervisor version that took a snapshot, which
 // is the only one that can restore it.
-func (m *Manager) snapshotStarter(snapshot types.Snapshot) (hypervisor.Starter, error) {
+func (m *Manager) snapshotStarter(snapshot Snapshot) (hypervisor.Starter, error) {
 	for _, s := range m.starters[snapshot.HypervisorType] {
 		if s.Version() == snapshot.HypervisorVersion {
 			return s, nil
@@ -49,7 +48,7 @@ func (m *Manager) snapshotStarter(snapshot types.Snapshot) (hypervisor.Starter, 
 }
 
 // connect returns a control client for an instance's running VMM.
-func (m *Manager) connect(instance types.InstanceSpec, status types.InstanceStatus) (hypervisor.Hypervisor, error) {
+func (m *Manager) connect(instance Spec, status Status) (hypervisor.Hypervisor, error) {
 	starter, err := m.resolveStarter(instance, status.HypervisorVersion)
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func (m *Manager) connect(instance types.InstanceSpec, status types.InstanceStat
 }
 
 // requireCapability returns errors.ErrUnsupported unless supported is true.
-func requireCapability(instance types.InstanceSpec, supported bool, feature string) error {
+func requireCapability(instance Spec, supported bool, feature string) error {
 	if supported {
 		return nil
 	}

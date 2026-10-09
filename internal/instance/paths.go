@@ -3,11 +3,7 @@
 
 package instance
 
-import (
-	"path/filepath"
-
-	"github.com/konradasb/dicer/internal/types"
-)
+import "path/filepath"
 
 // An instance's files live in two places. The persistent instance directory,
 // keyed by name, holds the overlay disk, the console and hypervisor logs and,
@@ -33,39 +29,39 @@ const (
 )
 
 // instanceDir returns an instance's persistent directory.
-func (m *Manager) instanceDir(instance types.InstanceSpec) string {
+func (m *Manager) instanceDir(instance Spec) string {
 	return m.definitions.InstanceDir(instance.Name)
 }
 
 // overlayDiskPath returns the writable disk holding an instance's root
 // filesystem.
-func (m *Manager) overlayDiskPath(instance types.InstanceSpec) string {
+func (m *Manager) overlayDiskPath(instance Spec) string {
 	return filepath.Join(m.instanceDir(instance), overlayDiskFile)
 }
 
 // keptOverlayDiskPath returns where an instance's overlay disk is kept while
 // a restore replaces it, until the restore succeeds.
-func (m *Manager) keptOverlayDiskPath(instance types.InstanceSpec) string {
+func (m *Manager) keptOverlayDiskPath(instance Spec) string {
 	return m.overlayDiskPath(instance) + ".kept"
 }
 
 // standbyDir returns the directory an instance on standby is frozen in.
-func (m *Manager) standbyDir(instance types.InstanceSpec) string {
+func (m *Manager) standbyDir(instance Spec) string {
 	return filepath.Join(m.instanceDir(instance), standbyDirName)
 }
 
 // serialLogPath returns the file an instance's serial console is written to.
-func (m *Manager) serialLogPath(instance types.InstanceSpec) string {
+func (m *Manager) serialLogPath(instance Spec) string {
 	return filepath.Join(m.instanceDir(instance), serialLogFile)
 }
 
 // snapshotDir returns the directory holding a snapshot's files.
-func (m *Manager) snapshotDir(snapshot types.Snapshot) string {
+func (m *Manager) snapshotDir(snapshot Snapshot) string {
 	return m.definitions.SnapshotDir(snapshot.Name)
 }
 
 // snapshotOverlayDiskPath returns a snapshot's copy of the overlay disk.
-func (m *Manager) snapshotOverlayDiskPath(snapshot types.Snapshot) string {
+func (m *Manager) snapshotOverlayDiskPath(snapshot Snapshot) string {
 	return filepath.Join(m.snapshotDir(snapshot), overlayDiskFile)
 }
 
@@ -96,7 +92,7 @@ func (m *Manager) hypervisorSocketPath(instanceID string) string {
 
 // hypervisorLogPath returns the file an instance's VMM writes its own log
 // to, through a link in the runtime directory.
-func (m *Manager) hypervisorLogPath(instance types.InstanceSpec) string {
+func (m *Manager) hypervisorLogPath(instance Spec) string {
 	return filepath.Join(m.instanceDir(instance), hypervisorLogFile)
 }
 

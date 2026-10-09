@@ -11,7 +11,6 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 
 	"github.com/konradasb/dicer/internal/guest"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // guestPath is the PATH the workload runs with, and the one a command
@@ -20,14 +19,14 @@ const guestPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 // resolveMode resolves auto to systemd if the command is the systemd binary
 // in the root filesystem at root, and to exec otherwise.
-func resolveMode(root string, cfg *guest.Config) types.InitMode {
-	if cfg.Mode != types.InitModeAuto {
+func resolveMode(root string, cfg *guest.Config) guest.InitMode {
+	if cfg.Mode != guest.InitModeAuto {
 		return cfg.Mode
 	}
 	if isSystemd(root, cfg.Argv()[0]) {
-		return types.InitModeSystemd
+		return guest.InitModeSystemd
 	}
-	return types.InitModeExec
+	return guest.InitModeExec
 }
 
 // isSystemd reports whether command resolves to .../systemd/systemd within

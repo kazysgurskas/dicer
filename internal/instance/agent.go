@@ -18,7 +18,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
@@ -35,12 +34,12 @@ const agentReadyTimeout = 30 * time.Second
 // answer. It returns an ErrUnavailable error if the agent does not answer in
 // time, and an ErrInvalidState one if the instance is not running or stops.
 // The returned function closes the connection.
-func (m *Manager) Agent(ctx context.Context, instance types.InstanceSpec) (diceragentv1.AgentServiceClient, func(), error) {
+func (m *Manager) Agent(ctx context.Context, instance Spec) (diceragentv1.AgentServiceClient, func(), error) {
 	status, err := m.Status(instance)
 	if err != nil {
 		return nil, nil, err
 	}
-	if status.State != types.InstanceStateRunning {
+	if status.State != StateRunning {
 		return nil, nil, errdefs.InvalidState("instance %q is %s, not running", instance.Name, status.State.Lowercase())
 	}
 
@@ -58,7 +57,7 @@ func (m *Manager) Agent(ctx context.Context, instance types.InstanceSpec) (dicer
 
 // waitForAgent waits until conn reaches the instance's guest agent. It gives
 // up once the instance stops running, or after agentReadyTimeout.
-func (m *Manager) waitForAgent(ctx context.Context, instance types.InstanceSpec, conn *grpc.ClientConn) error {
+func (m *Manager) waitForAgent(ctx context.Context, instance Spec, conn *grpc.ClientConn) error {
 	readyCtx, cancel := context.WithTimeout(ctx, agentReadyTimeout)
 	defer cancel()
 
@@ -87,7 +86,7 @@ func (m *Manager) waitForAgent(ctx context.Context, instance types.InstanceSpec,
 		if err != nil {
 			return err
 		}
-		if status.State != types.InstanceStateRunning {
+		if status.State != StateRunning {
 			return errdefs.InvalidState("instance %q is %s, not running", instance.Name, status.State.Lowercase())
 		}
 	}
@@ -118,8 +117,8 @@ func dialAgent(vsockPath string) (*grpc.ClientConn, error) {
 
 // syncGuest asks a running guest to flush its filesystems before its VMM is
 // ended. It is best effort.
-func (m *Manager) syncGuest(ctx context.Context, instance types.InstanceSpec, status types.InstanceStatus) {
-	if status.State != types.InstanceStateRunning || status.VsockPath == "" {
+func (m *Manager) syncGuest(ctx context.Context, instance Spec, status Status) {
+	if status.State != StateRunning || status.VsockPath == "" {
 		return
 	}
 

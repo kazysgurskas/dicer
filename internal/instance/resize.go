@@ -14,7 +14,6 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // resizeMemoryTimeout bounds how long Resize waits for the guest to take or
@@ -30,7 +29,7 @@ const resizeMemoryTimeout = time.Minute
 // the hypervisor refuses changes nothing. If the hypervisor or the guest
 // fails a resize it took, the instance keeps holding the larger until it
 // next starts, with want.
-func (m *Manager) Resize(ctx context.Context, instance types.InstanceSpec, want types.Resources) (err error) {
+func (m *Manager) Resize(ctx context.Context, instance Spec, want Resources) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationResize, started, err) }()
 
@@ -42,7 +41,7 @@ func (m *Manager) Resize(ctx context.Context, instance types.InstanceSpec, want 
 	if err != nil {
 		return err
 	}
-	if status.State != types.InstanceStateRunning {
+	if status.State != StateRunning {
 		return errdefs.InvalidState("instance %q is %s; only a running instance can be resized",
 			instance.Name, status.State.Lowercase())
 	}
@@ -71,7 +70,7 @@ func (m *Manager) Resize(ctx context.Context, instance types.InstanceSpec, want 
 		}
 	}
 
-	larger := types.Resources{VCPUs: max(held.VCPUs, want.VCPUs), MemoryBytes: max(held.MemoryBytes, want.MemoryBytes)}
+	larger := Resources{VCPUs: max(held.VCPUs, want.VCPUs), MemoryBytes: max(held.MemoryBytes, want.MemoryBytes)}
 	if err := m.reserve(instance, larger); err != nil {
 		return err
 	}
@@ -114,7 +113,7 @@ func (m *Manager) Resize(ctx context.Context, instance types.InstanceSpec, want 
 // resizeVM gives the guest want's memory, then its vCPUs, leaving alone
 // what is the same as held. Memory goes first: it is what the guest can
 // fail to take, and vCPUs change at once.
-func resizeVM(ctx context.Context, hv hypervisor.Hypervisor, held, want types.Resources) error {
+func resizeVM(ctx context.Context, hv hypervisor.Hypervisor, held, want Resources) error {
 	if want.MemoryBytes != held.MemoryBytes {
 		ctx, cancel := context.WithTimeout(ctx, resizeMemoryTimeout)
 		defer cancel()
@@ -131,7 +130,7 @@ func resizeVM(ctx context.Context, hv hypervisor.Hypervisor, held, want types.Re
 // checkResize returns ErrInvalidArgument unless an instance holding held can
 // be resized to want: a change to its vCPUs or memory needs a maximum for
 // them, and stays within it.
-func checkResize(instance types.InstanceSpec, held, want types.Resources) error {
+func checkResize(instance Spec, held, want Resources) error {
 	switch {
 	case want.VCPUs != held.VCPUs && instance.MaxVCPUs == 0:
 		return errdefs.InvalidArgument("instance %q has no max_vcpus, so its vCPUs cannot change while it runs: "+

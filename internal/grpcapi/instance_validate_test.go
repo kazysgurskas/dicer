@@ -13,7 +13,8 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
+	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -26,12 +27,12 @@ func TestMountsFromProtoCleansTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mountsFromProto: %v", err)
 	}
-	want := []types.Mount{
-		{Type: types.MountTypeVolume, Source: "v0", Target: "/data"},
-		{Type: types.MountTypeFile, Content: []byte("s3cret"), Mode: 0o600, Target: "/etc/app/secret", ReadOnly: true},
-		{Type: types.MountTypeTmpfs},
+	want := []instance.Mount{
+		{Type: instance.MountTypeVolume, Source: "v0", Target: "/data"},
+		{Type: instance.MountTypeFile, Content: []byte("s3cret"), Mode: 0o600, Target: "/etc/app/secret", ReadOnly: true},
+		{Type: instance.MountTypeTmpfs},
 	}
-	if !slices.EqualFunc(got, want, types.Mount.Equal) {
+	if !slices.EqualFunc(got, want, instance.Mount.Equal) {
 		t.Errorf("mounts = %+v, want %+v", got, want)
 	}
 
@@ -51,29 +52,29 @@ func TestCheckMounts(t *testing.T) {
 	}
 	for i := range instance.MaxVolumeMounts + 1 {
 		name := fmt.Sprintf("v%d", i)
-		if err := definitions.CreateVolume(types.Volume{ID: "id-" + name, Name: name}); err != nil {
+		if err := definitions.CreateVolume(volume.Volume{ID: "id-" + name, Name: name}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	h := &instanceHandler{definitions: definitions}
 
-	if err := h.checkMounts([]types.Mount{
-		{Type: types.MountTypeVolume, Source: "v0", Target: "/data"},
-		{Type: types.MountTypeFile, Content: []byte("s3cret"), Target: "/etc/app/secret", ReadOnly: true},
-		{Type: types.MountTypeTmpfs, Target: "/scratch"},
+	if err := h.checkMounts([]instance.Mount{
+		{Type: instance.MountTypeVolume, Source: "v0", Target: "/data"},
+		{Type: instance.MountTypeFile, Content: []byte("s3cret"), Target: "/etc/app/secret", ReadOnly: true},
+		{Type: instance.MountTypeTmpfs, Target: "/scratch"},
 	}); err != nil {
 		t.Errorf("checkMounts = %v, want nil", err)
 	}
 
-	tooMany := make([]types.Mount, instance.MaxVolumeMounts+1)
+	tooMany := make([]instance.Mount, instance.MaxVolumeMounts+1)
 	for i := range tooMany {
-		tooMany[i] = types.Mount{Type: types.MountTypeVolume, Source: fmt.Sprintf("v%d", i), Target: fmt.Sprintf("/v%d", i)}
+		tooMany[i] = instance.Mount{Type: instance.MountTypeVolume, Source: fmt.Sprintf("v%d", i), Target: fmt.Sprintf("/v%d", i)}
 	}
 	tests := []struct {
 		name   string
-		mounts []types.Mount
+		mounts []instance.Mount
 	}{
-		{"unknown volume", []types.Mount{{Type: types.MountTypeVolume, Source: "nope", Target: "/data"}}},
+		{"unknown volume", []instance.Mount{{Type: instance.MountTypeVolume, Source: "nope", Target: "/data"}}},
 		{"too many volumes", tooMany},
 	}
 	for _, tt := range tests {
@@ -102,7 +103,7 @@ func TestPortMappingsFromProto(t *testing.T) {
 		if err != nil {
 			t.Fatalf("portMappingsFromProto: %v", err)
 		}
-		want := types.PortMapping{HostPort: 8080, GuestPort: 80, Protocol: types.ProtocolTCP}
+		want := network.PortMapping{HostPort: 8080, GuestPort: 80, Protocol: network.ProtocolTCP}
 		if len(got) != 1 || got[0] != want {
 			t.Errorf("got %+v, want [%+v]", got, want)
 		}

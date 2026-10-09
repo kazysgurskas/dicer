@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // setRemoveOnExit has the harness instance ask to be deleted when it stops,
@@ -78,7 +77,7 @@ func TestRemoveOnExitDeletesAStoppedInstance(t *testing.T) {
 func TestRemoveOnExitKeepsAnInstanceThatWillRestart(t *testing.T) {
 	h := newHarness(t)
 	h.setRemoveOnExit(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeAlways})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
 	h.restartAtOnce()
 	h.start(t)
 
@@ -97,7 +96,7 @@ func TestAnInstanceThatDidNotAskIsNotDeleted(t *testing.T) {
 	h.start(t)
 
 	h.exit(t, 0)
-	h.waitForState(t, types.InstanceStateStopped)
+	h.waitForState(t, StateStopped)
 
 	if _, err := h.definitions.Instance(h.instance.ID); err != nil {
 		t.Errorf("an instance that did not ask to be deleted was: %v", err)

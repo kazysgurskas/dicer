@@ -3,10 +3,7 @@
 
 package image
 
-import (
-	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
-)
+import "github.com/konradasb/dicer/internal/events"
 
 // Recorder records what happens to images. It is declared here, and satisfied
 // by internal/events, so that this package reports what it does without
@@ -22,7 +19,7 @@ func (discardRecorder) Record(events.Event) {}
 
 // record records that action happened to image: known by its reference, with
 // its digest among the attributes.
-func (m *Manager) record(image *types.Image, action events.Action, message string, attrs map[string]string) {
+func (m *Manager) record(image *Image, action events.Action, message string, attrs map[string]string) {
 	if attrs == nil {
 		attrs = map[string]string{}
 	}

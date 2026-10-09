@@ -6,8 +6,6 @@ package instance
 import (
 	"os"
 	"testing"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestStatusDefaultsToStopped(t *testing.T) {
@@ -17,7 +15,7 @@ func TestStatusDefaultsToStopped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStatus: %v", err)
 	}
-	if status.State != types.InstanceStateStopped {
+	if status.State != StateStopped {
 		t.Errorf("state = %s, want Stopped for an instance with no status file", status.State)
 	}
 }
@@ -26,9 +24,9 @@ func TestStatusRoundTripAndRemoval(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 
 	pid := 4242
-	err := manager.writeStatus(types.InstanceStatus{
+	err := manager.writeStatus(Status{
 		InstanceID: "id-web",
-		State:      types.InstanceStateRunning,
+		State:      StateRunning,
 		VMMPID:     &pid,
 	})
 	if err != nil {
@@ -39,7 +37,7 @@ func TestStatusRoundTripAndRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStatus: %v", err)
 	}
-	if got.State != types.InstanceStateRunning || got.VMMPID == nil || *got.VMMPID != pid {
+	if got.State != StateRunning || got.VMMPID == nil || *got.VMMPID != pid {
 		t.Errorf("status = %+v, want state Running and pid %d", got, pid)
 	}
 
@@ -50,7 +48,7 @@ func TestStatusRoundTripAndRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStatus after removal: %v", err)
 	}
-	if got.State != types.InstanceStateStopped {
+	if got.State != StateStopped {
 		t.Errorf("state after removal = %s, want Stopped", got.State)
 	}
 }
@@ -71,7 +69,7 @@ func TestCorruptStatusReadsAsFailed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStatus: %v", err)
 	}
-	if status.State != types.InstanceStateFailed {
+	if status.State != StateFailed {
 		t.Errorf("state = %s, want Failed for a corrupt status file", status.State)
 	}
 }

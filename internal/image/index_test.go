@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestIndex_CreateAndGet(t *testing.T) {
 	x := newIndex()
 
 	pulled := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	image := &types.Image{
+	image := &Image{
 		Name:      "docker.io/library/alpine:latest",
 		Digest:    "sha256:abc123",
 		CreatedAt: pulled,
@@ -51,7 +50,7 @@ func TestIndex_CreateAndGet(t *testing.T) {
 func TestIndex_CreateDuplicate(t *testing.T) {
 	x := newIndex()
 
-	image := &types.Image{
+	image := &Image{
 		Name:   "test",
 		Digest: "sha256:abc",
 	}
@@ -69,7 +68,7 @@ func TestIndex_CreateDuplicate(t *testing.T) {
 func TestIndex_Delete(t *testing.T) {
 	x := newIndex()
 
-	image := &types.Image{
+	image := &Image{
 		Name:   "test",
 		Digest: "sha256:abc",
 	}
@@ -98,7 +97,7 @@ func TestIndex_DeleteNotFound(t *testing.T) {
 func TestIndex_List(t *testing.T) {
 	x := newIndex()
 
-	images := []*types.Image{
+	images := []*Image{
 		{Name: "img1", Digest: "sha256:abc"},
 		{Name: "img2", Digest: "sha256:def"},
 		{Name: "img3", Digest: "sha256:ghi"},
@@ -142,11 +141,11 @@ func TestIndex_ListEmpty(t *testing.T) {
 func TestLatestByNameReturnsTheLatestPull(t *testing.T) {
 	x := newIndex()
 	now := time.Now()
-	older := &types.Image{Name: "docker.io/library/alpine:3.21", Digest: "sha256:old", CreatedAt: now.Add(-time.Hour)}
-	newer := &types.Image{Name: "docker.io/library/alpine:3.21", Digest: "sha256:new", CreatedAt: now}
+	older := &Image{Name: "docker.io/library/alpine:3.21", Digest: "sha256:old", CreatedAt: now.Add(-time.Hour)}
+	newer := &Image{Name: "docker.io/library/alpine:3.21", Digest: "sha256:new", CreatedAt: now}
 	// Indexed newest first, as a restart may load them: the pull times
 	// decide, not the order they are indexed in.
-	for _, image := range []*types.Image{newer, older} {
+	for _, image := range []*Image{newer, older} {
 		if err := x.create(image); err != nil {
 			t.Fatal(err)
 		}
@@ -163,7 +162,7 @@ func TestLatestByNameReturnsTheLatestPull(t *testing.T) {
 func TestIndexMarkUsed(t *testing.T) {
 	x := newIndex()
 	then := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	held := &types.Image{Digest: "sha256:abc", LastUsedAt: then}
+	held := &Image{Digest: "sha256:abc", LastUsedAt: then}
 	if err := x.create(held); err != nil {
 		t.Fatal(err)
 	}

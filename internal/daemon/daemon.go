@@ -32,7 +32,6 @@ import (
 	"github.com/konradasb/dicer/internal/metrics"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 	"github.com/konradasb/dicer/internal/version"
 	"github.com/konradasb/dicer/internal/volume"
 )
@@ -55,7 +54,7 @@ type daemon struct {
 	initrds    *initrd.Manager
 
 	// hypervisors are the starters for every VMM this daemon carries.
-	hypervisors map[types.HypervisorType][]hypervisor.Starter
+	hypervisors map[hypervisor.Type][]hypervisor.Starter
 
 	metrics *metrics.Metrics
 	events  *events.Log
@@ -355,19 +354,19 @@ func (n instanceNames) LookupAddr(network string, addr netip.Addr) []string {
 
 // hostCapacity reads the host's CPUs and memory once and works out what
 // instances may be given.
-func (d *daemon) hostCapacity() (types.Capacity, error) {
+func (d *daemon) hostCapacity() (instance.Capacity, error) {
 	cpus, err := hostinfo.CPUCount()
 	if err != nil {
-		return types.Capacity{}, fmt.Errorf("read the host's CPUs: %w", err)
+		return instance.Capacity{}, fmt.Errorf("read the host's CPUs: %w", err)
 	}
 	memory, err := hostinfo.MemoryTotal()
 	if err != nil {
-		return types.Capacity{}, fmt.Errorf("read the host's memory: %w", err)
+		return instance.Capacity{}, fmt.Errorf("read the host's memory: %w", err)
 	}
 
 	capacity, err := d.cfg.Resources.capacity(cpus, memory)
 	if err != nil {
-		return types.Capacity{}, err
+		return instance.Capacity{}, err
 	}
 
 	allocatable := capacity.Allocatable()

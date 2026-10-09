@@ -8,17 +8,17 @@ import (
 
 	gcr "github.com/google/go-containerregistry/pkg/v1"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/health"
 )
 
 // healthCheckFromDocker converts an image's HEALTHCHECK, or returns nil if it
 // declares none. Unset timings take Dicer's defaults.
-func healthCheckFromDocker(hc *gcr.HealthConfig) (*types.HealthCheck, error) {
+func healthCheckFromDocker(hc *gcr.HealthConfig) (*health.Check, error) {
 	if hc == nil || len(hc.Test) == 0 {
 		return nil, nil //nolint:nilnil // an image without a HEALTHCHECK is not an error
 	}
 
-	c := &types.HealthCheck{
+	c := &health.Check{
 		Interval:    hc.Interval,
 		Timeout:     hc.Timeout,
 		StartPeriod: hc.StartPeriod,
@@ -27,7 +27,7 @@ func healthCheckFromDocker(hc *gcr.HealthConfig) (*types.HealthCheck, error) {
 
 	switch kind, args := hc.Test[0], hc.Test[1:]; kind {
 	case "NONE":
-		return &types.HealthCheck{Disabled: true}, nil
+		return &health.Check{Disabled: true}, nil
 	case "CMD":
 		c.Exec = args
 	case "CMD-SHELL":

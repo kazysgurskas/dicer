@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -20,12 +21,12 @@ func TestVolumeDeletedIsRecorded(t *testing.T) {
 	recorded := &fakeRecorder{}
 	s.volumeHandler.events = recorded
 
-	volume := types.Volume{ID: "v-1", Name: "data", SizeBytes: 10 << 30}
+	volume := volume.Volume{ID: "v-1", Name: "data", SizeBytes: 10 << 30}
 	if err := definitions.CreateVolume(volume); err != nil {
 		t.Fatal(err)
 	}
-	if err := definitions.CreateInstance(types.InstanceSpec{
-		ID: "i-1", Name: "db", Mounts: []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}},
+	if err := definitions.CreateInstance(instance.Spec{
+		ID: "i-1", Name: "db", Mounts: []instance.Mount{{Type: instance.MountTypeVolume, Source: "data", Target: "/data"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -63,13 +64,13 @@ func TestVolumeCreatedIsRecorded(t *testing.T) {
 		t.Fatalf("CreateVolume: %v", err)
 	}
 
-	volume := types.Volume{ID: v.GetId(), Name: "data", SizeBytes: 64 << 20}
+	volume := volume.Volume{ID: v.GetId(), Name: "data", SizeBytes: 64 << 20}
 	wantVolumeEvent(t, recorded.events, volume, events.ActionCreated, "Created volume of 64 MiB, formatted ext4")
 }
 
 // wantVolumeEvent checks recorded is the one event about volume that action
 // and message say.
-func wantVolumeEvent(t *testing.T, recorded []events.Event, volume types.Volume, action events.Action, message string) {
+func wantVolumeEvent(t *testing.T, recorded []events.Event, volume volume.Volume, action events.Action, message string) {
 	t.Helper()
 
 	if len(recorded) != 1 {

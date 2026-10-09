@@ -24,20 +24,70 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/guest"
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/naming"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 )
+
+// SnapshotKind is what a Snapshot holds.
+type SnapshotKind string
+
+const (
+	// SnapshotKindMemory is a running or paused guest frozen to disk: its
+	// memory and device state, with its overlay disk as it was at the same
+	// moment. Restoring it resumes the guest where it was.
+	SnapshotKindMemory SnapshotKind = "memory"
+
+	// SnapshotKindDisk is a stopped instance's overlay disk alone. Restoring
+	// it rolls the disk back, and the guest boots from it afresh.
+	SnapshotKindDisk SnapshotKind = "disk"
+)
+
+// Snapshot is an instance frozen to disk. It is a resource of its own: it
+// outlives the instance it was taken from, which may since have been
+// renamed, changed or deleted. It never holds the instance's volumes.
+type Snapshot struct {
+	ID   string       `yaml:"id" json:"id"`
+	Name string       `yaml:"name" json:"name"`
+	Kind SnapshotKind `yaml:"kind" json:"kind"`
+
+	// Instance is the definition of the instance the snapshot was taken
+	// from, as it was then.
+	Instance Spec `yaml:"instance" json:"instance"`
+
+	// IP and MAC are the guest's address on its network, which a memory
+	// snapshot's guest keeps. A disk snapshot has neither.
+	IP  string `yaml:"ip,omitempty" json:"ip,omitempty"`
+	MAC string `yaml:"mac,omitempty" json:"mac,omitempty"`
+
+	// HypervisorType and HypervisorVersion took a memory snapshot, and are
+	// the only ones that can restore it. A disk snapshot has neither.
+	HypervisorType    hypervisor.Type `yaml:"hypervisor_type,omitempty" json:"hypervisor_type,omitempty"`
+	HypervisorVersion string          `yaml:"hypervisor_version,omitempty" json:"hypervisor_version,omitempty"`
+
+	// VCPUs, MemoryBytes and ImageDigest are what a memory snapshot's guest
+	// ran with, which a restore is admitted on and boots the image of. They
+	// can differ from Instance's after a resize or an image update.
+	VCPUs       int    `yaml:"vcpus,omitempty" json:"vcpus,omitempty"`
+	MemoryBytes int64  `yaml:"memory_bytes,omitempty" json:"memory_bytes,omitempty"`
+	ImageDigest string `yaml:"image_digest,omitempty" json:"image_digest,omitempty"`
+
+	CreatedAt time.Time `yaml:"created_at" json:"created_at"`
+
+	// SizeBytes is the space the snapshot occupies, measured when read.
+	SizeBytes int64 `yaml:"-" json:"-"`
+}
 
 // CreateSnapshot freezes an instance to disk as a snapshot called name, or,
 // if name is empty, after the instance and the time. See writeSnapshot for
 // what it holds.
 func (m *Manager) CreateSnapshot(
-	ctx context.Context, instance types.InstanceSpec, name string,
-) (_ types.Snapshot, err error) {
+	ctx context.Context, instance Spec, name string,
+) (_ Snapshot, err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationCreateSnapshot, started, err) }()
 
@@ -45,16 +95,16 @@ func (m *Manager) CreateSnapshot(
 		name = instance.Name + "-" + strings.ToLower(started.UTC().Format("20060102t150405z"))
 	}
 	if err := naming.Validate(name); err != nil {
-		return types.Snapshot{}, err
+		return Snapshot{}, err
 	}
 	// Checked again as the snapshot is recorded; this spares taking it.
 	if _, err := m.definitions.Snapshot(name); err == nil {
-		return types.Snapshot{}, errdefs.Exists("snapshot %q already exists", name)
+		return Snapshot{}, errdefs.Exists("snapshot %q already exists", name)
 	}
 
 	staged, err := m.definitions.StageSnapshot()
 	if err != nil {
-		return types.Snapshot{}, err
+		return Snapshot{}, err
 	}
 	// On success the directory has been moved into place, so this removes
 	// only what a failure left.
@@ -62,12 +112,12 @@ func (m *Manager) CreateSnapshot(
 
 	snapshot, paused, err := m.writeSnapshot(ctx, instance, staged)
 	if err != nil {
-		return types.Snapshot{}, err
+		return Snapshot{}, err
 	}
 	snapshot.ID, snapshot.Name, snapshot.CreatedAt = cuid2.Generate(), name, started
 
 	if err := m.definitions.CreateSnapshot(snapshot, staged); err != nil {
-		return types.Snapshot{}, err
+		return Snapshot{}, err
 	}
 	snapshot.SizeBytes, _ = diskfile.AllocatedBytesUnder(m.snapshotDir(snapshot))
 
@@ -87,31 +137,31 @@ func (m *Manager) CreateSnapshot(
 // is refused, because the volume is not in the snapshot and would not match
 // what the restored guest remembers of it.
 func (m *Manager) writeSnapshot(
-	ctx context.Context, instance types.InstanceSpec, dir string,
-) (types.Snapshot, time.Duration, error) {
+	ctx context.Context, instance Spec, dir string,
+) (Snapshot, time.Duration, error) {
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
 
 	status, err := m.Status(instance)
 	if err != nil {
-		return types.Snapshot{}, 0, err
+		return Snapshot{}, 0, err
 	}
 
-	snapshot := types.Snapshot{Instance: instance}
+	snapshot := Snapshot{Instance: instance}
 	switch status.State {
-	case types.InstanceStateRunning, types.InstanceStatePaused:
-		if slices.ContainsFunc(instance.Mounts, func(mount types.Mount) bool {
-			return mount.Type == types.MountTypeVolume && !mount.ReadOnly
+	case StateRunning, StatePaused:
+		if slices.ContainsFunc(instance.Mounts, func(mount Mount) bool {
+			return mount.Type == MountTypeVolume && !mount.ReadOnly
 		}) {
-			return types.Snapshot{}, 0, errdefs.InvalidState("instance %q can write to a volume, which a snapshot does not hold; "+
+			return Snapshot{}, 0, errdefs.InvalidState("instance %q can write to a volume, which a snapshot does not hold; "+
 				"stop it first, or mount its volumes read-only", instance.Name)
 		}
 		allocation, err := m.Allocation(instance)
 		if err != nil {
-			return types.Snapshot{}, 0, err
+			return Snapshot{}, 0, err
 		}
-		snapshot.Kind = types.SnapshotKindMemory
+		snapshot.Kind = SnapshotKindMemory
 		snapshot.IP, snapshot.MAC = allocation.IP, allocation.MAC
 		snapshot.HypervisorType, snapshot.HypervisorVersion = instance.EffectiveHypervisorType(), status.HypervisorVersion
 		snapshot.VCPUs, snapshot.MemoryBytes = status.VCPUs, status.MemoryBytes
@@ -119,21 +169,21 @@ func (m *Manager) writeSnapshot(
 
 		paused, err := m.writeMemorySnapshot(ctx, instance, status, dir)
 		if err != nil {
-			return types.Snapshot{}, 0, err
+			return Snapshot{}, 0, err
 		}
 		return snapshot, paused, nil
-	case types.InstanceStateStopped, types.InstanceStateFailed:
+	case StateStopped, StateFailed:
 		if _, err := os.Stat(m.overlayDiskPath(instance)); errors.Is(err, os.ErrNotExist) {
-			return types.Snapshot{}, 0, errdefs.InvalidState("instance %q has never started, so it has no disk to copy", instance.Name)
+			return Snapshot{}, 0, errdefs.InvalidState("instance %q has never started, so it has no disk to copy", instance.Name)
 		}
-		snapshot.Kind = types.SnapshotKindDisk
+		snapshot.Kind = SnapshotKindDisk
 
 		if err := diskfile.Copy(m.overlayDiskPath(instance), filepath.Join(dir, overlayDiskFile)); err != nil {
-			return types.Snapshot{}, 0, fmt.Errorf("copy overlay disk: %w", err)
+			return Snapshot{}, 0, fmt.Errorf("copy overlay disk: %w", err)
 		}
 		return snapshot, 0, nil
 	default:
-		return types.Snapshot{}, 0, errdefs.InvalidState("instance %q is %s; snapshot or fork it once it is running, paused or stopped",
+		return Snapshot{}, 0, errdefs.InvalidState("instance %q is %s; snapshot or fork it once it is running, paused or stopped",
 			instance.Name, status.State.Lowercase())
 	}
 }
@@ -142,7 +192,7 @@ func (m *Manager) writeSnapshot(
 // state and overlay disk into dir, and returns how long the guest was paused
 // for it: not at all if it already was.
 func (m *Manager) writeMemorySnapshot(
-	ctx context.Context, instance types.InstanceSpec, status types.InstanceStatus, dir string,
+	ctx context.Context, instance Spec, status Status, dir string,
 ) (paused time.Duration, err error) {
 	hv, err := m.connect(instance, status)
 	if err != nil {
@@ -152,7 +202,7 @@ func (m *Manager) writeMemorySnapshot(
 		return 0, err
 	}
 
-	running := status.State == types.InstanceStateRunning
+	running := status.State == StateRunning
 	snapshotCtx, cancel := context.WithTimeout(ctx, memoryTransferTimeout(status.MemoryBytes))
 	defer cancel()
 	pausedAt, err := snapshotVM(snapshotCtx, hv, running, dir)
@@ -222,7 +272,7 @@ func snapshotVM(ctx context.Context, hv hypervisor.Hypervisor, running bool, dir
 
 // recordSnapshotCreated records the event of a snapshot taken in took,
 // pausing its guest for paused.
-func (m *Manager) recordSnapshotCreated(snapshot types.Snapshot, took, paused time.Duration) {
+func (m *Manager) recordSnapshotCreated(snapshot Snapshot, took, paused time.Duration) {
 	attrs := map[string]string{
 		"instance":   snapshot.Instance.Name,
 		"kind":       string(snapshot.Kind),
@@ -244,22 +294,22 @@ func memoryTransferTimeout(memoryBytes int64) time.Duration {
 }
 
 // Snapshots returns every snapshot, oldest first.
-func (m *Manager) Snapshots() []types.Snapshot {
+func (m *Manager) Snapshots() []Snapshot {
 	snapshots := m.definitions.Snapshots()
 	for i := range snapshots {
 		snapshots[i].SizeBytes, _ = diskfile.AllocatedBytesUnder(m.snapshotDir(snapshots[i]))
 	}
-	slices.SortFunc(snapshots, func(a, b types.Snapshot) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	slices.SortFunc(snapshots, func(a, b Snapshot) int { return a.CreatedAt.Compare(b.CreatedAt) })
 
 	return snapshots
 }
 
 // Snapshot returns a snapshot by name or ID, or an errdefs.ErrNotFound error
 // if there is none.
-func (m *Manager) Snapshot(nameOrID string) (types.Snapshot, error) {
+func (m *Manager) Snapshot(nameOrID string) (Snapshot, error) {
 	snapshot, err := m.definitions.Snapshot(nameOrID)
 	if err != nil {
-		return types.Snapshot{}, err
+		return Snapshot{}, err
 	}
 	snapshot.SizeBytes, _ = diskfile.AllocatedBytesUnder(m.snapshotDir(snapshot))
 
@@ -267,7 +317,7 @@ func (m *Manager) Snapshot(nameOrID string) (types.Snapshot, error) {
 }
 
 // DeleteSnapshot removes a snapshot and its files.
-func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot types.Snapshot) (err error) {
+func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot Snapshot) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationDeleteSnapshot, started, err) }()
 
@@ -293,7 +343,7 @@ func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot types.Snapshot) (
 // since its frozen guest would be lost. A memory snapshot resumes its guest
 // where it was; a disk snapshot leaves it stopped, to boot from the disk at
 // its next start.
-func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot types.Snapshot) (_ types.InstanceSpec, err error) {
+func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spec, err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationRestoreSnapshot, started, err) }()
 
@@ -303,40 +353,40 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot types.Snapshot) 
 
 	instance, err := m.definitions.Instance(snapshot.Instance.ID)
 	if errors.Is(err, errdefs.ErrNotFound) {
-		return types.InstanceSpec{}, errdefs.NotFound("instance %q, which snapshot %q was taken of, has been deleted",
+		return Spec{}, errdefs.NotFound("instance %q, which snapshot %q was taken of, has been deleted",
 			snapshot.Instance.Name, snapshot.Name)
 	}
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return Spec{}, err
 	}
 
 	status, err := m.Status(instance)
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return Spec{}, err
 	}
 	if status.State.IsActive() {
-		return types.InstanceSpec{}, errdefs.InvalidState("instance %q is %s; stop it before restoring a snapshot",
+		return Spec{}, errdefs.InvalidState("instance %q is %s; stop it before restoring a snapshot",
 			instance.Name, status.State.Lowercase())
 	}
 	// Its frozen guest resumes at the next start, on the overlay disk as it
 	// left it. A restore would change that disk under it, or run another
 	// guest in its place.
-	if status.State == types.InstanceStateStandby {
-		return types.InstanceSpec{}, errdefs.InvalidState("instance %q is on standby; "+
+	if status.State == StateStandby {
+		return Spec{}, errdefs.InvalidState("instance %q is on standby; "+
 			"stop it, which discards its frozen guest, before restoring a snapshot", instance.Name)
 	}
 	m.cancelRestart(instance.ID)
 
 	switch snapshot.Kind {
-	case types.SnapshotKindMemory:
+	case SnapshotKindMemory:
 		err = m.restoreMemory(ctx, instance, snapshot)
-	case types.SnapshotKindDisk:
+	case SnapshotKindDisk:
 		err = m.restoreDisk(ctx, instance, snapshot)
 	default:
 		err = fmt.Errorf("snapshot %q is of unknown kind %q", snapshot.Name, snapshot.Kind)
 	}
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return Spec{}, err
 	}
 
 	m.logger.InfoContext(ctx, "restored snapshot",
@@ -345,7 +395,7 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot types.Snapshot) 
 }
 
 // restoreDisk rolls instance's overlay disk back to a disk snapshot's.
-func (m *Manager) restoreDisk(ctx context.Context, instance types.InstanceSpec, snapshot types.Snapshot) error {
+func (m *Manager) restoreDisk(ctx context.Context, instance Spec, snapshot Snapshot) error {
 	// Copy replaces the disk only once it has all of the snapshot's.
 	if err := diskfile.Copy(m.snapshotOverlayDiskPath(snapshot), m.overlayDiskPath(instance)); err != nil {
 		return fmt.Errorf("restore overlay disk: %w", err)
@@ -361,10 +411,10 @@ func (m *Manager) restoreDisk(ctx context.Context, instance types.InstanceSpec, 
 // restoreMemory resumes instance from a memory snapshot of it: its guest
 // where it was, on its disk as it was. It is refused if the instance's mounts
 // or address have changed since, which the guest still has as they were.
-func (m *Manager) restoreMemory(ctx context.Context, instance types.InstanceSpec, snapshot types.Snapshot) error {
+func (m *Manager) restoreMemory(ctx context.Context, instance Spec, snapshot Snapshot) error {
 	started := time.Now()
 
-	if !slices.EqualFunc(instance.Mounts, snapshot.Instance.Mounts, types.Mount.Equal) {
+	if !slices.EqualFunc(instance.Mounts, snapshot.Instance.Mounts, Mount.Equal) {
 		return errdefs.InvalidState("instance %q's mounts have changed since snapshot %q was taken, "+
 			"and its guest expects them as they were; change them back to restore it", instance.Name, snapshot.Name)
 	}
@@ -391,7 +441,7 @@ func (m *Manager) restoreMemory(ctx context.Context, instance types.InstanceSpec
 // or an instance's on standby.
 type frozenGuest struct {
 	// snapshot is what the guest ran with.
-	snapshot types.Snapshot
+	snapshot Snapshot
 	// dir holds the hypervisor's files.
 	dir string
 	// overlay is a copy of the guest's disk to resume it on, or empty to
@@ -400,7 +450,7 @@ type frozenGuest struct {
 }
 
 // frozenSnapshot returns the guest a memory snapshot holds.
-func (m *Manager) frozenSnapshot(snapshot types.Snapshot) frozenGuest {
+func (m *Manager) frozenSnapshot(snapshot Snapshot) frozenGuest {
 	return frozenGuest{snapshot: snapshot, dir: m.snapshotDir(snapshot), overlay: m.snapshotOverlayDiskPath(snapshot)}
 }
 
@@ -408,14 +458,14 @@ func (m *Manager) frozenSnapshot(snapshot types.Snapshot) frozenGuest {
 // another's. It records the instance running. On failure the instance is
 // marked failed, and keeps the disk it had. The caller must hold the
 // instance lock.
-func (m *Manager) resume(ctx context.Context, instance types.InstanceSpec, frozen frozenGuest) (err error) {
+func (m *Manager) resume(ctx context.Context, instance Spec, frozen frozenGuest) (err error) {
 	snapshot := frozen.snapshot
 	starter, err := m.snapshotStarter(snapshot)
 	if err != nil {
 		return err
 	}
 
-	need := types.Resources{VCPUs: snapshot.VCPUs, MemoryBytes: snapshot.MemoryBytes}
+	need := Resources{VCPUs: snapshot.VCPUs, MemoryBytes: snapshot.MemoryBytes}
 	if err := m.admit(instance, need); err != nil {
 		return err
 	}
@@ -443,7 +493,7 @@ func (m *Manager) resume(ctx context.Context, instance types.InstanceSpec, froze
 		held:              need,
 		imageDigest:       snapshot.ImageDigest,
 		vsockCID:          vsockCID(snapshot.Instance.ID),
-		healthCheck:       types.EffectiveHealthCheck(instance.HealthCheck, image.HealthCheck),
+		healthCheck:       health.EffectiveCheck(instance.HealthCheck, image.HealthCheck),
 	}
 	running, err := m.recordRunning(instance, vmm, run)
 	if err != nil {
@@ -461,7 +511,7 @@ func (m *Manager) resume(ctx context.Context, instance types.InstanceSpec, froze
 // and, if it is a fork of another instance's, its own identity. The returned
 // function undoes all of it, putting back the overlay disk the instance had.
 func (m *Manager) restore(
-	ctx context.Context, instance types.InstanceSpec, frozen frozenGuest, starter hypervisor.Starter, image *types.Image,
+	ctx context.Context, instance Spec, frozen frozenGuest, starter hypervisor.Starter, image *image.Image,
 ) (*process.Process, func(), error) {
 	snapshot := frozen.snapshot
 	cu := cleanup.Make(func() {})
@@ -556,14 +606,14 @@ func (m *Manager) restore(
 
 // snapshotImage returns the image a memory snapshot's guest booted from,
 // pulling it by digest if needed.
-func (m *Manager) snapshotImage(ctx context.Context, snapshot types.Snapshot) (*types.Image, error) {
+func (m *Manager) snapshotImage(ctx context.Context, snapshot Snapshot) (*image.Image, error) {
 	ref, err := reference.Parse(snapshot.Instance.ImageRef)
 	if err != nil {
 		return nil, fmt.Errorf("image %q: %w", snapshot.Instance.ImageRef, err)
 	}
 	pinned := ref.Repository() + "@" + snapshot.ImageDigest
 
-	image, err := m.images.Ensure(ctx, pinned, types.PullPolicyMissing)
+	image, err := m.images.Ensure(ctx, pinned, image.PullPolicyMissing)
 	if err != nil {
 		return nil, fmt.Errorf("get image %q: %w", pinned, err)
 	}

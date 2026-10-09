@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/konradasb/dicer/internal/atomicfile"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // The methods in this file are where an image's files live under the data
@@ -127,7 +126,7 @@ func (m *Manager) diskExists(digestHex string) bool {
 }
 
 // saveMetadata records image beside its disk.
-func (m *Manager) saveMetadata(digestHex string, image *types.Image) error {
+func (m *Manager) saveMetadata(digestHex string, image *Image) error {
 	data, err := json.MarshalIndent(image, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
@@ -137,13 +136,13 @@ func (m *Manager) saveMetadata(digestHex string, image *types.Image) error {
 }
 
 // loadMetadata reads the image recorded by saveMetadata.
-func (m *Manager) loadMetadata(digestHex string) (*types.Image, error) {
+func (m *Manager) loadMetadata(digestHex string) (*Image, error) {
 	data, err := os.ReadFile(m.metadataPath(digestHex))
 	if err != nil {
 		return nil, fmt.Errorf("read metadata file: %w", err)
 	}
 
-	var image types.Image
+	var image Image
 	if err := json.Unmarshal(data, &image); err != nil {
 		return nil, fmt.Errorf("unmarshal metadata: %w", err)
 	}

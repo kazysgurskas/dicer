@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func newTestManager(t *testing.T) *Manager {
@@ -24,8 +23,8 @@ func newTestManager(t *testing.T) *Manager {
 	return m
 }
 
-func testNetwork() types.Network {
-	return types.Network{
+func testNetwork() Network {
+	return Network{
 		ID:      "net-default",
 		Name:    "default",
 		Subnet:  "10.0.0.0/24",
@@ -247,7 +246,7 @@ func TestListUnknownNetworkIsEmptyNotAnError(t *testing.T) {
 func TestAllocateFailsOnAnExhaustedSubnet(t *testing.T) {
 	m := newTestManager(t)
 	// A /30 has 4 addresses: network, gateway, one host, broadcast.
-	n := types.Network{ID: "n", Name: "tiny", Subnet: "10.9.0.0/30", Gateway: "10.9.0.1"}
+	n := Network{ID: "n", Name: "tiny", Subnet: "10.9.0.0/30", Gateway: "10.9.0.1"}
 
 	if _, err := m.Allocate(n, "id-1", ""); err != nil {
 		t.Fatalf("first Allocate: %v", err)
@@ -386,7 +385,7 @@ func BenchmarkAllocation(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			n := types.Network{ID: "n", Name: "lan", Subnet: "10.0.0.0/16", Gateway: "10.0.0.1"}
+			n := Network{ID: "n", Name: "lan", Subnet: "10.0.0.0/16", Gateway: "10.0.0.1"}
 			for i := range size {
 				if _, err := m.Allocate(n, "id-"+strconv.Itoa(i), ""); err != nil {
 					b.Fatal(err)

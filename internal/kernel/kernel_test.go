@@ -1,7 +1,7 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package types
+package kernel
 
 import (
 	"errors"

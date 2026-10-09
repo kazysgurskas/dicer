@@ -10,8 +10,8 @@ import (
 	"slices"
 
 	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Recover reconciles recorded instance status with what is running on the host.
@@ -73,7 +73,7 @@ const (
 )
 
 // recoverInstance applies Recover to one instance.
-func (m *Manager) recoverInstance(ctx context.Context, instance types.InstanceSpec) recovery {
+func (m *Manager) recoverInstance(ctx context.Context, instance Spec) recovery {
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -87,9 +87,9 @@ func (m *Manager) recoverInstance(ctx context.Context, instance types.InstanceSp
 	}
 
 	switch status.State {
-	case types.InstanceStateStopped, types.InstanceStateFailed, types.InstanceStateStandby:
+	case StateStopped, StateFailed, StateStandby:
 		return recoveryNone
-	case types.InstanceStateRestarting:
+	case StateRestarting:
 		m.scheduleRestart(ctx, instance.ID, status.NextRestartAt)
 		m.logger.InfoContext(ctx, "instance is waiting to restart",
 			"instance", instance.Name, "restart_at", status.NextRestartAt)
@@ -144,7 +144,7 @@ func (m *Manager) recoverInstance(ctx context.Context, instance types.InstanceSp
 // are up, as they were left, but the host network has to know them, to set
 // them up again when firewalld reloads, and their guests ask the gateway
 // still.
-func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []types.InstanceSpec) {
+func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []Spec) {
 	restored := make(map[string]bool)
 	for _, instance := range instances {
 		if restored[instance.NetworkName] {
@@ -164,7 +164,7 @@ func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []types.
 }
 
 // restoreNetwork sets an adopted network up again, under its lock.
-func (m *Manager) restoreNetwork(ctx context.Context, nw types.Network) {
+func (m *Manager) restoreNetwork(ctx context.Context, nw network.Network) {
 	lock := m.networkLock(nw.Name)
 	lock.Lock()
 	defer lock.Unlock()
@@ -177,11 +177,11 @@ func (m *Manager) restoreNetwork(ctx context.Context, nw types.Network) {
 }
 
 // operationOf names the operation an in-progress state belongs to.
-func operationOf(s types.InstanceState) string {
+func operationOf(s State) string {
 	switch s {
-	case types.InstanceStateStarting:
+	case StateStarting:
 		return operationStart
-	case types.InstanceStateStopping:
+	case StateStopping:
 		return operationStop
 	default:
 		return string(s)
@@ -202,7 +202,7 @@ func (m *Manager) StartOnBoot(ctx context.Context) {
 		}
 
 		status, err := m.Status(instance)
-		if err != nil || (status.State != types.InstanceStateStopped && status.State != types.InstanceStateFailed) {
+		if err != nil || (status.State != StateStopped && status.State != StateFailed) {
 			continue
 		}
 

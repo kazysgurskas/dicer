@@ -117,12 +117,12 @@ and mark the pull request breaking (`!`), as removing one is.
 cmd/                    main packages: dicer, dicerd, dicer-init, dicer-agent
 proto/                  the API: protobuf definitions and generated code
 internal/
-  types/                the daemon's model: instances, images, networks, ...
   daemon/               configuration, wiring, process lifecycle
   cli/                  the command line, dicer compose included
   compose/              compose files: reading them, and the requests they make
   grpcapi/              the API's handlers
-  instance/             instance lifecycle: starting, stopping, supervising
+  instance/             instances and snapshots, and their lifecycle
+  health/               health checks: running probes, and judging their results
   filestore/            resource definitions, as YAML on disk
   network/ hostnet/     networks and addresses; bridges, TAP devices, iptables
   dns/                  each network's nameserver: guests' names, and forwarding
@@ -144,6 +144,9 @@ specs/                  the Cloud Hypervisor OpenAPI spec
 scripts/                the install and uninstall scripts
 build/                  the Linux packages, and their apt and dnf repository
 ```
+
+Each resource's definition lives in the package named for it, beside the
+code that manages it: `instance.Spec`, `network.Network`, `image.Image`.
 
 ## Documentation site
 

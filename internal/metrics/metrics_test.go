@@ -14,7 +14,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 )
 
 // A source left nil exports no series at all, rather than a misleading zero.
@@ -65,8 +65,8 @@ func TestReferenceListsEverything(t *testing.T) {
 		Images:   func() ImageSummary { return ImageSummary{} },
 		Kernels:  func() KernelSummary { return KernelSummary{} },
 		Volumes:  func() VolumeSummary { return VolumeSummary{} },
-		InstanceStats: func() []types.InstanceStats {
-			return []types.InstanceStats{{InstanceID: "i-web", Name: "web"}}
+		InstanceStats: func() []instance.Stats {
+			return []instance.Stats{{InstanceID: "i-web", Name: "web"}}
 		},
 	}})
 

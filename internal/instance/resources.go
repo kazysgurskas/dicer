@@ -1,11 +1,12 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package types
+package instance
 
 import (
 	"fmt"
 
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 )
 
@@ -71,11 +72,11 @@ func (c Capacity) Unlimited() bool {
 type Usage struct {
 	// ByState counts instances per state, and names every state even when
 	// no instance is in it.
-	ByState map[InstanceState]int `json:"by_state"`
+	ByState map[State]int `json:"by_state"`
 
 	// ByHealth counts checked instances per health status, and names every
 	// status even when no instance has it.
-	ByHealth map[HealthStatus]int `json:"by_health"`
+	ByHealth map[health.Status]int `json:"by_health"`
 
 	// Capacity is what instances may be given, and how that was arrived at.
 	Capacity Capacity `json:"capacity"`
@@ -84,7 +85,7 @@ type Usage struct {
 	Allocated Resources `json:"allocated"`
 
 	// Instances are the instances holding resources, in name order.
-	Instances []InstanceResources `json:"instances"`
+	Instances []HeldResources `json:"instances"`
 }
 
 // Available returns what is left for further instances.
@@ -92,18 +93,9 @@ func (u Usage) Available() Resources {
 	return u.Capacity.Allocatable().Sub(u.Allocated)
 }
 
-// InstanceResources is what one instance holds of the host.
-type InstanceResources struct {
-	Name      string        `json:"name"`
-	State     InstanceState `json:"state"`
-	Resources Resources     `json:"resources"`
-}
-
-// DiskUsage is the size of a filesystem and how much of it is free.
-type DiskUsage struct {
-	// TotalBytes is the filesystem's size.
-	TotalBytes int64 `json:"total_bytes"`
-
-	// FreeBytes excludes blocks reserved for root.
-	FreeBytes int64 `json:"free_bytes"`
+// HeldResources is what one instance holds of the host.
+type HeldResources struct {
+	Name      string    `json:"name"`
+	State     State     `json:"state"`
+	Resources Resources `json:"resources"`
 }

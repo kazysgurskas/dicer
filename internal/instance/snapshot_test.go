@@ -17,7 +17,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestCreateMemorySnapshot(t *testing.T) {
@@ -29,7 +28,7 @@ func TestCreateMemorySnapshot(t *testing.T) {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
 
-	if snapshot.Name != "before-upgrade" || snapshot.Kind != types.SnapshotKindMemory || snapshot.Instance.ID != h.instance.ID {
+	if snapshot.Name != "before-upgrade" || snapshot.Kind != SnapshotKindMemory || snapshot.Instance.ID != h.instance.ID {
 		t.Errorf("snapshot = %+v", snapshot)
 	}
 	if snapshot.HypervisorVersion != testHypervisorVersion {
@@ -71,7 +70,7 @@ func TestCreateMemorySnapshot(t *testing.T) {
 func TestCreateSnapshotOfPausedInstance(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	forceState(t, h.manager, h.instance.ID, types.InstanceStatePaused)
+	forceState(t, h.manager, h.instance.ID, StatePaused)
 
 	if _, err := h.manager.CreateSnapshot(t.Context(), h.instance, "paused"); err != nil {
 		t.Fatalf("CreateSnapshot: %v", err)
@@ -80,8 +79,8 @@ func TestCreateSnapshotOfPausedInstance(t *testing.T) {
 	if h.hv.paused != 0 || h.hv.resumed != 0 {
 		t.Errorf("paused %d times and resumed %d, want neither", h.hv.paused, h.hv.resumed)
 	}
-	if status, _ := h.manager.Status(h.instance); status.State != types.InstanceStatePaused {
-		t.Errorf("state = %s, want it left %s", status.State, types.InstanceStatePaused)
+	if status, _ := h.manager.Status(h.instance); status.State != StatePaused {
+		t.Errorf("state = %s, want it left %s", status.State, StatePaused)
 	}
 }
 
@@ -93,7 +92,7 @@ func TestCreateDiskSnapshotOfStoppedInstance(t *testing.T) {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
 
-	if snapshot.Kind != types.SnapshotKindDisk || snapshot.HypervisorVersion != "" || snapshot.IP != "" {
+	if snapshot.Kind != SnapshotKindDisk || snapshot.HypervisorVersion != "" || snapshot.IP != "" {
 		t.Errorf("snapshot = %+v, want a disk snapshot with no hypervisor or address", snapshot)
 	}
 	if h.hv.paused != 0 || len(h.hv.snapshotDirs) != 0 {
@@ -122,7 +121,7 @@ func TestCreateSnapshotRejections(t *testing.T) {
 	t.Run("instance stopping", func(t *testing.T) {
 		h := newHarness(t)
 		h.running(t)
-		forceState(t, h.manager, h.instance.ID, types.InstanceStateStopping)
+		forceState(t, h.manager, h.instance.ID, StateStopping)
 
 		_, err := h.manager.CreateSnapshot(t.Context(), h.instance, "nope")
 		if !errors.Is(err, errdefs.ErrInvalidState) {
@@ -146,7 +145,7 @@ func TestCreateSnapshotRejections(t *testing.T) {
 	// not match what it holds by the time the snapshot is restored.
 	t.Run("running instance writing to a volume", func(t *testing.T) {
 		h := newHarness(t)
-		h.instance.Mounts = []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}}
+		h.instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 		h.running(t)
 
 		_, err := h.manager.CreateSnapshot(t.Context(), h.instance, "nope")
@@ -305,8 +304,8 @@ func TestRestoreMemorySnapshot(t *testing.T) {
 		t.Errorf("resumed %d times, want 1", h.hv.resumed)
 	}
 	status := h.status(t)
-	if status.State != types.InstanceStateRunning {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateRunning)
+	if status.State != StateRunning {
+		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
 	if status.HypervisorVersion != testHypervisorVersion {
 		t.Errorf("hypervisor version = %q, want the snapshot's", status.HypervisorVersion)
@@ -339,8 +338,8 @@ func TestRestoreDiskSnapshot(t *testing.T) {
 	if h.starter.vmmCount() != 0 {
 		t.Error("restoring a disk snapshot started a VMM")
 	}
-	if status := h.status(t); status.State != types.InstanceStateStopped {
-		t.Errorf("state = %s, want the instance left %s", status.State, types.InstanceStateStopped)
+	if status := h.status(t); status.State != StateStopped {
+		t.Errorf("state = %s, want the instance left %s", status.State, StateStopped)
 	}
 }
 
@@ -408,7 +407,7 @@ func TestRestoreMemorySnapshotRefusesAChangedInstance(t *testing.T) {
 		change func(t *testing.T, h *harness)
 	}{
 		{"mounts", func(t *testing.T, h *harness) {
-			h.instance.Mounts = []types.Mount{{Type: types.MountTypeTmpfs, Target: "/scratch"}}
+			h.instance.Mounts = []Mount{{Type: MountTypeTmpfs, Target: "/scratch"}}
 			h.definitions.instances[h.instance.Name] = h.instance
 		}},
 		{"address", func(t *testing.T, h *harness) {
@@ -458,12 +457,12 @@ func TestRestoreSnapshotRejections(t *testing.T) {
 	// at the next start, so a restore under it would hand that guest a disk
 	// or memory it never had. It must be stopped first, which discards the
 	// frozen guest.
-	for _, kind := range []types.SnapshotKind{types.SnapshotKindMemory, types.SnapshotKindDisk} {
+	for _, kind := range []SnapshotKind{SnapshotKindMemory, SnapshotKindDisk} {
 		t.Run("instance on standby, "+string(kind)+" snapshot", func(t *testing.T) {
 			h := newHarness(t)
 			// A disk snapshot is of a stopped instance, a memory one of a
 			// running instance.
-			if kind == types.SnapshotKindMemory {
+			if kind == SnapshotKindMemory {
 				h.start(t)
 			}
 			snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "snap")
@@ -473,7 +472,7 @@ func TestRestoreSnapshotRejections(t *testing.T) {
 			if snapshot.Kind != kind {
 				t.Fatalf("took a %s snapshot, want %s", snapshot.Kind, kind)
 			}
-			if kind == types.SnapshotKindDisk {
+			if kind == SnapshotKindDisk {
 				h.start(t)
 			}
 			if err := h.manager.Standby(t.Context(), h.instance); err != nil {
@@ -488,8 +487,8 @@ func TestRestoreSnapshotRejections(t *testing.T) {
 			if !errors.Is(err, errdefs.ErrInvalidState) {
 				t.Errorf("RestoreSnapshot of an instance on standby = %v, want ErrInvalidState", err)
 			}
-			if status := h.status(t); status.State != types.InstanceStateStandby {
-				t.Errorf("state = %s, want the instance left %s", status.State, types.InstanceStateStandby)
+			if status := h.status(t); status.State != StateStandby {
+				t.Errorf("state = %s, want the instance left %s", status.State, StateStandby)
 			}
 			if got, err := os.ReadFile(h.overlay); err != nil || !bytes.Equal(got, want) {
 				t.Errorf("overlay disk changed (%d bytes, %v), want it left as it was", len(got), err)
@@ -515,8 +514,8 @@ func TestRestoreSnapshotRejections(t *testing.T) {
 		if !errors.Is(err, errdefs.ErrInvalidState) {
 			t.Errorf("RestoreSnapshot = %v, want a complaint about the missing version", err)
 		}
-		if status := h.status(t); status.State != types.InstanceStateStopped {
-			t.Errorf("state = %s, want the instance left %s", status.State, types.InstanceStateStopped)
+		if status := h.status(t); status.State != StateStopped {
+			t.Errorf("state = %s, want the instance left %s", status.State, StateStopped)
 		}
 	})
 }
@@ -544,8 +543,8 @@ func TestFailedRestoreKeepsTheInstancesDisk(t *testing.T) {
 	}
 
 	status := h.status(t)
-	if status.State != types.InstanceStateFailed || status.StateError == "" {
-		t.Errorf("state = %s (%q), want %s with the reason", status.State, status.StateError, types.InstanceStateFailed)
+	if status.State != StateFailed || status.StateError == "" {
+		t.Errorf("state = %s (%q), want %s with the reason", status.State, status.StateError, StateFailed)
 	}
 	if got, err := os.ReadFile(h.overlay); err != nil || !bytes.Equal(got, want) {
 		t.Errorf("overlay disk = %q (%v), want the one the instance had", got, err)
@@ -561,7 +560,7 @@ func TestFailedRestoreKeepsTheInstancesDisk(t *testing.T) {
 func TestCreateSnapshotRecordsWhatTheGuestHas(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	if err := h.manager.transitionWith(h.instance, types.InstanceStateRunning, func(status *types.InstanceStatus) {
+	if err := h.manager.transitionWith(h.instance, StateRunning, func(status *Status) {
 		status.VCPUs, status.MemoryBytes = 3, 3<<30
 	}); err != nil {
 		t.Fatal(err)
@@ -583,7 +582,7 @@ func TestCreateSnapshotRecordsWhatTheGuestHas(t *testing.T) {
 func TestSnapshotGetsTimeForTheGuestsMemory(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	if err := h.manager.transitionWith(h.instance, types.InstanceStateRunning, func(status *types.InstanceStatus) {
+	if err := h.manager.transitionWith(h.instance, StateRunning, func(status *Status) {
 		status.MemoryBytes = 64 << 30
 	}); err != nil {
 		t.Fatal(err)

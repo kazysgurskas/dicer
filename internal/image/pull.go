@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/konradasb/dicer/internal/image/reference"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // pull is one image's pull, and who is waiting on it. It is shared by every
@@ -17,7 +16,7 @@ import (
 type pull struct {
 	// done is closed once image and err are set.
 	done  chan struct{}
-	image *types.Image
+	image *Image
 	err   error
 
 	cancel   context.CancelFunc
@@ -35,7 +34,7 @@ type pull struct {
 // how the pull goes for as long as this caller waits, and not after.
 func (m *Manager) sharedPull(
 	ctx context.Context, resolved *reference.ResolvedRef, onProgress ProgressFunc,
-) (*types.Image, error) {
+) (*Image, error) {
 	digest := resolved.Digest()
 
 	for {
@@ -134,7 +133,7 @@ func (r *progressRelay) remove(listener int) {
 }
 
 // report passes p to every listener.
-func (r *progressRelay) report(p types.PullProgress) {
+func (r *progressRelay) report(p PullProgress) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, f := range r.listeners {

@@ -12,8 +12,9 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/volume"
 )
 
 // TestResolveMountsAttachesExistingDisk guards the volume's whole purpose:
@@ -24,7 +25,7 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 	volumes := fakeVolumes{dir: t.TempDir()}
 	manager.volumes = volumes
 
-	definitions.volumes["data"] = types.Volume{ID: "vol-1", Name: "data"}
+	definitions.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
 	disk := volumes.Path("vol-1")
 	if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 		t.Fatal(err)
@@ -34,7 +35,7 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 	}
 
 	instance := seedInstance(t, definitions, "web")
-	instance.Mounts = []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}}
+	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
 	mounts, disks, err := manager.resolveMounts(instance)
 	if err != nil {
@@ -52,9 +53,9 @@ func TestResolveMountsMissingDisk(t *testing.T) {
 	manager, definitions, _ := newTestManager(t)
 	manager.volumes = fakeVolumes{dir: t.TempDir()}
 
-	definitions.volumes["data"] = types.Volume{ID: "vol-1", Name: "data"}
+	definitions.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
 	instance := seedInstance(t, definitions, "web")
-	instance.Mounts = []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}}
+	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
 	if _, _, err := manager.resolveMounts(instance); err == nil {
 		t.Error("resolveMounts succeeded for a volume whose disk is gone")
@@ -70,7 +71,7 @@ func TestResolveMountsMixed(t *testing.T) {
 	manager.volumes = volumes
 
 	for _, name := range []string{"a", "b"} {
-		definitions.volumes[name] = types.Volume{ID: "vol-" + name, Name: name}
+		definitions.volumes[name] = volume.Volume{ID: "vol-" + name, Name: name}
 		disk := volumes.Path("vol-" + name)
 		if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 			t.Fatal(err)
@@ -80,11 +81,11 @@ func TestResolveMountsMixed(t *testing.T) {
 		}
 	}
 	instance := seedInstance(t, definitions, "web")
-	instance.Mounts = []types.Mount{
-		{Type: types.MountTypeVolume, Source: "a", Target: "/a"},
-		{Type: types.MountTypeFile, Content: []byte("k=v"), Mode: 0o640, Target: "/etc/app.conf", ReadOnly: true},
-		{Type: types.MountTypeTmpfs, Target: "/scratch"},
-		{Type: types.MountTypeVolume, Source: "b", Target: "/b", ReadOnly: true},
+	instance.Mounts = []Mount{
+		{Type: MountTypeVolume, Source: "a", Target: "/a"},
+		{Type: MountTypeFile, Content: []byte("k=v"), Mode: 0o640, Target: "/etc/app.conf", ReadOnly: true},
+		{Type: MountTypeTmpfs, Target: "/scratch"},
+		{Type: MountTypeVolume, Source: "b", Target: "/b", ReadOnly: true},
 	}
 
 	mounts, disks, err := manager.resolveMounts(instance)
@@ -139,7 +140,7 @@ func TestStartUsesTheImageHeld(t *testing.T) {
 	if !ok {
 		t.Fatalf("images is a %T, want the fake", h.manager.images)
 	}
-	images.held = &types.Image{
+	images.held = &image.Image{
 		Name: h.instance.ImageRef, Digest: "sha256:bbbb", DiskPath: images.diskPath, Entrypoint: []string{"/bin/sh"},
 	}
 
@@ -177,15 +178,15 @@ func TestStartAppliesRateLimits(t *testing.T) {
 // The guest decides how to start the command, unless the instance says: the
 // host no longer guesses from the image's entrypoint.
 func TestInitConfigCarriesTheInitMode(t *testing.T) {
-	image := &types.Image{Entrypoint: []string{"/sbin/init"}}
+	image := &image.Image{Entrypoint: []string{"/sbin/init"}}
 	setup := &networkSetup{nic: hypervisor.NetworkInterfaceConfig{IP: "10.0.0.2"}, prefixLen: 24}
 
-	for mode, want := range map[types.InitMode]types.InitMode{
-		"":                    types.InitModeAuto,
-		types.InitModeExec:    types.InitModeExec,
-		types.InitModeSystemd: types.InitModeSystemd,
+	for mode, want := range map[guest.InitMode]guest.InitMode{
+		"":                    guest.InitModeAuto,
+		guest.InitModeExec:    guest.InitModeExec,
+		guest.InitModeSystemd: guest.InitModeSystemd,
 	} {
-		cfg := buildInitConfig(types.InstanceSpec{Name: "web", InitMode: mode}, image, nil, setup, guest.HaltPowerOff)
+		cfg := buildInitConfig(Spec{Name: "web", InitMode: mode}, image, nil, setup, guest.HaltPowerOff)
 		if cfg.Mode != want {
 			t.Errorf("instance mode %q: config mode = %q, want %q", mode, cfg.Mode, want)
 		}

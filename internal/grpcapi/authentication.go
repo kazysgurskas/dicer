@@ -18,7 +18,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/token"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // authorizationHeader is the metadata a client sends its token in, as
@@ -105,25 +104,25 @@ func (a *Authentication) authenticate(ctx context.Context, fullMethod string) (c
 // presentedToken returns the token a call was made with. It returns an
 // ErrUnauthenticated error saying why if the call has none the daemon
 // knows.
-func (a *Authentication) presentedToken(ctx context.Context) (types.Token, error) {
+func (a *Authentication) presentedToken(ctx context.Context) (token.Token, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	values := md.Get(authorizationHeader)
 	if len(values) == 0 {
-		return types.Token{}, errdefs.Unauthenticated("no authorization header")
+		return token.Token{}, errdefs.Unauthenticated("no authorization header")
 	}
 
 	value, ok := strings.CutPrefix(values[0], "Bearer ")
 	if !ok {
-		return types.Token{}, errdefs.Unauthenticated("authorization header is not Bearer")
+		return token.Token{}, errdefs.Unauthenticated("authorization header is not Bearer")
 	}
 	secret, _, err := token.Parse(value)
 	if err != nil {
-		return types.Token{}, errdefs.Unauthenticated("%v", err)
+		return token.Token{}, errdefs.Unauthenticated("%v", err)
 	}
 
 	t, err := a.definitions.TokenBySecretSHA256(token.SecretSHA256(secret))
 	if errors.Is(err, errdefs.ErrNotFound) {
-		return types.Token{}, errdefs.Unauthenticated("unknown token")
+		return token.Token{}, errdefs.Unauthenticated("unknown token")
 	}
 	return t, err
 }
@@ -131,7 +130,7 @@ func (a *Authentication) presentedToken(ctx context.Context) (types.Token, error
 // recordUse records that a token made a call, unless it was recorded less
 // than lastUseResolution ago. A failure is logged, not returned: it is no
 // reason to refuse the call.
-func (a *Authentication) recordUse(ctx context.Context, t types.Token) {
+func (a *Authentication) recordUse(ctx context.Context, t token.Token) {
 	now := time.Now()
 	if now.Sub(t.LastUsedAt) < lastUseResolution {
 		return
@@ -148,7 +147,7 @@ type tokenKey struct{}
 
 // tokenFrom returns the token a call was made with, and whether it was made
 // with one: a call over the socket needs none.
-func tokenFrom(ctx context.Context) (types.Token, bool) {
-	t, ok := ctx.Value(tokenKey{}).(types.Token)
+func tokenFrom(ctx context.Context) (token.Token, bool) {
+	t, ok := ctx.Value(tokenKey{}).(token.Token)
 	return t, ok
 }

@@ -7,7 +7,6 @@ import (
 	"context"
 
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // WarnDeprecatedHypervisorVersions logs a warning for everything that still uses a
@@ -32,7 +31,7 @@ func (m *Manager) WarnDeprecatedHypervisorVersions(ctx context.Context) {
 	}
 
 	for _, snapshot := range m.definitions.Snapshots() {
-		if snapshot.Kind != types.SnapshotKindMemory {
+		if snapshot.Kind != SnapshotKindMemory {
 			continue
 		}
 		if hypervisor.IsDeprecated(m.starters[snapshot.HypervisorType], snapshot.HypervisorVersion) {
@@ -45,7 +44,7 @@ func (m *Manager) WarnDeprecatedHypervisorVersions(ctx context.Context) {
 // guestHypervisorVersion returns the hypervisor version an instance's guest
 // is running or frozen on, or "" if it has no guest or its version cannot be
 // read.
-func (m *Manager) guestHypervisorVersion(instance types.InstanceSpec) string {
+func (m *Manager) guestHypervisorVersion(instance Spec) string {
 	if status, err := m.Status(instance); err == nil && status.State.IsActive() {
 		return status.HypervisorVersion
 	}

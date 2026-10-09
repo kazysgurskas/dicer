@@ -14,7 +14,6 @@ import (
 	"github.com/konradasb/dicer/internal/filestore"
 	imagepkg "github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -35,7 +34,7 @@ func (h *imageHandler) PullImage(
 	}
 
 	// Progress is reported on this goroutine.
-	onProgress := func(p types.PullProgress) {
+	onProgress := func(p imagepkg.PullProgress) {
 		_ = stream.Send(&dicerdv1.PullImageProgress{
 			Stage:           pullStages.toProto(p.Stage),
 			DownloadedBytes: p.DownloadedBytes,

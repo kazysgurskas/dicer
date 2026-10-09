@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/network"
+	"github.com/konradasb/dicer/internal/token"
 )
 
 func newTestManager(t *testing.T) *Manager {
@@ -30,8 +32,8 @@ func newTestManager(t *testing.T) *Manager {
 	return m
 }
 
-func testNetwork(name string) types.Network {
-	return types.Network{
+func testNetwork(name string) network.Network {
+	return network.Network{
 		ID:      "net-" + name,
 		Name:    name,
 		Subnet:  "10.0.0.0/24",
@@ -40,8 +42,8 @@ func testNetwork(name string) types.Network {
 	}
 }
 
-func testInstance(name string) types.InstanceSpec {
-	return types.InstanceSpec{
+func testInstance(name string) instance.Spec {
+	return instance.Spec{
 		ID:          "id-" + name,
 		Name:        name,
 		ImageRef:    "docker.io/library/alpine:latest",
@@ -229,7 +231,7 @@ func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 func TestCreateRejectsPathTraversal(t *testing.T) {
 	m := newTestManager(t)
 
-	err := m.CreateNetwork(types.Network{ID: "n1", Name: "../escape"})
+	err := m.CreateNetwork(network.Network{ID: "n1", Name: "../escape"})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Fatalf("CreateNetwork(../escape) = %v, want ErrInvalidArgument", err)
 	}
@@ -245,12 +247,12 @@ func TestMatchingInstancesAreThoseMatchAccepts(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		match func(types.InstanceSpec) bool
+		match func(instance.Spec) bool
 		want  []string
 	}{
-		{"none", func(types.InstanceSpec) bool { return false }, nil},
-		{"some", func(i types.InstanceSpec) bool { return i.Name != "db" }, []string{"cache", "web"}},
-		{"all", func(types.InstanceSpec) bool { return true }, []string{"cache", "db", "web"}},
+		{"none", func(instance.Spec) bool { return false }, nil},
+		{"some", func(i instance.Spec) bool { return i.Name != "db" }, []string{"cache", "web"}},
+		{"all", func(instance.Spec) bool { return true }, []string{"cache", "db", "web"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -286,7 +288,7 @@ func BenchmarkMatchingInstances(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				m.MatchingInstances(func(i types.InstanceSpec) bool { return i.Name == "instance-5" })
+				m.MatchingInstances(func(i instance.Spec) bool { return i.Name == "instance-5" })
 			}
 		})
 	}
@@ -307,7 +309,7 @@ func TestStagedSnapshotIsMovedIntoPlace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staged, "overlay.img"), []byte("disk"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := types.Snapshot{ID: "id-snap", Name: "snap", Kind: types.SnapshotKindDisk, Instance: testInstance("web")}
+	snapshot := instance.Snapshot{ID: "id-snap", Name: "snap", Kind: instance.SnapshotKindDisk, Instance: testInstance("web")}
 	if err := m.CreateSnapshot(snapshot, staged); err != nil {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
@@ -340,7 +342,7 @@ func TestCreateSnapshotOfATakenNameFails(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StageSnapshot: %v", err)
 		}
-		err = m.CreateSnapshot(types.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap"}, staged)
+		err = m.CreateSnapshot(instance.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap"}, staged)
 		if !errors.Is(err, want) {
 			t.Errorf("CreateSnapshot %d = %v, want %v", i, err, want)
 		}
@@ -369,15 +371,15 @@ func TestStagingLeftByACrashIsRemoved(t *testing.T) {
 	}
 }
 
-func testToken(name, secretHash string) types.Token {
-	return types.Token{ID: "id-" + name, Name: name, SecretSHA256: secretHash, Scopes: []types.Scope{types.ScopeAll}}
+func testToken(name, secretHash string) token.Token {
+	return token.Token{ID: "id-" + name, Name: name, SecretSHA256: secretHash, Scopes: []token.Scope{token.ScopeAll}}
 }
 
 func TestTokenIsFoundBySecretSHA256(t *testing.T) {
 	m := newTestManager(t)
 
 	const ciHash, deployHash = "aa", "bb"
-	for _, tok := range []types.Token{testToken("ci", ciHash), testToken("deploy", deployHash)} {
+	for _, tok := range []token.Token{testToken("ci", ciHash), testToken("deploy", deployHash)} {
 		if err := m.CreateToken(tok); err != nil {
 			t.Fatalf("CreateToken: %v", err)
 		}

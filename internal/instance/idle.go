@@ -6,8 +6,6 @@ package instance
 import (
 	"context"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // idleSampleInterval is how often running instances are sampled to judge
@@ -43,7 +41,7 @@ func (m *Manager) StandbyIdle(ctx context.Context) {
 // standbyIdle judges each running instance that can go on standby idle or
 // busy from a sample of its stats, and puts on standby those idle for long
 // enough.
-func (m *Manager) standbyIdle(ctx context.Context, tracker *idleTracker, sample []types.InstanceStats) {
+func (m *Manager) standbyIdle(ctx context.Context, tracker *idleTracker, sample []Stats) {
 	sampled := make(map[string]bool, len(sample))
 	for _, stats := range sample {
 		instance, err := m.definitions.Instance(stats.InstanceID)
@@ -52,7 +50,7 @@ func (m *Manager) standbyIdle(ctx context.Context, tracker *idleTracker, sample 
 		}
 		// A paused instance is not idle but stopped by a user, and its
 		// pause would count against it once it is resumed.
-		if status, err := m.Status(instance); err != nil || status.State != types.InstanceStateRunning {
+		if status, err := m.Status(instance); err != nil || status.State != StateRunning {
 			continue
 		}
 
@@ -78,14 +76,14 @@ type idleTracker struct {
 // idleSamples is an instance's last sample, and since when it has been
 // idle; zero while it is busy.
 type idleSamples struct {
-	last      types.InstanceStats
+	last      Stats
 	idleSince time.Time
 }
 
 // observe takes a sample of an instance's stats and returns how long it has
 // been idle: zero if it was busy since the last sample, or if this is the
 // first of its run.
-func (t *idleTracker) observe(stats types.InstanceStats) time.Duration {
+func (t *idleTracker) observe(stats Stats) time.Duration {
 	if t.instances == nil {
 		t.instances = make(map[string]idleSamples)
 	}
@@ -118,7 +116,7 @@ func (t *idleTracker) keepOnly(sampled map[string]bool) {
 
 // idle reports whether an instance was idle between two samples of its
 // stats.
-func idle(before, after types.InstanceStats) bool {
+func idle(before, after Stats) bool {
 	span := after.ReadAt.Sub(before.ReadAt)
 	if span <= 0 {
 		return false

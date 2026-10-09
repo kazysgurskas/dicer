@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // newTestManager returns a Manager that knows only where its files go,
@@ -320,7 +318,7 @@ func TestSaveAndLoadMetadata(t *testing.T) {
 	}
 
 	now := time.Now()
-	image := &types.Image{
+	image := &Image{
 		Name:       "docker.io/library/alpine:latest",
 		Digest:     "sha256:abc123",
 		DiskPath:   "/path/to/disk.img",

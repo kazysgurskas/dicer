@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -39,7 +39,7 @@ func newInstanceStatsServer(t *testing.T) *Server {
 	t.Helper()
 
 	s, definitions := newTestServer(t)
-	if err := definitions.CreateInstance(types.InstanceSpec{ID: "i-1", Name: "web"}); err != nil {
+	if err := definitions.CreateInstance(instance.Spec{ID: "i-1", Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	s.statsInterval = time.Millisecond
@@ -121,15 +121,15 @@ func TestInstanceStatsBatchMeasuresCPUSinceThePreviousRead(t *testing.T) {
 	started := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	read := started.Add(time.Minute)
 
-	previous := []types.InstanceStats{
+	previous := []instance.Stats{
 		{InstanceID: "i-web", StartedAt: started, ReadAt: read, CPUTime: 5 * time.Second},
 		// Restarted since, so its totals began again.
 		{InstanceID: "i-db", StartedAt: started, ReadAt: read, CPUTime: time.Hour},
 	}
-	current := []types.InstanceStats{
+	current := []instance.Stats{
 		{
 			InstanceID: "i-web", Name: "web", StartedAt: started, ReadAt: read.Add(time.Second),
-			Committed: types.Resources{VCPUs: 2, MemoryBytes: 1 << 30}, CPUTime: 6500 * time.Millisecond,
+			Committed: instance.Resources{VCPUs: 2, MemoryBytes: 1 << 30}, CPUTime: 6500 * time.Millisecond,
 			ResidentMemoryBytes: 1 << 29, DiskReadBytes: 1, DiskWrittenBytes: 2,
 			NetworkReceiveBytes: 3, NetworkTransmitBytes: 4,
 			NetworkReceiveDrops: 5, NetworkTransmitDrops: 6,

@@ -13,14 +13,14 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // SetupBridge ensures the bridge, iptables rules and gateway access for a
 // network exist. Every step is idempotent and checked on each call. The
 // network is remembered, to set up again when firewalld reloads, until
 // TeardownBridge.
-func (h *Host) SetupBridge(ctx context.Context, nw *types.Network) error {
+func (h *Host) SetupBridge(ctx context.Context, nw *network.Network) error {
 	_, ipNet, err := net.ParseCIDR(nw.Subnet)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidSubnet, err)
@@ -47,7 +47,7 @@ func (h *Host) SetupBridge(ctx context.Context, nw *types.Network) error {
 
 // TeardownBridge removes a network's bridge, with its iptables rules and its
 // gateway access. Best-effort: it logs failures rather than returning them.
-func (h *Host) TeardownBridge(ctx context.Context, nw *types.Network) {
+func (h *Host) TeardownBridge(ctx context.Context, nw *network.Network) {
 	h.mu.Lock()
 	delete(h.networks, nw.Bridge)
 	h.mu.Unlock()
@@ -64,7 +64,7 @@ func (h *Host) TeardownBridge(ctx context.Context, nw *types.Network) {
 
 // ensureBridge creates the network's bridge if it does not exist, and makes
 // sure it is up and holds the gateway address.
-func (h *Host) ensureBridge(ctx context.Context, nw *types.Network, ipNet *net.IPNet) error {
+func (h *Host) ensureBridge(ctx context.Context, nw *network.Network, ipNet *net.IPNet) error {
 	br, err := netlink.LinkByName(nw.Bridge)
 	switch {
 	case isLinkNotFound(err):

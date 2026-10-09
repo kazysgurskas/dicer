@@ -6,8 +6,13 @@ package grpcapi
 import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/guest"
+	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -41,66 +46,66 @@ func (e enum[T, P]) fromProto(p P) (T, error) {
 	return zero, errdefs.InvalidArgument("unknown %s %v", e.what, p)
 }
 
-var hypervisorTypes = enum[types.HypervisorType, dicerdv1.HypervisorType]{"hypervisor", map[types.HypervisorType]dicerdv1.HypervisorType{
-	types.HypervisorTypeCloudHypervisor: dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR,
-	types.HypervisorTypeFirecracker:     dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER,
+var hypervisorTypes = enum[hypervisor.Type, dicerdv1.HypervisorType]{"hypervisor", map[hypervisor.Type]dicerdv1.HypervisorType{
+	hypervisor.TypeCloudHypervisor: dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR,
+	hypervisor.TypeFirecracker:     dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER,
 }}
 
-var instanceStates = enum[types.InstanceState, dicerdv1.InstanceState]{"instance state", map[types.InstanceState]dicerdv1.InstanceState{
-	types.InstanceStateStopped:    dicerdv1.InstanceState_INSTANCE_STATE_STOPPED,
-	types.InstanceStateStarting:   dicerdv1.InstanceState_INSTANCE_STATE_STARTING,
-	types.InstanceStateRunning:    dicerdv1.InstanceState_INSTANCE_STATE_RUNNING,
-	types.InstanceStatePaused:     dicerdv1.InstanceState_INSTANCE_STATE_PAUSED,
-	types.InstanceStateStandby:    dicerdv1.InstanceState_INSTANCE_STATE_STANDBY,
-	types.InstanceStateStopping:   dicerdv1.InstanceState_INSTANCE_STATE_STOPPING,
-	types.InstanceStateRestarting: dicerdv1.InstanceState_INSTANCE_STATE_RESTARTING,
-	types.InstanceStateFailed:     dicerdv1.InstanceState_INSTANCE_STATE_FAILED,
+var instanceStates = enum[instance.State, dicerdv1.InstanceState]{"instance state", map[instance.State]dicerdv1.InstanceState{
+	instance.StateStopped:    dicerdv1.InstanceState_INSTANCE_STATE_STOPPED,
+	instance.StateStarting:   dicerdv1.InstanceState_INSTANCE_STATE_STARTING,
+	instance.StateRunning:    dicerdv1.InstanceState_INSTANCE_STATE_RUNNING,
+	instance.StatePaused:     dicerdv1.InstanceState_INSTANCE_STATE_PAUSED,
+	instance.StateStandby:    dicerdv1.InstanceState_INSTANCE_STATE_STANDBY,
+	instance.StateStopping:   dicerdv1.InstanceState_INSTANCE_STATE_STOPPING,
+	instance.StateRestarting: dicerdv1.InstanceState_INSTANCE_STATE_RESTARTING,
+	instance.StateFailed:     dicerdv1.InstanceState_INSTANCE_STATE_FAILED,
 }}
 
-var pullPolicies = enum[types.PullPolicy, dicerdv1.PullPolicy]{"pull policy", map[types.PullPolicy]dicerdv1.PullPolicy{
-	types.PullPolicyMissing: dicerdv1.PullPolicy_PULL_POLICY_MISSING,
-	types.PullPolicyAlways:  dicerdv1.PullPolicy_PULL_POLICY_ALWAYS,
-	types.PullPolicyNever:   dicerdv1.PullPolicy_PULL_POLICY_NEVER,
+var pullPolicies = enum[image.PullPolicy, dicerdv1.PullPolicy]{"pull policy", map[image.PullPolicy]dicerdv1.PullPolicy{
+	image.PullPolicyMissing: dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+	image.PullPolicyAlways:  dicerdv1.PullPolicy_PULL_POLICY_ALWAYS,
+	image.PullPolicyNever:   dicerdv1.PullPolicy_PULL_POLICY_NEVER,
 }}
 
-var initModes = enum[types.InitMode, dicerdv1.InitMode]{"init mode", map[types.InitMode]dicerdv1.InitMode{
-	types.InitModeAuto:    dicerdv1.InitMode_INIT_MODE_AUTO,
-	types.InitModeExec:    dicerdv1.InitMode_INIT_MODE_EXEC,
-	types.InitModeSystemd: dicerdv1.InitMode_INIT_MODE_SYSTEMD,
+var initModes = enum[guest.InitMode, dicerdv1.InitMode]{"init mode", map[guest.InitMode]dicerdv1.InitMode{
+	guest.InitModeAuto:    dicerdv1.InitMode_INIT_MODE_AUTO,
+	guest.InitModeExec:    dicerdv1.InitMode_INIT_MODE_EXEC,
+	guest.InitModeSystemd: dicerdv1.InitMode_INIT_MODE_SYSTEMD,
 }}
 
-var restartModes = enum[types.RestartMode, dicerdv1.RestartMode]{"restart policy", map[types.RestartMode]dicerdv1.RestartMode{
-	types.RestartModeNo:            dicerdv1.RestartMode_RESTART_MODE_NO,
-	types.RestartModeOnFailure:     dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE,
-	types.RestartModeUnlessStopped: dicerdv1.RestartMode_RESTART_MODE_UNLESS_STOPPED,
-	types.RestartModeAlways:        dicerdv1.RestartMode_RESTART_MODE_ALWAYS,
+var restartModes = enum[instance.RestartMode, dicerdv1.RestartMode]{"restart policy", map[instance.RestartMode]dicerdv1.RestartMode{
+	instance.RestartModeNo:            dicerdv1.RestartMode_RESTART_MODE_NO,
+	instance.RestartModeOnFailure:     dicerdv1.RestartMode_RESTART_MODE_ON_FAILURE,
+	instance.RestartModeUnlessStopped: dicerdv1.RestartMode_RESTART_MODE_UNLESS_STOPPED,
+	instance.RestartModeAlways:        dicerdv1.RestartMode_RESTART_MODE_ALWAYS,
 }}
 
-var mountTypes = enum[types.MountType, dicerdv1.MountType]{"mount type", map[types.MountType]dicerdv1.MountType{
-	types.MountTypeVolume: dicerdv1.MountType_MOUNT_TYPE_VOLUME,
-	types.MountTypeFile:   dicerdv1.MountType_MOUNT_TYPE_FILE,
-	types.MountTypeTmpfs:  dicerdv1.MountType_MOUNT_TYPE_TMPFS,
+var mountTypes = enum[instance.MountType, dicerdv1.MountType]{"mount type", map[instance.MountType]dicerdv1.MountType{
+	instance.MountTypeVolume: dicerdv1.MountType_MOUNT_TYPE_VOLUME,
+	instance.MountTypeFile:   dicerdv1.MountType_MOUNT_TYPE_FILE,
+	instance.MountTypeTmpfs:  dicerdv1.MountType_MOUNT_TYPE_TMPFS,
 }}
 
 var protocols = enum[string, dicerdv1.Protocol]{"protocol", map[string]dicerdv1.Protocol{
-	types.ProtocolTCP: dicerdv1.Protocol_PROTOCOL_TCP,
-	types.ProtocolUDP: dicerdv1.Protocol_PROTOCOL_UDP,
+	network.ProtocolTCP: dicerdv1.Protocol_PROTOCOL_TCP,
+	network.ProtocolUDP: dicerdv1.Protocol_PROTOCOL_UDP,
 }}
 
-var healthStatuses = enum[types.HealthStatus, dicerdv1.HealthStatus]{"health status", map[types.HealthStatus]dicerdv1.HealthStatus{
-	types.HealthStatusStarting:  dicerdv1.HealthStatus_HEALTH_STATUS_STARTING,
-	types.HealthStatusHealthy:   dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY,
-	types.HealthStatusUnhealthy: dicerdv1.HealthStatus_HEALTH_STATUS_UNHEALTHY,
+var healthStatuses = enum[health.Status, dicerdv1.HealthStatus]{"health status", map[health.Status]dicerdv1.HealthStatus{
+	health.StatusStarting:  dicerdv1.HealthStatus_HEALTH_STATUS_STARTING,
+	health.StatusHealthy:   dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY,
+	health.StatusUnhealthy: dicerdv1.HealthStatus_HEALTH_STATUS_UNHEALTHY,
 }}
 
 var architectures = enum[string, dicerdv1.Architecture]{"architecture", map[string]dicerdv1.Architecture{
-	types.ArchitectureX86_64:  dicerdv1.Architecture_ARCHITECTURE_X86_64,
-	types.ArchitectureAArch64: dicerdv1.Architecture_ARCHITECTURE_AARCH64,
+	kernel.ArchitectureX86_64:  dicerdv1.Architecture_ARCHITECTURE_X86_64,
+	kernel.ArchitectureAArch64: dicerdv1.Architecture_ARCHITECTURE_AARCH64,
 }}
 
-var snapshotKinds = enum[types.SnapshotKind, dicerdv1.SnapshotKind]{"snapshot kind", map[types.SnapshotKind]dicerdv1.SnapshotKind{
-	types.SnapshotKindMemory: dicerdv1.SnapshotKind_SNAPSHOT_KIND_MEMORY,
-	types.SnapshotKindDisk:   dicerdv1.SnapshotKind_SNAPSHOT_KIND_DISK,
+var snapshotKinds = enum[instance.SnapshotKind, dicerdv1.SnapshotKind]{"snapshot kind", map[instance.SnapshotKind]dicerdv1.SnapshotKind{
+	instance.SnapshotKindMemory: dicerdv1.SnapshotKind_SNAPSHOT_KIND_MEMORY,
+	instance.SnapshotKindDisk:   dicerdv1.SnapshotKind_SNAPSHOT_KIND_DISK,
 }}
 
 var eventKinds = enum[events.Kind, dicerdv1.EventKind]{"event kind", map[events.Kind]dicerdv1.EventKind{
@@ -139,9 +144,9 @@ var logSources = enum[instance.LogSource, dicerdv1.LogSource]{"log source", map[
 	instance.LogSourceHypervisor: dicerdv1.LogSource_LOG_SOURCE_HYPERVISOR,
 }}
 
-var pullStages = enum[types.PullStage, dicerdv1.PullStage]{"pull stage", map[types.PullStage]dicerdv1.PullStage{
-	types.PullStageResolving:   dicerdv1.PullStage_PULL_STAGE_RESOLVING,
-	types.PullStageDownloading: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING,
-	types.PullStageUnpacking:   dicerdv1.PullStage_PULL_STAGE_UNPACKING,
-	types.PullStageConverting:  dicerdv1.PullStage_PULL_STAGE_CONVERTING,
+var pullStages = enum[image.PullStage, dicerdv1.PullStage]{"pull stage", map[image.PullStage]dicerdv1.PullStage{
+	image.PullStageResolving:   dicerdv1.PullStage_PULL_STAGE_RESOLVING,
+	image.PullStageDownloading: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING,
+	image.PullStageUnpacking:   dicerdv1.PullStage_PULL_STAGE_UNPACKING,
+	image.PullStageConverting:  dicerdv1.PullStage_PULL_STAGE_CONVERTING,
 }}

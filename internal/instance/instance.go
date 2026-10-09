@@ -1,295 +1,434 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package instance runs instances as virtual machines and manages their
-// lifecycle: starting, stopping, pausing and deleting them.
-//
-// Operations are synchronous; a failed one unwinds what it allocated. Every
-// host resource an instance holds is derived from its ID, so recovery after an
-// unclean shutdown needs no journal. See recover.go.
 package instance
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
-	"net"
-	"sync"
+	"slices"
+	"strings"
 	"time"
 
-	"github.com/prometheus/procfs"
-
-	"github.com/konradasb/dicer/internal/defaults"
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/guest"
+	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/naming"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
-	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
-// Definitions stores the instance, network, volume and kernel definitions.
-type Definitions interface {
-	CreateInstance(instance types.InstanceSpec) error
-	Instance(nameOrID string) (types.InstanceSpec, error)
-	Instances() []types.InstanceSpec
-	MatchingInstances(match func(types.InstanceSpec) bool) []types.InstanceSpec
-	UpdateInstance(instance types.InstanceSpec) error
-	RenameInstance(nameOrID string, renamed types.InstanceSpec) error
-	DeleteInstance(nameOrID string) error
-	// InstanceDir is the persistent directory holding an instance's
-	// definition and overlay disk.
-	InstanceDir(name string) string
-
-	// StageSnapshot returns an empty directory to write a snapshot's files
-	// in, which CreateSnapshot moves into place.
-	StageSnapshot() (string, error)
-	CreateSnapshot(snapshot types.Snapshot, staged string) error
-	Snapshot(nameOrID string) (types.Snapshot, error)
-	Snapshots() []types.Snapshot
-	DeleteSnapshot(nameOrID string) error
-	// SnapshotDir is the directory holding a snapshot's files.
-	SnapshotDir(name string) string
-
-	Network(nameOrID string) (types.Network, error)
-	Networks() []types.Network
-	Kernel(nameOrID string) (types.Kernel, error)
-	Volume(nameOrID string) (types.Volume, error)
+// Instance is a virtual machine. Spec is the desired state, persisted across
+// reboots. Status is the observed state, kept in the runtime directory and
+// empty after a reboot.
+type Instance struct {
+	Spec   Spec   `json:"spec"`
+	Status Status `json:"status"`
 }
 
-// Networks assigns and releases guest addresses.
-type Networks interface {
-	Allocate(n types.Network, instanceID, staticIP string) (types.NetworkAllocation, error)
-	Allocation(networkName, instanceID string) (types.NetworkAllocation, error)
-	InstanceAt(networkName, ip string) (instanceID string, ok bool)
-	Release(networkName, instanceID string) error
-	Reconcile(networks []string, live map[string]struct{}) (int, error)
+// Spec is the persistent definition of a virtual machine. Referenced kernels,
+// networks and mounts are resolved at each start.
+type Spec struct {
+	ID                string          `yaml:"id" json:"id"`
+	Name              string          `yaml:"name" json:"name"`
+	Hostname          string          `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	ImageRef          string          `yaml:"image_ref" json:"image_ref"`
+	HypervisorType    hypervisor.Type `yaml:"hypervisor_type,omitempty" json:"hypervisor_type,omitempty"`
+	HypervisorVersion string          `yaml:"hypervisor_version,omitempty" json:"hypervisor_version,omitempty"`
+	KernelName        string          `yaml:"kernel_name" json:"kernel_name"`
+	KernelArgs        string          `yaml:"kernel_args,omitempty" json:"kernel_args,omitempty"`
+	VCPUs             int             `yaml:"vcpus" json:"vcpus"`
+	MemoryBytes       int64           `yaml:"memory_bytes" json:"memory_bytes"`
+	DiskBytes         int64           `yaml:"disk_bytes" json:"disk_bytes"`
+	NetworkName       string          `yaml:"network_name" json:"network_name"`
+	StaticIP          string          `yaml:"static_ip,omitempty" json:"static_ip,omitempty"`
+
+	// MaxVCPUs and MaxMemoryBytes are the most the instance can be resized
+	// to while it runs: it boots with room for them. Zero leaves no room.
+	MaxVCPUs       int   `yaml:"max_vcpus,omitempty" json:"max_vcpus,omitempty"`
+	MaxMemoryBytes int64 `yaml:"max_memory_bytes,omitempty" json:"max_memory_bytes,omitempty"`
+
+	// DiskBytesPerSecond and DiskIOPS limit the bytes and operations per
+	// second each of the instance's disks is read and written at.
+	// UploadBytesPerSecond and DownloadBytesPerSecond limit the bytes per
+	// second its guest sends and receives. Zero is unlimited.
+	DiskBytesPerSecond     int64 `yaml:"disk_bytes_per_second,omitempty" json:"disk_bytes_per_second,omitempty"`
+	DiskIOPS               int64 `yaml:"disk_iops,omitempty" json:"disk_iops,omitempty"`
+	UploadBytesPerSecond   int64 `yaml:"upload_bytes_per_second,omitempty" json:"upload_bytes_per_second,omitempty"`
+	DownloadBytesPerSecond int64 `yaml:"download_bytes_per_second,omitempty" json:"download_bytes_per_second,omitempty"`
+
+	// StandbyAfter is how long the instance may be idle, running but doing
+	// next to nothing, before it is put on standby. Zero is never.
+	StandbyAfter time.Duration `yaml:"standby_after,omitempty" json:"standby_after,omitempty"`
+
+	Ports  []network.PortMapping `yaml:"ports,omitempty" json:"ports,omitempty"`
+	Mounts []Mount               `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+	Env    map[string]string     `yaml:"env,omitempty" json:"env,omitempty"`
+	Cmd    []string              `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+
+	// InitMode is how the guest starts the command: auto, exec or systemd.
+	// Empty is auto: systemd if the command is systemd, else exec.
+	InitMode guest.InitMode `yaml:"init_mode,omitempty" json:"init_mode,omitempty"`
+
+	Labels  map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
+	Restart RestartPolicy     `yaml:"restart,omitempty" json:"restart,omitzero"`
+
+	// HealthCheck is how the instance's health is checked, overriding its
+	// image's; a Disabled one switches the image's off. Nil means the
+	// image's, if it declares one.
+	HealthCheck *health.Check `yaml:"healthcheck,omitempty" json:"health_check,omitempty"`
+
+	CreatedAt time.Time `yaml:"created_at" json:"created_at,omitzero"`
+	UpdatedAt time.Time `yaml:"updated_at" json:"updated_at,omitzero"`
+
+	// RemoveOnExit deletes the instance once it stops, unless its restart
+	// policy will start it again.
+	RemoveOnExit bool `yaml:"remove_on_exit,omitempty" json:"remove_on_exit,omitempty"`
+
+	// StoppedByUser records that a user stopped the instance and has not
+	// started it since. An unless-stopped instance is not started at boot
+	// while it is set.
+	StoppedByUser bool `yaml:"stopped_by_user,omitempty" json:"stopped_by_user,omitempty"`
 }
 
-// Images provides the bootable disk for an image reference.
-type Images interface {
-	Image(ref string) (*types.Image, error)
-	Ensure(ctx context.Context, ref string, policy types.PullPolicy) (*types.Image, error)
+// Resources returns what the instance asks for.
+func (s Spec) Resources() Resources {
+	return Resources{VCPUs: s.VCPUs, MemoryBytes: s.MemoryBytes}
 }
 
-// Kernels finds a kernel's binary on the host.
-type Kernels interface {
-	Path(k types.Kernel) (string, error)
+// MaxResources returns the most the instance can hold: its maximums where
+// set, otherwise what it asks for.
+func (s Spec) MaxResources() Resources {
+	return Resources{VCPUs: max(s.VCPUs, s.MaxVCPUs), MemoryBytes: max(s.MemoryBytes, s.MaxMemoryBytes)}
 }
 
-// Volumes locates the disk backing a volume.
-type Volumes interface {
-	Path(id string) string
+// Validate returns an invalid argument error if the instance cannot be run
+// as defined, as far as the definition alone can tell: an invalid name or
+// hostname, no image, a size it cannot have, a maximum below what it asks
+// for or that its hypervisor cannot honour, a negative rate limit, a request
+// to be deleted when it stops that its restart policy contradicts, or
+// invalid or clashing ports or mounts.
+func (s Spec) Validate() error {
+	if err := naming.Validate(s.Name); err != nil {
+		return err
+	}
+	if err := naming.ValidateHostname(s.Hostname); err != nil {
+		return err
+	}
+
+	switch {
+	case s.ImageRef == "":
+		return errdefs.InvalidArgument("an instance needs an image")
+	case s.VCPUs <= 0:
+		return errdefs.InvalidArgument("an instance needs at least 1 vCPU")
+	case s.MemoryBytes <= 0:
+		return errdefs.InvalidArgument("an instance needs more than 0 bytes of memory")
+	case s.DiskBytes <= 0:
+		return errdefs.InvalidArgument("an instance needs a disk of more than 0 bytes")
+	case s.MaxVCPUs < 0 || s.MaxVCPUs > 0 && s.MaxVCPUs < s.VCPUs:
+		return errdefs.InvalidArgument("max_vcpus %d is below the instance's %s",
+			s.MaxVCPUs, humanize.Count(s.VCPUs, "vCPU"))
+	case s.MaxMemoryBytes < 0 || s.MaxMemoryBytes > 0 && s.MaxMemoryBytes < s.MemoryBytes:
+		return errdefs.InvalidArgument("max_memory_bytes %s is below the instance's %s memory",
+			humanize.Bytes(s.MaxMemoryBytes), humanize.Bytes(s.MemoryBytes))
+	case s.MaxVCPUs > 0 && s.EffectiveHypervisorType() == hypervisor.TypeFirecracker:
+		return errdefs.InvalidArgument("firecracker cannot add vCPUs to a running guest: leave max_vcpus unset, " +
+			"or use cloud-hypervisor")
+	case s.DiskBytesPerSecond < 0 || s.DiskIOPS < 0 || s.UploadBytesPerSecond < 0 || s.DownloadBytesPerSecond < 0:
+		return errdefs.InvalidArgument("a rate limit cannot be negative: give 0 for no limit")
+	case s.StandbyAfter != 0 && s.StandbyAfter < MinStandbyAfter:
+		return errdefs.InvalidArgument("standby_after %s is too short: idleness is judged a minute at a time, "+
+			"so give %s or more, or 0 for never", s.StandbyAfter, MinStandbyAfter)
+	case s.RemoveOnExit && s.Restart.Restarts():
+		return errdefs.InvalidArgument(
+			"an instance cannot be deleted when it stops and restarted when it stops: "+
+				"the restart policy is %s, so drop it or drop the request to delete it", s.Restart)
+	}
+
+	for i, port := range s.Ports {
+		if err := port.Validate(); err != nil {
+			return err
+		}
+		for _, prev := range s.Ports[:i] {
+			if port.Overlaps(prev) {
+				return errdefs.InvalidArgument("port %s overlaps port %s", port, prev)
+			}
+		}
+	}
+	return validateMounts(s.Mounts)
 }
 
-// Initrds provides the initramfs guests boot from.
-type Initrds interface {
-	Prepare(ctx context.Context) (string, error)
+// VolumeMount returns the mount by which the instance attaches the named
+// volume, and false if it attaches none.
+func (s Spec) VolumeMount(name string) (Mount, bool) {
+	for _, m := range s.Mounts {
+		if m.Type == MountTypeVolume && m.Source == name {
+			return m, true
+		}
+	}
+
+	return Mount{}, false
 }
 
-// HostNetwork attaches an instance to its network on this host.
-type HostNetwork interface {
-	SetupBridge(ctx context.Context, nw *types.Network) error
-	CreateTAP(ctx context.Context, nw *types.Network, allocation *types.NetworkAllocation, bandwidth network.Bandwidth) error
-	RemoveTAP(ctx context.Context, nw *types.Network, instanceID string)
-	// DisconnectTAP detaches an instance's TAP device from the bridge, and
-	// ConnectTAP attaches it again.
-	DisconnectTAP(ctx context.Context, nw *types.Network, instanceID string) error
-	ConnectTAP(ctx context.Context, nw *types.Network, instanceID string) error
-	TeardownBridge(ctx context.Context, nw *types.Network)
+// EffectiveHypervisorType returns the hypervisor the instance runs on,
+// filling in the default for a spec that names none.
+func (s Spec) EffectiveHypervisorType() hypervisor.Type {
+	if s.HypervisorType == "" {
+		return hypervisor.DefaultType
+	}
 
-	// PublishPorts forwards host ports to the instance's address, replacing
-	// any it already published.
-	PublishPorts(ctx context.Context, nw *types.Network, allocation *types.NetworkAllocation, ports []types.PortMapping) error
-	// UnpublishPorts removes every port the instance published.
-	UnpublishPorts(ctx context.Context, instanceID string)
+	return s.HypervisorType
 }
 
-// DNSServers answer the DNS queries of each network's guests, on the
-// network's gateway address, which is the nameserver they are given while
-// it is served.
-type DNSServers interface {
-	// Serve starts serving a network, unless it already is. The network's
-	// bridge must be up.
-	Serve(ctx context.Context, nw types.Network) error
-	// Stop stops serving a network.
-	Stop(network string)
+// Status is the observed state of an instance. It lives under the runtime
+// directory, so a host reboot discards it.
+type Status struct {
+	InstanceID string `json:"instance_id,omitempty"`
+	State      State  `json:"state"`
+	StateError string `json:"state_error,omitempty"`
+
+	VMMPID               *int   `json:"hypervisor_pid,omitempty"`
+	HypervisorSocketPath string `json:"hypervisor_socket_path,omitempty"`
+	HypervisorVersion    string `json:"hypervisor_version,omitempty"`
+	VsockCID             int64  `json:"vsock_cid,omitempty"`
+	VsockPath            string `json:"vsock_path,omitempty"`
+
+	// VCPUs and MemoryBytes are what the instance was admitted with. The
+	// spec may have been edited since.
+	VCPUs       int   `json:"vcpus,omitempty"`
+	MemoryBytes int64 `json:"memory_bytes,omitempty"`
+
+	// ImageDigest is the image the guest booted from.
+	ImageDigest string `json:"image_digest,omitempty"`
+
+	// IP and MAC are the instance's address, held while it is defined.
+	IP  string `json:"ip,omitempty"`
+	MAC string `json:"mac,omitempty"`
+
+	// HealthCheck is the check this run was started with, or nil for none.
+	HealthCheck *health.Check `json:"health_check,omitempty"`
+
+	// Health is what that check has found, or nil if there is none.
+	Health *health.Health `json:"health,omitempty"`
+
+	StartedAt time.Time `json:"started_at,omitzero"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
+
+	// ExitCode is the exit code the guest reported when it last ended on
+	// its own, if it reported one.
+	ExitCode *int `json:"exit_code,omitempty"`
+
+	// FinishedAt is when the guest last ended without being asked to.
+	FinishedAt time.Time `json:"finished_at,omitzero"`
+
+	// RestartCount is how many times in a row the restart policy has
+	// started the instance again. A start a user asks for resets it.
+	RestartCount int `json:"restart_count,omitempty"`
+
+	// NextRestartAt is when a Restarting instance is due to start again.
+	NextRestartAt time.Time `json:"next_restart_at,omitzero"`
 }
 
-// Config holds the dependencies for a Manager.
-type Config struct {
-	Definitions Definitions
-	Networks    Networks
+// HeldResources returns what the instance holds of the host's CPU and
+// memory, which is nothing unless its state says it holds anything.
+func (s Status) HeldResources() Resources {
+	if !s.State.HoldsResources() {
+		return Resources{}
+	}
 
-	// RunDir holds ephemeral runtime state. Defaults to defaults.RunDir.
-	RunDir string
-
-	Images      Images
-	Kernels     Kernels
-	Volumes     Volumes
-	Initrds     Initrds
-	HostNetwork HostNetwork
-	Starters    map[types.HypervisorType][]hypervisor.Starter
-
-	// DNSServers, if set, lets guests find each other by name. Without it,
-	// they are given the network's upstream nameservers.
-	DNSServers DNSServers
-
-	// Capacity limits the CPU and memory instances may be given. The zero
-	// value is unlimited.
-	Capacity types.Capacity
-
-	// Metrics, Events and Logger are optional.
-	Metrics Metrics
-	Events  Recorder
-	Logger  *slog.Logger
+	return Resources{VCPUs: s.VCPUs, MemoryBytes: s.MemoryBytes}
 }
 
-// Manager drives instance lifecycle operations and owns the status that
-// describes them.
-type Manager struct {
-	definitions Definitions
-	networks    Networks
-	runDir      string
-	images      Images
-	kernels     Kernels
-	volumes     Volumes
-	initrds     Initrds
-	hostNetwork HostNetwork
-	starters    map[types.HypervisorType][]hypervisor.Starter
-	dnsServers  DNSServers
-	capacity    types.Capacity
-	metrics     Metrics
-	events      Recorder
-	logger      *slog.Logger
+// MinStandbyAfter is the shortest InstanceSpec.StandbyAfter: how idle an
+// instance is, is judged a minute at a time.
+const MinStandbyAfter = time.Minute
 
-	// procDir is where procfs is mounted, from which stats are read.
-	procDir string
-
-	// Seams replaced by tests.
-	provisionConfigDisk func(ctx context.Context, path string, cfg *guest.Config) error
-	attach              func(pid int, arg string) (*process.Process, error)
-	probe               func(ctx context.Context, vsockPath string, check types.HealthCheck) (probeResult, error)
-	shutdownGuest       func(ctx context.Context, vsockPath string) error
-	setGuestClock       func(ctx context.Context, vsockPath string, t time.Time) error
-	setGuestIdentity    func(ctx context.Context, vsockPath string, req *diceragentv1.SetIdentityRequest) error
-	restartWait         func(at time.Time) time.Duration
-	dialGuest           func(ctx context.Context, address string) (net.Conn, error)
-
-	// shutdownTimeout is how long a VMM asked to exit has before it is
-	// killed.
-	shutdownTimeout time.Duration
-
-	// stopGracePeriod is how long a guest asked to shut down has to do it.
-	stopGracePeriod time.Duration
-
-	// admissionMu serialises admission. See admission.go.
-	admissionMu sync.Mutex
-
-	// locks holds a mutex per instance ID. Locks are never removed, since
-	// an operation may still be waiting on one.
-	locks sync.Map
-
-	// networkLocks holds a mutex per network name, serialising bridge
-	// setup and teardown.
-	networkLocks sync.Map
-
-	// vmms supervises each active instance's VMM, by instance ID. Entries
-	// change only under that instance's lock.
-	vmmsMu sync.Mutex
-	vmms   map[string]*supervised
-
-	// wakers listen on the ports of instances on standby to wake them, by
-	// instance ID. Entries change only under that instance's lock. See
-	// wake.go.
-	wakersMu sync.Mutex
-	wakers   map[string]*waker
-
-	// restarts holds each Restarting instance's pending restart, by
-	// instance ID; restarting counts restarts under way.
-	restartsMu sync.Mutex
-	restarts   map[string]*pendingRestart
-	restarting sync.WaitGroup
-
-	// closing is closed by Close to stop watchers and pending restarts.
-	closing   chan struct{}
-	closeOnce sync.Once
-	watchers  sync.WaitGroup
-}
+// State is the lifecycle state of an instance.
+type State string
 
 const (
-	defaultShutdownTimeout = 5 * time.Second
-	defaultStopGracePeriod = 10 * time.Second
+	// StateStopped means the instance is defined but not running. A freshly
+	// created instance starts here.
+	StateStopped State = "Stopped"
+
+	// StateStarting means a start is in progress. An instance found in this
+	// state at daemon boot crashed mid-start and is cleaned up.
+	StateStarting State = "Starting"
+
+	// StateRunning means the VM is executing.
+	StateRunning State = "Running"
+
+	// StatePaused means the vCPUs are halted but the VM is resident.
+	StatePaused State = "Paused"
+
+	// StateStandby means the guest is frozen to disk, its VMM ended:
+	// it holds no CPU or memory, but keeps its address, host ports and
+	// writable volumes, and a start resumes it where it was.
+	StateStandby State = "Standby"
+
+	// StateStopping means a shutdown is in progress.
+	StateStopping State = "Stopping"
+
+	// StateRestarting means the instance ended without being asked to, and
+	// its restart policy will start it again at
+	// InstanceStatus.NextRestartAt. It holds nothing in the meantime.
+	StateRestarting State = "Restarting"
+
+	// StateFailed means the last operation failed; see
+	// InstanceStatus.StateError.
+	StateFailed State = "Failed"
 )
 
-// NewManager creates a Manager.
-func NewManager(cfg Config) *Manager {
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
-	}
-	if cfg.RunDir == "" {
-		cfg.RunDir = defaults.RunDir
-	}
-	if cfg.Metrics == nil {
-		cfg.Metrics = discardMetrics{}
-	}
-	if cfg.Events == nil {
-		cfg.Events = discardRecorder{}
-	}
-
-	return &Manager{
-		definitions: cfg.Definitions,
-		networks:    cfg.Networks,
-		runDir:      cfg.RunDir,
-		images:      cfg.Images,
-		kernels:     cfg.Kernels,
-		volumes:     cfg.Volumes,
-		initrds:     cfg.Initrds,
-		hostNetwork: cfg.HostNetwork,
-		starters:    cfg.Starters,
-		dnsServers:  cfg.DNSServers,
-		capacity:    cfg.Capacity,
-		metrics:     cfg.Metrics,
-		events:      cfg.Events,
-		logger:      cfg.Logger.With("component", "instance"),
-		procDir:     procfs.DefaultMountPoint,
-
-		provisionConfigDisk: provisionConfigDisk,
-		attach:              process.Attach,
-		probe:               probeGuest,
-
-		shutdownTimeout:  defaultShutdownTimeout,
-		stopGracePeriod:  defaultStopGracePeriod,
-		shutdownGuest:    shutdownGuest,
-		setGuestClock:    setGuestClock,
-		setGuestIdentity: setGuestIdentity,
-		restartWait:      time.Until,
-		dialGuest:        dialGuest,
-
-		vmms:     make(map[string]*supervised),
-		wakers:   make(map[string]*waker),
-		restarts: make(map[string]*pendingRestart),
-		closing:  make(chan struct{}),
+// States returns every lifecycle state, in the order an instance normally moves
+// through them.
+func States() []State {
+	return []State{
+		StateStopped,
+		StateStarting,
+		StateRunning,
+		StatePaused,
+		StateStandby,
+		StateStopping,
+		StateRestarting,
+		StateFailed,
 	}
 }
 
-// lock returns the mutex that serialises operations on one instance.
-func (m *Manager) lock(id string) *sync.Mutex {
-	return mutexIn(&m.locks, id)
+// allowedTransitions maps each state to the states it may move to.
+var allowedTransitions = map[State][]State{
+	StateStopped: {StateStarting},
+	StateStarting: {
+		StateRunning, StateRestarting, StateFailed,
+	},
+	StateRunning: {
+		StatePaused, StateStopping, StateStopped,
+		StateRestarting, StateFailed,
+	},
+	StatePaused: {
+		StateRunning, StateStopping, StateStopped,
+		StateRestarting, StateFailed,
+	},
+	StateStandby:  {StateStarting},
+	StateStopping: {StateStopped, StateFailed},
+	StateRestarting: {
+		StateStarting, StateStopping, StateFailed,
+	},
+	StateFailed: {
+		StateStarting, StateStopping, StateStopped,
+	},
 }
 
-// networkLock returns the mutex that serialises changes to one network's
-// bridge.
-func (m *Manager) networkLock(name string) *sync.Mutex {
-	return mutexIn(&m.networkLocks, name)
+// CanTransitionTo reports whether a transition to target is allowed.
+func (s State) CanTransitionTo(target State) bool {
+	return slices.Contains(allowedTransitions[s], target)
 }
 
-// mutexIn returns the mutex locks holds for key, adding one if there is none.
-func mutexIn(locks *sync.Map, key string) *sync.Mutex {
-	v, _ := locks.LoadOrStore(key, &sync.Mutex{})
-	mu, ok := v.(*sync.Mutex)
-	if !ok {
-		panic(fmt.Sprintf("lock for %q has type %T", key, v))
+// HoldsResources reports whether an instance in the state holds the CPU and
+// memory it was admitted with: starting, running or paused.
+func (s State) HoldsResources() bool {
+	return s == StateStarting || s.IsActive()
+}
+
+// HoldsPortsAndVolumes reports whether an instance in the state keeps its
+// published host ports and writable volumes to itself: one that holds
+// resources, is stopping, or is on standby, to resume with them.
+func (s State) HoldsPortsAndVolumes() bool {
+	return s.HoldsResources() || s == StateStopping || s == StateStandby
+}
+
+// IsActive reports whether the state implies a live VMM.
+func (s State) IsActive() bool {
+	return s == StateRunning || s == StatePaused
+}
+
+// String returns the state as it is written: "Running".
+func (s State) String() string { return string(s) }
+
+// Lowercase returns the state as a sentence says it after "is": "running",
+// not "Running", and "on standby".
+func (s State) Lowercase() string {
+	if s == StateStandby {
+		return "on standby"
 	}
-	return mu
+	return strings.ToLower(string(s))
+}
+
+// RestartMode is when an instance is started again without being asked.
+type RestartMode string
+
+// The restart modes, as Docker names them.
+const (
+	// RestartModeNo leaves an instance that ended as it is.
+	RestartModeNo RestartMode = "no"
+
+	// RestartModeOnFailure restarts an instance whose end was not clean.
+	RestartModeOnFailure RestartMode = "on-failure"
+
+	// RestartModeUnlessStopped restarts an instance however it ended, and
+	// starts it when the daemon starts, unless it was last stopped by a
+	// user.
+	RestartModeUnlessStopped RestartMode = "unless-stopped"
+
+	// RestartModeAlways restarts an instance however it ended, and starts it
+	// when the daemon starts, even if it was last stopped by a user.
+	RestartModeAlways RestartMode = "always"
+)
+
+// RestartPolicy is what the daemon does when an instance ends without being
+// asked to. Restarts use exponential backoff.
+type RestartPolicy struct {
+	Mode RestartMode `yaml:"mode,omitempty" json:"mode,omitempty"`
+
+	// MaxRetries is how many times in a row an on-failure instance is
+	// restarted before it is left Failed. Zero means no limit.
+	MaxRetries int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+}
+
+// Validate returns an invalid argument error if the daemon cannot follow
+// the policy.
+func (p RestartPolicy) Validate() error {
+	switch p.Mode {
+	case "", RestartModeNo, RestartModeUnlessStopped, RestartModeAlways:
+		if p.MaxRetries != 0 {
+			return errdefs.InvalidArgument("a retry limit applies only to the on-failure restart policy")
+		}
+	case RestartModeOnFailure:
+		if p.MaxRetries < 0 {
+			return errdefs.InvalidArgument("the retry limit cannot be negative")
+		}
+	default:
+		return errdefs.InvalidArgument("unknown restart policy %q: want no, on-failure[:N], unless-stopped or always", p.Mode)
+	}
+
+	return nil
+}
+
+// Restarts reports whether the policy ever starts an instance again.
+func (p RestartPolicy) Restarts() bool {
+	return p.Mode != "" && p.Mode != RestartModeNo
+}
+
+// StartsOnBoot reports whether an instance with this policy is started when
+// the daemon starts.
+func (p RestartPolicy) StartsOnBoot(stoppedByUser bool) bool {
+	switch p.Mode {
+	case RestartModeAlways:
+		return true
+	case RestartModeUnlessStopped:
+		return !stoppedByUser
+	default:
+		return false
+	}
+}
+
+// String is the policy as the CLI and API take it: "on-failure:5".
+func (p RestartPolicy) String() string {
+	if p.Mode == "" {
+		return string(RestartModeNo)
+	}
+	if p.MaxRetries > 0 {
+		return fmt.Sprintf("%s:%d", p.Mode, p.MaxRetries)
+	}
+
+	return string(p.Mode)
 }

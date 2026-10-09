@@ -11,13 +11,12 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Prune removes every image whose digest is not in keep, and the layers in
 // the layer cache only they needed.
-func (m *Manager) Prune(keep map[string]struct{}) (types.PruneResult, error) {
-	var unused []*types.Image
+func (m *Manager) Prune(keep map[string]struct{}) (PruneResult, error) {
+	var unused []*Image
 	for _, image := range m.index.list() {
 		if _, ok := keep[image.Digest]; !ok {
 			unused = append(unused, image)
@@ -33,8 +32,8 @@ func (m *Manager) Prune(keep map[string]struct{}) (types.PruneResult, error) {
 
 // remove deletes images and their disks, then the cached layers no remaining
 // image needs. It is how every removal goes, asked for or collected.
-func (m *Manager) remove(images []*types.Image) (types.PruneResult, error) {
-	var result types.PruneResult
+func (m *Manager) remove(images []*Image) (PruneResult, error) {
+	var result PruneResult
 
 	for _, image := range images {
 		if err := m.index.delete(image.Digest); err != nil {

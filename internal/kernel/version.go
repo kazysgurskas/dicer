@@ -3,8 +3,6 @@
 
 package kernel
 
-import "github.com/konradasb/dicer/internal/types"
-
 // Version identifies a release of Dicer's kernel,
 // https://github.com/konradasb/dicer-kernel.
 type Version string
@@ -16,6 +14,6 @@ const DefaultVersion Version = "v6.18.53-1"
 
 // Default returns the definition of the default kernel this binary carries,
 // without an ID or times.
-func Default() types.Kernel {
-	return types.Kernel{Name: types.DefaultKernelName, Architecture: defaultArchitecture, SHA256: defaultSHA256}
+func Default() Kernel {
+	return Kernel{Name: DefaultName, Architecture: defaultArchitecture, SHA256: defaultSHA256}
 }

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // wakeHarness is a harness whose instance publishes a port on the loopback
@@ -32,7 +32,7 @@ func newWakeHarness(t *testing.T, standbyAfter time.Duration) *wakeHarness {
 
 	h := &wakeHarness{harness: newHarness(t), port: freePort(t)}
 	h.instance.StandbyAfter = standbyAfter
-	h.instance.Ports = []types.PortMapping{{HostIP: "127.0.0.1", HostPort: uint16(h.port), GuestPort: 80}}
+	h.instance.Ports = []network.PortMapping{{HostIP: "127.0.0.1", HostPort: uint16(h.port), GuestPort: 80}}
 	h.definitions.instances[h.instance.Name] = h.instance
 
 	guest := echoServer(t)
@@ -60,8 +60,8 @@ func TestConnectionWakesInstanceOnStandby(t *testing.T) {
 		t.Errorf("the guest answered %q, want the echo of %q", got, "ping")
 	}
 
-	if status := h.status(t); status.State != types.InstanceStateRunning {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateRunning)
+	if status := h.status(t); status.State != StateRunning {
+		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
 	allocation, err := h.manager.Allocation(h.instance)
 	if err != nil {
@@ -222,8 +222,8 @@ func TestStartResumesInstanceTheDaemonListensFor(t *testing.T) {
 	if err := h.manager.Start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if status := h.status(t); status.State != types.InstanceStateRunning {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateRunning)
+	if status := h.status(t); status.State != StateRunning {
+		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
 	if h.listening() {
 		t.Error("the daemon still listens on the port of a running instance")

@@ -17,7 +17,6 @@ import (
 	"github.com/nrednav/cuid2"
 
 	"github.com/konradasb/dicer/internal/diskfile"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Config configures a Manager.
@@ -29,8 +28,8 @@ type Config struct {
 }
 
 // Manager owns the disk files that back volumes. It records no metadata: the
-// types.Volume definition is kept with the others, by filestore.Manager, and
-// its disk is found by ID.
+// Volume definition is kept with the others, by filestore.Manager, and its
+// disk is found by ID.
 type Manager struct {
 	dataDir string
 	logger  *slog.Logger
@@ -63,8 +62,8 @@ func (m *Manager) volumeDir(id string) string {
 }
 
 // Create makes a new volume: a sparse, ext4-formatted disk file under a
-// fresh ID. Recording the returned types.Volume is the caller's job.
-func (m *Manager) Create(ctx context.Context, name string, sizeBytes int64) (*types.Volume, error) {
+// fresh ID. Recording the returned Volume is the caller's job.
+func (m *Manager) Create(ctx context.Context, name string, sizeBytes int64) (*Volume, error) {
 	if sizeBytes <= 0 {
 		return nil, errors.New("size must be greater than zero")
 	}
@@ -77,7 +76,7 @@ func (m *Manager) Create(ctx context.Context, name string, sizeBytes int64) (*ty
 	}
 
 	now := time.Now()
-	volume := types.Volume{
+	volume := Volume{
 		ID:        id,
 		Name:      name,
 		Path:      m.Path(id),

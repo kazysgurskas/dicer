@@ -14,9 +14,11 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -59,37 +61,37 @@ func (h *instanceHandler) CreateInstance(
 
 // newInstance validates a create request and returns the instance it
 // defines. A kernel or network left out is the default one.
-func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (types.InstanceSpec, error) {
-	req.KernelName = cmp.Or(req.GetKernelName(), types.DefaultKernelName)
-	req.NetworkName = cmp.Or(req.GetNetworkName(), types.DefaultNetworkName)
+func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (instance.Spec, error) {
+	req.KernelName = cmp.Or(req.GetKernelName(), kernel.DefaultName)
+	req.NetworkName = cmp.Or(req.GetNetworkName(), network.DefaultName)
 
 	ports, err := portMappingsFromProto(req.GetPorts())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	mounts, err := mountsFromProto(req.GetMounts())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	restart, err := restartPolicyFromProto(req.GetRestartPolicy())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	healthCheck, err := healthCheckFromProto(req.GetHealthCheck())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	initMode, err := initModes.fromProto(req.GetInitMode())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	hypervisorType, err := hypervisorTypes.fromProto(req.GetHypervisorType())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 
 	now := time.Now()
-	instance := types.InstanceSpec{
+	spec := instance.Spec{
 		ID:                     cuid2.Generate(),
 		Name:                   req.GetName(),
 		Hostname:               req.GetHostname(),
@@ -117,29 +119,29 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (type
 		Labels:                 req.GetLabels(),
 		Restart:                restart,
 		HealthCheck:            healthCheck,
-		InitMode:               cmp.Or(initMode, types.InitModeAuto),
+		InitMode:               cmp.Or(initMode, guest.InitModeAuto),
 		RemoveOnExit:           req.GetRemoveOnExit(),
 		CreatedAt:              now,
 		UpdatedAt:              now,
 	}
 
-	if err := instance.Validate(); err != nil {
-		return types.InstanceSpec{}, err
+	if err := spec.Validate(); err != nil {
+		return instance.Spec{}, err
 	}
-	imageRef, err := reference.Parse(instance.ImageRef)
+	imageRef, err := reference.Parse(spec.ImageRef)
 	if err != nil {
-		return types.InstanceSpec{}, errdefs.InvalidArgument("invalid image %q: %v", instance.ImageRef, err)
+		return instance.Spec{}, errdefs.InvalidArgument("invalid image %q: %v", spec.ImageRef, err)
 	}
-	instance.ImageRef = imageRef.String()
+	spec.ImageRef = imageRef.String()
 
-	if _, err := h.definitions.Instance(instance.Name); err == nil {
-		return types.InstanceSpec{}, errdefs.Exists("instance %q already exists", instance.Name)
+	if _, err := h.definitions.Instance(spec.Name); err == nil {
+		return instance.Spec{}, errdefs.Exists("instance %q already exists", spec.Name)
 	}
-	if err := h.checkCanStart(instance); err != nil {
-		return types.InstanceSpec{}, err
+	if err := h.checkCanStart(spec); err != nil {
+		return instance.Spec{}, err
 	}
 
-	return instance, nil
+	return spec, nil
 }
 
 // UpdateInstance modifies an instance's definition. See
@@ -197,7 +199,7 @@ func (h *instanceHandler) UpdateInstance(
 
 // applyReferences applies the image, kernel and network an update names,
 // checking that each is valid or exists.
-func (h *instanceHandler) applyReferences(instance *types.InstanceSpec, req *dicerdv1.UpdateInstanceRequest) error {
+func (h *instanceHandler) applyReferences(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) error {
 	if v := req.ImageRef; v != nil {
 		ref, err := reference.Parse(*v)
 		if err != nil {
@@ -221,7 +223,7 @@ func (h *instanceHandler) applyReferences(instance *types.InstanceSpec, req *dic
 }
 
 // applySettings applies the scalar fields an update sets.
-func applySettings(instance *types.InstanceSpec, req *dicerdv1.UpdateInstanceRequest) {
+func applySettings(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) {
 	if v := req.Vcpus; v != nil {
 		instance.VCPUs = int(*v)
 	}
@@ -253,7 +255,7 @@ func setIf[T any](dst, v *T) {
 }
 
 // applyLists replaces each list or map an update gives a non-empty value.
-func applyLists(instance *types.InstanceSpec, req *dicerdv1.UpdateInstanceRequest) error {
+func applyLists(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) error {
 	if len(req.GetMounts()) > 0 {
 		mounts, err := mountsFromProto(req.GetMounts())
 		if err != nil {
@@ -461,12 +463,12 @@ func (h *instanceHandler) ListInstances(
 }
 
 // view assembles the API representation of an instance.
-func (h *instanceHandler) view(instance types.InstanceSpec) (*dicerdv1.Instance, error) {
+func (h *instanceHandler) view(instance instance.Spec) (*dicerdv1.Instance, error) {
 	return viewInstance(h.instances, instance)
 }
 
 // viewInstance assembles an instance's spec, status, address and health.
-func viewInstance(instances *instance.Manager, spec types.InstanceSpec) (*dicerdv1.Instance, error) {
+func viewInstance(instances *instance.Manager, spec instance.Spec) (*dicerdv1.Instance, error) {
 	status, err := instances.Status(spec)
 	if err != nil {
 		return nil, err
@@ -479,5 +481,5 @@ func viewInstance(instances *instance.Manager, spec types.InstanceSpec) (*dicerd
 		status.HealthCheck, status.Health = &check, &health
 	}
 
-	return instanceToProto(types.Instance{Spec: spec, Status: status}), nil
+	return instanceToProto(instance.Instance{Spec: spec, Status: status}), nil
 }

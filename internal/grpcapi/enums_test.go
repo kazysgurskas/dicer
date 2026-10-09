@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/guest"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -58,7 +58,7 @@ func TestEnumFromProto(t *testing.T) {
 	if _, err := initModes.fromProto(dicerdv1.InitMode(99)); !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("fromProto(99) = %v, want InvalidArgument", err)
 	}
-	if got := initModes.toProto(types.InitMode("openrc")); got != dicerdv1.InitMode_INIT_MODE_UNSPECIFIED {
+	if got := initModes.toProto(guest.InitMode("openrc")); got != dicerdv1.InitMode_INIT_MODE_UNSPECIFIED {
 		t.Errorf("toProto(openrc) = %v, want unspecified", got)
 	}
 }

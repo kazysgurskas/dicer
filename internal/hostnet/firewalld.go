@@ -14,7 +14,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // firewalldZone is the firewalld zone a network's bridge is bound to: one
@@ -66,7 +66,7 @@ func (h *Host) WatchFirewalld(ctx context.Context) {
 	}
 	err := h.firewalld.watchReloads(ctx, func() {
 		h.mu.Lock()
-		networks := make([]types.Network, 0, len(h.networks))
+		networks := make([]network.Network, 0, len(h.networks))
 		for _, nw := range h.networks {
 			networks = append(networks, nw)
 		}

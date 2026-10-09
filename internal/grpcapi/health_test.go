@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/health"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -68,21 +68,21 @@ func TestHealthCheckFromProtoRejects(t *testing.T) {
 
 func TestHealthToProto(t *testing.T) {
 	at := time.Now()
-	check := types.HealthCheck{TCP: &types.TCPProbe{Port: 5432}}.WithDefaults()
+	check := health.Check{TCP: &health.TCPProbe{Port: 5432}}.WithDefaults()
 
-	got := healthToProto(check, types.Health{
-		Status: types.HealthStatusUnhealthy, FailingStreak: 3, LastCheck: at, LastOutput: "connection refused",
+	got := healthToProto(check, health.Health{
+		Status: health.StatusUnhealthy, FailingStreak: 3, LastCheck: at, LastOutput: "connection refused",
 	})
 
 	if got.GetStatus() != dicerdv1.HealthStatus_HEALTH_STATUS_UNHEALTHY || got.GetFailingStreak() != 3 || got.GetLastOutput() != "connection refused" ||
 		!got.GetLastCheckTime().AsTime().Equal(at) {
 		t.Errorf("healthToProto = %v", got)
 	}
-	if got.GetCheck().GetTcp().GetPort() != 5432 || got.GetCheck().GetInterval().AsDuration() != types.DefaultHealthCheckInterval {
+	if got.GetCheck().GetTcp().GetPort() != 5432 || got.GetCheck().GetInterval().AsDuration() != health.DefaultInterval {
 		t.Errorf("check = %v, want the one being run, defaults included", got.GetCheck())
 	}
 
-	if got := healthToProto(check, types.NewHealth()); got.GetLastCheckTime() != nil {
+	if got := healthToProto(check, health.New()); got.GetLastCheckTime() != nil {
 		t.Errorf("a check not yet run reports a last check at %v", got.GetLastCheckTime())
 	}
 }

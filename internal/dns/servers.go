@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // Port is the port guests ask on.
@@ -69,7 +69,7 @@ func NewServers(cfg Config) *Servers {
 // already serving it as it is: it is restarted if the network's gateway,
 // subnet, upstreams or isolation have changed. The gateway address must
 // already be on the host, on the network's bridge.
-func (s *Servers) Serve(ctx context.Context, nw types.Network) error {
+func (s *Servers) Serve(ctx context.Context, nw network.Network) error {
 	want, err := s.networkOf(nw)
 	if err != nil {
 		return err
@@ -102,14 +102,14 @@ func (s *Servers) Serve(ctx context.Context, nw types.Network) error {
 }
 
 // networkOf returns what a server needs to know of nw.
-func (s *Servers) networkOf(nw types.Network) (network, error) {
+func (s *Servers) networkOf(nw network.Network) (servedNetwork, error) {
 	subnet, err := netip.ParsePrefix(nw.Subnet)
 	if err != nil {
-		return network{}, fmt.Errorf("network %q: subnet: %w", nw.Name, err)
+		return servedNetwork{}, fmt.Errorf("network %q: subnet: %w", nw.Name, err)
 	}
 	gateway, err := netip.ParseAddr(nw.Gateway)
 	if err != nil {
-		return network{}, fmt.Errorf("network %q: gateway: %w", nw.Name, err)
+		return servedNetwork{}, fmt.Errorf("network %q: gateway: %w", nw.Name, err)
 	}
 
 	nameservers := nw.Nameservers
@@ -121,7 +121,7 @@ func (s *Servers) networkOf(nw types.Network) (network, error) {
 		upstreams = append(upstreams, net.JoinHostPort(ns, strconv.Itoa(Port)))
 	}
 
-	return network{
+	return servedNetwork{
 		name:             nw.Name,
 		domain:           strings.ToLower(nw.Name),
 		subnet:           subnet.Masked(),
@@ -133,7 +133,7 @@ func (s *Servers) networkOf(nw types.Network) (network, error) {
 }
 
 // sameNetwork reports whether a server for a serves b as it is.
-func sameNetwork(a, b network) bool {
+func sameNetwork(a, b servedNetwork) bool {
 	return a.name == b.name && a.subnet == b.subnet && a.gateway == b.gateway &&
 		slices.Equal(a.upstreams, b.upstreams) && a.answersInstances == b.answersInstances &&
 		a.internal == b.internal

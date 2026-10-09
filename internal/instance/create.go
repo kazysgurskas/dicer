@@ -9,14 +9,14 @@ import (
 
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
+	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/image/reference"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Create records a new instance's definition, first pulling its image as
 // pull says. It boots nothing: see Start. Nothing is recorded if the image
 // cannot be had.
-func (m *Manager) Create(ctx context.Context, instance types.InstanceSpec, pull types.PullPolicy) error {
+func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPolicy) error {
 	// Before the definition, so that one whose image cannot be had is never
 	// seen, even for as long as a pull takes. The error names the image.
 	if _, err := m.images.Ensure(ctx, instance.ImageRef, pull); err != nil {

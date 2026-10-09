@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func newTestManager(t *testing.T) *Manager {
@@ -38,14 +37,14 @@ func sha256Of(s string) string {
 
 // importKernel imports contents as the kernel with the given ID and name, and
 // returns it.
-func importKernel(t *testing.T, m *Manager, id, name, contents string) types.Kernel {
+func importKernel(t *testing.T, m *Manager, id, name, contents string) Kernel {
 	t.Helper()
 
 	digest, err := m.Import(id, strings.NewReader(contents), "")
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
-	return types.Kernel{ID: id, Name: name, SHA256: digest}
+	return Kernel{ID: id, Name: name, SHA256: digest}
 }
 
 // TestImportKeepsAKernelWithItsChecksum checks that an imported kernel is
@@ -91,12 +90,12 @@ func TestPathRefusesAMissingOrDamagedKernel(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		kernel func() types.Kernel
+		kernel func() Kernel
 		want   string
 	}{
 		{
 			"missing",
-			func() types.Kernel {
+			func() Kernel {
 				k := importKernel(t, m, "k1", "gone", "vmlinux")
 				_ = os.Remove(m.binaryPath(k.ID))
 				return k
@@ -105,7 +104,7 @@ func TestPathRefusesAMissingOrDamagedKernel(t *testing.T) {
 		},
 		{
 			"damaged",
-			func() types.Kernel {
+			func() Kernel {
 				k := importKernel(t, m, "k2", "bad", "vmlinux")
 				_ = os.WriteFile(m.binaryPath(k.ID), []byte("damaged"), 0o755)
 				return k
@@ -114,7 +113,7 @@ func TestPathRefusesAMissingOrDamagedKernel(t *testing.T) {
 		},
 		{
 			"with no checksum",
-			func() types.Kernel {
+			func() Kernel {
 				k := importKernel(t, m, "k3", "old", "vmlinux")
 				k.SHA256 = ""
 				return k
@@ -123,8 +122,8 @@ func TestPathRefusesAMissingOrDamagedKernel(t *testing.T) {
 		},
 		{
 			"the default kernel, missing",
-			func() types.Kernel {
-				k := importKernel(t, m, "k4", types.DefaultKernelName, "vmlinux")
+			func() Kernel {
+				k := importKernel(t, m, "k4", DefaultName, "vmlinux")
 				_ = os.Remove(m.binaryPath(k.ID))
 				return k
 			},
@@ -145,7 +144,7 @@ func TestPathRefusesAMissingOrDamagedKernel(t *testing.T) {
 // extracted as a kernel's binary, in place of whatever was there.
 func TestExtractDefaultReplacesWhatIsThere(t *testing.T) {
 	m := newTestManager(t)
-	importKernel(t, m, "k1", types.DefaultKernelName, "an older default kernel")
+	importKernel(t, m, "k1", DefaultName, "an older default kernel")
 
 	if err := m.ExtractDefault("k1"); err != nil {
 		t.Fatalf("ExtractDefault: %v", err)

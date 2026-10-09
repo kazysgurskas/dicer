@@ -13,12 +13,11 @@ import (
 
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // pullTestImage pulls one image under a digest of the test's choosing, so a
 // test can hold several at once.
-func pullTestImage(t *testing.T, m *Manager, fakeRegistry *fakeRegistryClient, ref, digest string) *types.Image {
+func pullTestImage(t *testing.T, m *Manager, fakeRegistry *fakeRegistryClient, ref, digest string) *Image {
 	t.Helper()
 
 	fakeRegistry.resolveFunc = func(context.Context, *reference.Ref) (string, error) { return digest, nil }
@@ -138,26 +137,26 @@ func TestPullReportsProgress(t *testing.T) {
 		{Phase: registry.PhaseUnpacking},
 	}
 
-	var got []types.PullProgress
-	if _, err := m.Pull(t.Context(), "alpine:3.21", func(p types.PullProgress) { got = append(got, p) }); err != nil {
+	var got []PullProgress
+	if _, err := m.Pull(t.Context(), "alpine:3.21", func(p PullProgress) { got = append(got, p) }); err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
 
-	var stages []types.PullStage
+	var stages []PullStage
 	for _, p := range got {
 		if len(stages) == 0 || stages[len(stages)-1] != p.Stage {
 			stages = append(stages, p.Stage)
 		}
 	}
 
-	want := []types.PullStage{types.PullStageResolving, types.PullStageDownloading, types.PullStageUnpacking, types.PullStageConverting}
+	want := []PullStage{PullStageResolving, PullStageDownloading, PullStageUnpacking, PullStageConverting}
 	if !slices.Equal(stages, want) {
 		t.Errorf("stages = %v, want %v", stages, want)
 	}
 
 	var sawBytes bool
 	for _, p := range got {
-		if p.Stage == types.PullStageDownloading && p.DownloadedBytes == 60 && p.TotalBytes == 100 {
+		if p.Stage == PullStageDownloading && p.DownloadedBytes == 60 && p.TotalBytes == 100 {
 			sawBytes = true
 		}
 	}

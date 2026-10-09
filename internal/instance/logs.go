@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 const (
@@ -51,7 +50,7 @@ type LogOptions struct {
 
 // StreamLogs writes an instance's log to w. With opts.Follow it keeps writing
 // until the instance stops or ctx is done.
-func (m *Manager) StreamLogs(ctx context.Context, instance types.InstanceSpec, opts LogOptions, w io.Writer) error {
+func (m *Manager) StreamLogs(ctx context.Context, instance Spec, opts LogOptions, w io.Writer) error {
 	path, err := m.logPath(instance, opts.Source)
 	if err != nil {
 		return err
@@ -106,7 +105,7 @@ func (m *Manager) StreamLogs(ctx context.Context, instance types.InstanceSpec, o
 }
 
 // logPath returns the file a log source is written to.
-func (m *Manager) logPath(instance types.InstanceSpec, source LogSource) (string, error) {
+func (m *Manager) logPath(instance Spec, source LogSource) (string, error) {
 	switch source {
 	case LogSourceGuest, "":
 		return m.serialLogPath(instance), nil

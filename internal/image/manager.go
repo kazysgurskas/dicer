@@ -22,7 +22,6 @@ import (
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // defaultMaxConcurrentPulls bounds pulls when Config.MaxConcurrentPulls is
@@ -173,13 +172,13 @@ func NewManager(cfg Config) (*Manager, error) {
 // Pull resolves a reference against its registry and returns the image,
 // pulling and converting it if needed. Concurrent pulls of the same image
 // share one download.
-func (m *Manager) Pull(ctx context.Context, ref string, onProgress ProgressFunc) (*types.Image, error) {
+func (m *Manager) Pull(ctx context.Context, ref string, onProgress ProgressFunc) (*Image, error) {
 	parsed, err := reference.Parse(ref)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidReference, err)
 	}
 
-	onProgress.report(types.PullProgress{Stage: types.PullStageResolving})
+	onProgress.report(PullProgress{Stage: PullStageResolving})
 
 	resolved, err := reference.Resolve(ctx, m.registry, parsed)
 	if err != nil {
@@ -202,14 +201,14 @@ func (m *Manager) Pull(ctx context.Context, ref string, onProgress ProgressFunc)
 // Image returns the locally held image ref names, without consulting a
 // registry. A tag names the image most recently pulled under it. An image
 // the host does not hold is an errdefs.ErrNotFound error.
-func (m *Manager) Image(ref string) (*types.Image, error) {
+func (m *Manager) Image(ref string) (*Image, error) {
 	parsed, err := reference.Parse(ref)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidReference, err)
 	}
 
 	var (
-		image *types.Image
+		image *Image
 		ok    bool
 	)
 	if parsed.HasDigest() {
@@ -228,14 +227,14 @@ func (m *Manager) Image(ref string) (*types.Image, error) {
 // it as policy says. It marks the image used, so that garbage collection
 // spares it until the instance is defined. With PullPolicyNever, an image
 // the host does not hold is an errdefs.ErrNotFound error.
-func (m *Manager) Ensure(ctx context.Context, ref string, policy types.PullPolicy) (*types.Image, error) {
-	if policy == types.PullPolicyAlways {
+func (m *Manager) Ensure(ctx context.Context, ref string, policy PullPolicy) (*Image, error) {
+	if policy == PullPolicyAlways {
 		return m.Pull(ctx, ref, nil)
 	}
 
 	image, err := m.Image(ref)
 	switch {
-	case errors.Is(err, errdefs.ErrNotFound) && policy == types.PullPolicyNever:
+	case errors.Is(err, errdefs.ErrNotFound) && policy == PullPolicyNever:
 		return nil, errdefs.NotFound("image %q is not on this host, and the pull policy is never: pull it first", ref)
 	case errors.Is(err, errdefs.ErrNotFound):
 		return m.Pull(ctx, ref, nil)
@@ -249,7 +248,7 @@ func (m *Manager) Ensure(ctx context.Context, ref string, policy types.PullPolic
 }
 
 // List returns every locally held image.
-func (m *Manager) List() []*types.Image {
+func (m *Manager) List() []*Image {
 	return m.index.list()
 }
 
@@ -279,7 +278,7 @@ func (m *Manager) Delete(ref string) error {
 // pull, so at most once concurrently per digest.
 func (m *Manager) loadOrPull(
 	ctx context.Context, resolved *reference.ResolvedRef, onProgress ProgressFunc,
-) (*types.Image, error) {
+) (*Image, error) {
 	digest := resolved.Digest()
 	digestHex := resolved.DigestHex()
 
@@ -358,7 +357,7 @@ func (m *Manager) pullFromRegistry(
 		return m.discardFailedPull(digestHex, &PullError{Ref: resolved.String(), Cause: err})
 	}
 
-	onProgress.report(types.PullProgress{Stage: types.PullStageConverting})
+	onProgress.report(PullProgress{Stage: PullStageConverting})
 
 	diskPath := m.diskPath(digestHex)
 	convertStarted := time.Now()
@@ -369,7 +368,7 @@ func (m *Manager) pullFromRegistry(
 	}
 
 	now := time.Now()
-	image := &types.Image{
+	image := &Image{
 		Name:       resolved.String(),
 		Digest:     digest,
 		DiskPath:   diskPath,
@@ -424,7 +423,7 @@ func (m *Manager) discardFailedPull(digestHex string, err error) error {
 
 // loadFromDisk loads an image's recorded metadata, checking its disk is
 // still present.
-func (m *Manager) loadFromDisk(digestHex string) (*types.Image, error) {
+func (m *Manager) loadFromDisk(digestHex string) (*Image, error) {
 	image, err := m.loadMetadata(digestHex)
 	if err != nil {
 		return nil, fmt.Errorf("load metadata: %w", err)

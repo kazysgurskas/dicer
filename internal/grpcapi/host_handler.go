@@ -9,14 +9,13 @@ import (
 	"os"
 
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // hostHandler reports the daemon's version, hypervisors and addresses.
 type hostHandler struct {
 	version       string
-	hypervisors   map[types.HypervisorType][]hypervisor.Starter
+	hypervisors   map[hypervisor.Type][]hypervisor.Starter
 	listenAddress string
 	hostAddresses func() ([]netip.Addr, error)
 	fingerprint   string
@@ -45,7 +44,7 @@ func (h *hostHandler) GetHostInfo(
 func (h *hostHandler) hypervisorInfos() []*dicerdv1.HypervisorInfo {
 	out := make([]*dicerdv1.HypervisorInfo, 0, len(h.hypervisors))
 
-	for i, hypervisorType := range types.HypervisorTypes() {
+	for i, hypervisorType := range hypervisor.Types() {
 		starters, ok := h.hypervisors[hypervisorType]
 		if !ok {
 			continue

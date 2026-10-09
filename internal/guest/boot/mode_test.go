@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/guest"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // rootfs builds a guest root filesystem: files, each executable, and
@@ -48,62 +47,62 @@ func TestResolveMode(t *testing.T) {
 		files []string
 		links map[string]string
 		cfg   guest.Config
-		want  types.InitMode
+		want  guest.InitMode
 	}{
 		{
 			name: "systemd itself", files: debian,
-			cfg: guest.Config{Entrypoint: []string{"/lib/systemd/systemd"}}, want: types.InitModeSystemd,
+			cfg: guest.Config{Entrypoint: []string{"/lib/systemd/systemd"}}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "init linked to systemd", files: debian, links: map[string]string{"sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: types.InitModeSystemd,
+			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "a relative link", files: debian, links: map[string]string{"sbin/init": "../lib/systemd/systemd"},
-			cfg: guest.Config{Cmd: []string{"/sbin/init"}}, want: types.InitModeSystemd,
+			cfg: guest.Config{Cmd: []string{"/sbin/init"}}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "a chain of links", files: []string{"usr/lib/systemd/systemd"},
 			links: map[string]string{"usr/sbin/init": "/sbin/init", "sbin/init": "/usr/lib/systemd/systemd"},
-			cfg:   guest.Config{Entrypoint: []string{"/usr/sbin/init"}}, want: types.InitModeSystemd,
+			cfg:   guest.Config{Entrypoint: []string{"/usr/sbin/init"}}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "found on the PATH", files: debian, links: map[string]string{"usr/sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{Entrypoint: []string{"init"}}, want: types.InitModeSystemd,
+			cfg: guest.Config{Entrypoint: []string{"init"}}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "no command boots the machine's init", files: debian, links: map[string]string{"sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{}, want: types.InitModeSystemd,
+			cfg: guest.Config{}, want: guest.InitModeSystemd,
 		},
 		{
 			name: "OpenRC's init is not systemd", files: []string{"sbin/openrc-init"},
 			links: map[string]string{"sbin/init": "/sbin/openrc-init"},
-			cfg:   guest.Config{Entrypoint: []string{"/sbin/init"}}, want: types.InitModeExec,
+			cfg:   guest.Config{Entrypoint: []string{"/sbin/init"}}, want: guest.InitModeExec,
 		},
 		{
 			name: "s6-overlay", files: []string{"init", "package/admin/s6-overlay/libexec/stage0"},
-			cfg: guest.Config{Entrypoint: []string{"/init"}}, want: types.InitModeExec,
+			cfg: guest.Config{Entrypoint: []string{"/init"}}, want: guest.InitModeExec,
 		},
 		{
 			name: "a replaced command is what runs", files: debian, links: map[string]string{"sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{Entrypoint: []string{"/bin/bash"}}, want: types.InitModeExec,
+			cfg: guest.Config{Entrypoint: []string{"/bin/bash"}}, want: guest.InitModeExec,
 		},
 		{
 			// Resolved from the guest's root, the link finds nothing: the
 			// host's systemd is no business of the guest's.
 			name: "a link out of the root", links: map[string]string{"sbin/init": "../../../../../lib/systemd/systemd"},
-			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: types.InitModeExec,
+			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: guest.InitModeExec,
 		},
 		{
 			name: "a dangling link", links: map[string]string{"sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: types.InitModeExec,
+			cfg: guest.Config{Entrypoint: []string{"/sbin/init"}}, want: guest.InitModeExec,
 		},
 		{
-			name: "nothing there", cfg: guest.Config{Entrypoint: []string{"missing"}}, want: types.InitModeExec,
+			name: "nothing there", cfg: guest.Config{Entrypoint: []string{"missing"}}, want: guest.InitModeExec,
 		},
 		{
 			name: "a mode asked for is kept", files: debian, links: map[string]string{"sbin/init": "/lib/systemd/systemd"},
-			cfg: guest.Config{Mode: types.InitModeExec, Entrypoint: []string{"/sbin/init"}}, want: types.InitModeExec,
+			cfg: guest.Config{Mode: guest.InitModeExec, Entrypoint: []string{"/sbin/init"}}, want: guest.InitModeExec,
 		},
 	}
 
@@ -112,7 +111,7 @@ func TestResolveMode(t *testing.T) {
 			root := rootfs(t, tt.files, tt.links)
 			cfg := tt.cfg
 			if cfg.Mode == "" {
-				cfg.Mode = types.InitModeAuto
+				cfg.Mode = guest.InitModeAuto
 			}
 			if got := resolveMode(root, &cfg); got != tt.want {
 				t.Errorf("resolveMode = %s, want %s", got, tt.want)

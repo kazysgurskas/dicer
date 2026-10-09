@@ -10,31 +10,31 @@ import (
 
 	gcr "github.com/google/go-containerregistry/pkg/v1"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/health"
 )
 
 func TestHealthCheckFromDocker(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		in   *gcr.HealthConfig
-		want *types.HealthCheck
+		want *health.Check
 	}{
 		{"no config", nil, nil},
 		{"empty test", &gcr.HealthConfig{}, nil},
 		{
 			"NONE disables the check a base image declared",
 			&gcr.HealthConfig{Test: []string{"NONE"}},
-			&types.HealthCheck{Disabled: true},
+			&health.Check{Disabled: true},
 		},
 		{
 			"CMD is the command and its arguments",
 			&gcr.HealthConfig{Test: []string{"CMD", "pg_isready", "-U", "postgres"}},
-			&types.HealthCheck{Exec: []string{"pg_isready", "-U", "postgres"}},
+			&health.Check{Exec: []string{"pg_isready", "-U", "postgres"}},
 		},
 		{
 			"CMD-SHELL is run by a shell",
 			&gcr.HealthConfig{Test: []string{"CMD-SHELL", "curl -f localhost || exit 1"}},
-			&types.HealthCheck{Exec: []string{"/bin/sh", "-c", "curl -f localhost || exit 1"}},
+			&health.Check{Exec: []string{"/bin/sh", "-c", "curl -f localhost || exit 1"}},
 		},
 		{
 			"timings are carried as they were given",
@@ -45,7 +45,7 @@ func TestHealthCheckFromDocker(t *testing.T) {
 				StartPeriod: time.Minute,
 				Retries:     5,
 			},
-			&types.HealthCheck{
+			&health.Check{
 				Exec:        []string{"true"},
 				Interval:    30 * time.Second,
 				Timeout:     3 * time.Second,

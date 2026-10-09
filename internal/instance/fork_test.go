@@ -14,7 +14,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // TestForkOfMemorySnapshotRunsAsItself checks that a fork resumes the
@@ -38,8 +37,8 @@ func TestForkOfMemorySnapshotRunsAsItself(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.State != types.InstanceStateRunning {
-		t.Errorf("fork is %s, want %s", status.State, types.InstanceStateRunning)
+	if status.State != StateRunning {
+		t.Errorf("fork is %s, want %s", status.State, StateRunning)
 	}
 	if got, want := h.starter.restoredSpec.TAPDevice, network.TAPName(fork.ID); got != want {
 		t.Errorf("restored on TAP %q, want the fork's own %q", got, want)
@@ -88,8 +87,8 @@ func TestForkOfDiskSnapshotIsStopped(t *testing.T) {
 		t.Fatalf("ForkSnapshot: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != types.InstanceStateStopped {
-		t.Errorf("fork is %s, want %s", status.State, types.InstanceStateStopped)
+	if status, _ := h.manager.Status(fork); status.State != StateStopped {
+		t.Errorf("fork is %s, want %s", status.State, StateStopped)
 	}
 	if h.starter.vmmCount() != 0 {
 		t.Error("forking a disk snapshot started a VMM")
@@ -163,11 +162,11 @@ func TestForkOfRunningInstanceRunsBesideIt(t *testing.T) {
 		t.Fatalf("ForkInstance: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != types.InstanceStateRunning {
-		t.Errorf("fork is %s, want %s", status.State, types.InstanceStateRunning)
+	if status, _ := h.manager.Status(fork); status.State != StateRunning {
+		t.Errorf("fork is %s, want %s", status.State, StateRunning)
 	}
-	if status := h.status(t); status.State != types.InstanceStateRunning {
-		t.Errorf("source is %s, want %s", status.State, types.InstanceStateRunning)
+	if status := h.status(t); status.State != StateRunning {
+		t.Errorf("source is %s, want %s", status.State, StateRunning)
 	}
 	// The source is resumed after its memory is written, and the fork as
 	// it is restored.
@@ -195,8 +194,8 @@ func TestForkOfStoppedInstanceIsStopped(t *testing.T) {
 		t.Fatalf("ForkInstance: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != types.InstanceStateStopped {
-		t.Errorf("fork is %s, want %s", status.State, types.InstanceStateStopped)
+	if status, _ := h.manager.Status(fork); status.State != StateStopped {
+		t.Errorf("fork is %s, want %s", status.State, StateStopped)
 	}
 	if h.starter.vmmCount() != 0 {
 		t.Error("forking a stopped instance started a VMM")
@@ -208,7 +207,7 @@ func TestForkOfStoppedInstanceIsStopped(t *testing.T) {
 // cannot be forked as it is leaves no fork behind.
 func TestRefusedForkOfInstanceDefinesNothing(t *testing.T) {
 	h := newHarness(t)
-	h.instance.Mounts = []types.Mount{{Type: types.MountTypeVolume, Source: "data", Target: "/data"}}
+	h.instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 	h.running(t)
 
 	err := h.manager.ForkInstance(t.Context(), h.instance, forkOf(h.instance, "copy"))
@@ -225,7 +224,7 @@ func TestRefusedForkOfInstanceDefinesNothing(t *testing.T) {
 
 // forkOf defines an instance named name as a fork of source, as the API
 // does.
-func forkOf(source types.InstanceSpec, name string) types.InstanceSpec {
+func forkOf(source Spec, name string) Spec {
 	fork := source
 	fork.ID, fork.Name = "id-"+name, name
 	fork.StaticIP, fork.Ports = "", nil

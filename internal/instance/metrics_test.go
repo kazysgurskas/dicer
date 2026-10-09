@@ -6,8 +6,6 @@ package instance
 import (
 	"context"
 	"testing"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
@@ -15,7 +13,7 @@ func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
 	recorder := &fakeMetrics{}
 	manager.metrics = recorder
 
-	instance := types.InstanceSpec{ID: "i-1", Name: "web", VCPUs: 1, MemoryBytes: 1 << 30}
+	instance := Spec{ID: "i-1", Name: "web", VCPUs: 1, MemoryBytes: 1 << 30}
 	definitions.instances[instance.Name] = instance
 
 	// Stopping an already-stopped instance succeeds, and is still an
@@ -49,7 +47,7 @@ func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
 func TestOperationsWithoutAMetricsRecorder(t *testing.T) {
 	manager, definitions, _ := newTestManager(t)
 
-	instance := types.InstanceSpec{ID: "i-1", Name: "web"}
+	instance := Spec{ID: "i-1", Name: "web"}
 	definitions.instances[instance.Name] = instance
 
 	if err := manager.Stop(context.Background(), instance); err != nil {

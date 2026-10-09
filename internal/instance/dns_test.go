@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/guest"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // fakeDNSServers records which networks it was asked to serve and stop
@@ -25,7 +25,7 @@ type fakeDNSServers struct {
 	serveErr error
 }
 
-func (f *fakeDNSServers) Serve(_ context.Context, nw types.Network) error {
+func (f *fakeDNSServers) Serve(_ context.Context, nw network.Network) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -130,28 +130,28 @@ func TestLookupFindsRunningInstancesByNameOrHostname(t *testing.T) {
 		t.Fatal("test manager's networks are not the fake")
 	}
 
-	place := func(name, hostname, network string, state types.InstanceState) netip.Addr {
+	place := func(name, hostname, networkName string, state State) netip.Addr {
 		t.Helper()
 		instance := seedInstance(t, definitions, name)
-		instance.Hostname, instance.NetworkName = hostname, network
+		instance.Hostname, instance.NetworkName = hostname, networkName
 		definitions.instances[name] = instance
-		if _, ok := definitions.networks[network]; !ok {
-			definitions.networks[network] = types.Network{Name: network, Subnet: "10.1.0.0/24", Gateway: "10.1.0.1"}
+		if _, ok := definitions.networks[networkName]; !ok {
+			definitions.networks[networkName] = network.Network{Name: networkName, Subnet: "10.1.0.0/24", Gateway: "10.1.0.1"}
 		}
-		alloc, err := networks.Allocate(definitions.networks[network], instance.ID, "")
+		alloc, err := networks.Allocate(definitions.networks[networkName], instance.ID, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := manager.writeStatus(types.InstanceStatus{InstanceID: instance.ID, State: state}); err != nil {
+		if err := manager.writeStatus(Status{InstanceID: instance.ID, State: state}); err != nil {
 			t.Fatal(err)
 		}
 		return netip.MustParseAddr(alloc.IP)
 	}
 
-	db := place("shop-db", "db", "default", types.InstanceStateRunning)
-	booting := place("shop-api", "", "default", types.InstanceStateStarting)
-	place("shop-old", "", "default", types.InstanceStateStopped)
-	place("other-db", "db", "elsewhere", types.InstanceStateRunning)
+	db := place("shop-db", "db", "default", StateRunning)
+	booting := place("shop-api", "", "default", StateStarting)
+	place("shop-old", "", "default", StateStopped)
+	place("other-db", "db", "elsewhere", StateRunning)
 
 	tests := []struct {
 		name string
@@ -186,8 +186,8 @@ func TestRecoverServesTheNetworksOfAdoptedInstances(t *testing.T) {
 	instance := seedInstance(t, definitions, "web")
 	vmm := startAdoptable(t, manager)
 	pid := vmm.PID()
-	if err := manager.writeStatus(types.InstanceStatus{
-		InstanceID: instance.ID, State: types.InstanceStateRunning, VMMPID: &pid,
+	if err := manager.writeStatus(Status{
+		InstanceID: instance.ID, State: StateRunning, VMMPID: &pid,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestRecoverServesTheNetworksOfAdoptedInstances(t *testing.T) {
 	stopped := seedInstance(t, definitions, "idle")
 	stopped.NetworkName = "quiet"
 	definitions.instances["idle"] = stopped
-	definitions.networks["quiet"] = types.Network{Name: "quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
+	definitions.networks["quiet"] = network.Network{Name: "quiet", Subnet: "10.2.0.0/24", Gateway: "10.2.0.1"}
 
 	manager.Recover(context.Background())
 

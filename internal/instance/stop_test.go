@@ -7,8 +7,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // TestStopFailedInstance checks that a failed start can be put to rest: Stop
@@ -27,8 +25,8 @@ func TestStopFailedInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if status.State != types.InstanceStateStopped {
-		t.Errorf("state = %s, want %s", status.State, types.InstanceStateStopped)
+	if status.State != StateStopped {
+		t.Errorf("state = %s, want %s", status.State, StateStopped)
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/guest"
 )
 
 // boot runs the init sequence. It does not return: it hands the machine to
@@ -65,7 +65,7 @@ func boot(log *slog.Logger, configFile string) {
 
 	log.Info("boot complete", "mode", cfg.Mode)
 	switch cfg.Mode {
-	case types.InitModeSystemd:
+	case guest.InitModeSystemd:
 		bootSystemd(log, cfg)
 	default:
 		bootExec(log, cfg)

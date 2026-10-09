@@ -13,8 +13,44 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 )
+
+func TestCPUPercentIsMeasuredAgainstOneHostCPU(t *testing.T) {
+	started := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	prev := Stats{StartedAt: started, ReadAt: started.Add(time.Minute), CPUTime: 10 * time.Second}
+
+	later := func(d time.Duration, cpu time.Duration) Stats {
+		return Stats{StartedAt: started, ReadAt: prev.ReadAt.Add(d), CPUTime: prev.CPUTime + cpu}
+	}
+
+	tests := []struct {
+		name          string
+		prev, current Stats
+		want          float64
+		wantOK        bool
+	}{
+		{name: "idle", prev: prev, current: later(time.Second, 0), want: 0, wantOK: true},
+		{name: "half a CPU", prev: prev, current: later(2*time.Second, time.Second), want: 50, wantOK: true},
+		{name: "two CPUs kept busy", prev: prev, current: later(time.Second, 2*time.Second), want: 200, wantOK: true},
+		{
+			// A restart begins the totals again, so they cannot be compared.
+			name:    "another VMM",
+			prev:    prev,
+			current: Stats{StartedAt: started.Add(time.Hour), ReadAt: prev.ReadAt.Add(time.Second)},
+		},
+		{name: "read at the same moment", prev: prev, current: later(0, 0)},
+		{name: "never read before", prev: Stats{}, current: later(time.Second, 0)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := tt.current.CPUPercent(tt.prev)
+			if ok != tt.wantOK || got != tt.want {
+				t.Errorf("CPUPercent() = %v, %v; want %v, %v", got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
 
 // fakeProc is a procfs tree for a test Manager to read stats from.
 type fakeProc struct{ dir string }
@@ -111,12 +147,12 @@ func TestStatsAreReadFromTheVMMAndItsTAPDevice(t *testing.T) {
 	}
 	got := stats[0]
 
-	want := types.InstanceStats{
+	want := Stats{
 		InstanceID:             h.instance.ID,
 		Name:                   h.instance.Name,
 		StartedAt:              h.status(t).StartedAt,
 		ReadAt:                 got.ReadAt,
-		Committed:              types.Resources{VCPUs: 1, MemoryBytes: 1 << 30},
+		Committed:              Resources{VCPUs: 1, MemoryBytes: 1 << 30},
 		CPUTime:                3 * time.Second,
 		ResidentMemoryBytes:    1000 * int64(os.Getpagesize()),
 		DiskReadBytes:          4096,

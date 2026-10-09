@@ -8,7 +8,9 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -42,10 +44,10 @@ func TestCreateInstanceTooBigForTheHost(t *testing.T) {
 func seedKernelAndNetwork(t *testing.T, definitions *filestore.Manager) {
 	t.Helper()
 
-	if err := definitions.CreateKernel(types.Kernel{ID: "k-1", Name: "k"}); err != nil {
+	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-1", Name: "k"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := definitions.CreateNetwork(types.Network{
+	if err := definitions.CreateNetwork(network.Network{
 		ID: "n-1", Name: "default", Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
 	}); err != nil {
 		t.Fatal(err)
@@ -68,7 +70,7 @@ func TestCreateInstanceWithAMaximumTooBigForTheHost(t *testing.T) {
 func TestResizeInstanceRefusals(t *testing.T) {
 	s, definitions := newTestServer(t)
 	seedKernelAndNetwork(t, definitions)
-	if err := definitions.CreateInstance(types.InstanceSpec{
+	if err := definitions.CreateInstance(instance.Spec{
 		ID: "i-1", Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
 		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30, MaxVCPUs: 4, MaxMemoryBytes: 4 << 30,
 	}); err != nil {
@@ -101,7 +103,7 @@ func TestInstanceRateLimits(t *testing.T) {
 	s, definitions := newTestServer(t)
 	seedKernelAndNetwork(t, definitions)
 
-	instance, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
+	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
 		Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30,
 		DiskBytesPerSecond: 50 << 20, DiskIops: 1000, UploadBytesPerSecond: 1 << 20, DownloadBytesPerSecond: 2 << 20,
@@ -109,16 +111,16 @@ func TestInstanceRateLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newInstance: %v", err)
 	}
-	got := instanceToProto(types.Instance{Spec: instance})
+	got := instanceToProto(instance.Instance{Spec: spec})
 	if got.GetDiskBytesPerSecond() != 50<<20 || got.GetDiskIops() != 1000 ||
 		got.GetUploadBytesPerSecond() != 1<<20 || got.GetDownloadBytesPerSecond() != 2<<20 {
 		t.Errorf("instance = %v, want the limits it was created with", got)
 	}
 
 	zero := int64(0)
-	applySettings(&instance, &dicerdv1.UpdateInstanceRequest{DiskIops: &zero})
-	if instance.DiskIOPS != 0 || instance.DiskBytesPerSecond != 50<<20 {
-		t.Errorf("updated instance = %+v, want only the IOPS limit removed", instance)
+	applySettings(&spec, &dicerdv1.UpdateInstanceRequest{DiskIops: &zero})
+	if spec.DiskIOPS != 0 || spec.DiskBytesPerSecond != 50<<20 {
+		t.Errorf("updated instance = %+v, want only the IOPS limit removed", spec)
 	}
 
 	_, err = s.newInstance(&dicerdv1.CreateInstanceRequest{
@@ -132,17 +134,17 @@ func TestInstanceRateLimits(t *testing.T) {
 func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
 	s, definitions := newTestServer(t)
 	seedKernelAndNetwork(t, definitions)
-	if err := definitions.CreateKernel(types.Kernel{ID: "k-2", Name: types.DefaultKernelName}); err != nil {
+	if err := definitions.CreateKernel(kernel.Kernel{ID: "k-2", Name: kernel.DefaultName}); err != nil {
 		t.Fatal(err)
 	}
 
-	instance, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
+	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30,
 	})
 	if err != nil {
 		t.Fatalf("newInstance: %v", err)
 	}
-	if instance.KernelName != types.DefaultKernelName || instance.NetworkName != types.DefaultNetworkName {
-		t.Errorf("kernel %q, network %q; want both %q", instance.KernelName, instance.NetworkName, "default")
+	if spec.KernelName != kernel.DefaultName || spec.NetworkName != network.DefaultName {
+		t.Errorf("kernel %q, network %q; want both %q", spec.KernelName, spec.NetworkName, "default")
 	}
 }

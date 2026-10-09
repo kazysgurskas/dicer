@@ -10,13 +10,12 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Delete removes an instance and everything it owns: its VM, network
 // resources, address, status and directory. Volumes and snapshots are kept. An
 // active instance is refused unless force is set.
-func (m *Manager) Delete(ctx context.Context, instance types.InstanceSpec, force bool) (err error) {
+func (m *Manager) Delete(ctx context.Context, instance Spec, force bool) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationDelete, started, err) }()
 

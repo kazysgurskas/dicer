@@ -16,11 +16,10 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // writeGuestLog puts a serial console log where the hypervisor would.
-func writeGuestLog(t *testing.T, manager *Manager, instance types.InstanceSpec, contents string) string {
+func writeGuestLog(t *testing.T, manager *Manager, instance Spec, contents string) string {
 	t.Helper()
 
 	path, err := manager.logPath(instance, LogSourceGuest)
@@ -125,7 +124,7 @@ func TestStreamLogsFollowStopsWithInstance(t *testing.T) {
 	path := writeGuestLog(t, manager, instance, "booting\n")
 
 	pid := os.Getpid()
-	if err := manager.writeStatus(types.InstanceStatus{InstanceID: instance.ID, State: types.InstanceStateRunning, VMMPID: &pid}); err != nil {
+	if err := manager.writeStatus(Status{InstanceID: instance.ID, State: StateRunning, VMMPID: &pid}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,8 +149,8 @@ func TestStreamLogsFollowStopsWithInstance(t *testing.T) {
 
 	// Stopping the instance ends the stream.
 	time.Sleep(2 * logPollInterval)
-	forceState(t, manager, instance.ID, types.InstanceStateStopping)
-	forceState(t, manager, instance.ID, types.InstanceStateStopped)
+	forceState(t, manager, instance.ID, StateStopping)
+	forceState(t, manager, instance.ID, StateStopped)
 
 	select {
 	case err := <-done:
@@ -176,7 +175,7 @@ func TestStreamLogsFollowsAStartingInstance(t *testing.T) {
 	manager, definitions, _ := newTestManager(t)
 	instance := seedInstance(t, definitions, "web")
 	writeGuestLog(t, manager, instance, "booting\n")
-	forceState(t, manager, instance.ID, types.InstanceStateStarting)
+	forceState(t, manager, instance.ID, StateStarting)
 
 	done := make(chan error, 1)
 	go func() {
@@ -189,7 +188,7 @@ func TestStreamLogsFollowsAStartingInstance(t *testing.T) {
 	case <-time.After(3 * logPollInterval):
 	}
 
-	forceState(t, manager, instance.ID, types.InstanceStateFailed)
+	forceState(t, manager, instance.ID, StateFailed)
 
 	select {
 	case <-done:

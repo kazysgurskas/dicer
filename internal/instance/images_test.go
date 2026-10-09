@@ -6,7 +6,7 @@ package instance
 import (
 	"testing"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/image"
 )
 
 func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
@@ -54,7 +54,7 @@ func TestImagesInUseKeepsWhatDefinitionsName(t *testing.T) {
 		t.Errorf("in use = %v, want nothing while the image is not held", inUse)
 	}
 
-	images.held = &types.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
+	images.held = &image.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
 	if inUse, err = h.manager.ImagesInUse(); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
 	if !ok {
 		t.Fatalf("images is %T", h.manager.images)
 	}
-	images.held = &types.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
+	images.held = &image.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
 
 	inUse, err := h.manager.ImagesInUse()
 	if err != nil {

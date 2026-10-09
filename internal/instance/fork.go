@@ -14,7 +14,6 @@ import (
 	"github.com/konradasb/dicer/internal/diskfile"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // ForkSnapshot creates instance as a copy of the one snapshot was taken of,
@@ -23,7 +22,7 @@ import (
 // snapshot the copy runs, resumed where the snapshot's guest was and then
 // given that identity; from a disk snapshot it is stopped, to boot from the
 // snapshot's disk. A fork that fails leaves no instance behind.
-func (m *Manager) ForkSnapshot(ctx context.Context, snapshot types.Snapshot, instance types.InstanceSpec) (err error) {
+func (m *Manager) ForkSnapshot(ctx context.Context, snapshot Snapshot, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationForkSnapshot, started, err) }()
 
@@ -35,7 +34,7 @@ func (m *Manager) ForkSnapshot(ctx context.Context, snapshot types.Snapshot, ins
 // snapshot of source taken now, except that the snapshot is not kept. The
 // caller defines instance from source. See writeSnapshot for the states
 // source can be forked in.
-func (m *Manager) ForkInstance(ctx context.Context, source, instance types.InstanceSpec) (err error) {
+func (m *Manager) ForkInstance(ctx context.Context, source, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationForkInstance, started, err) }()
 
@@ -64,7 +63,7 @@ func (m *Manager) ForkInstance(ctx context.Context, source, instance types.Insta
 // says what the instance is a copy of in its events, and attrs are added to
 // their attributes.
 func (m *Manager) fork(
-	ctx context.Context, frozen frozenGuest, instance types.InstanceSpec, from string, attrs map[string]string,
+	ctx context.Context, frozen frozenGuest, instance Spec, from string, attrs map[string]string,
 ) (err error) {
 	started := time.Now()
 
@@ -83,7 +82,7 @@ func (m *Manager) fork(
 		}
 	}()
 
-	if frozen.snapshot.Kind == types.SnapshotKindDisk {
+	if frozen.snapshot.Kind == SnapshotKindDisk {
 		if err := diskfile.Copy(frozen.overlay, m.overlayDiskPath(instance)); err != nil {
 			return fmt.Errorf("copy overlay disk: %w", err)
 		}

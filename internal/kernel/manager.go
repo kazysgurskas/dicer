@@ -18,7 +18,6 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/humanize"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Config configures a Manager.
@@ -65,11 +64,11 @@ func (m *Manager) binaryPath(id string) string {
 // Path returns the local path to a kernel's binary. It returns an
 // errdefs.ErrInvalidState error if the binary is missing from the host, or
 // does not match the kernel's checksum.
-func (m *Manager) Path(k types.Kernel) (string, error) {
+func (m *Manager) Path(k Kernel) (string, error) {
 	path := m.binaryPath(k.ID)
 
 	remedy := "delete it and import it again"
-	if k.Name == types.DefaultKernelName {
+	if k.Name == DefaultName {
 		remedy = "restart the daemon, which puts it back"
 	}
 

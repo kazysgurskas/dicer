@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Stop shuts down an instance and releases its host resources, keeping its
@@ -17,7 +16,7 @@ import (
 // discarding what it has frozen, so that it boots afresh. It cancels any
 // pending restart and sets StoppedByUser. Stopping a stopped instance is not
 // an error.
-func (m *Manager) Stop(ctx context.Context, instance types.InstanceSpec) (err error) {
+func (m *Manager) Stop(ctx context.Context, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationStop, started, err) }()
 
@@ -37,16 +36,16 @@ func (m *Manager) Stop(ctx context.Context, instance types.InstanceSpec) (err er
 		return err
 	}
 	switch status.State {
-	case types.InstanceStateStopped:
+	case StateStopped:
 		return nil
-	case types.InstanceStateStandby:
+	case StateStandby:
 		m.record(instance, events.ActionStopped, "Stopped instance: discarded what it had frozen on standby", nil)
 		m.logger.InfoContext(ctx, "stopped instance", "instance", instance.Name)
 		m.scheduleRemoval(ctx, instance)
 		return nil
 	}
 
-	if err := m.transition(instance, types.InstanceStateStopping); err != nil {
+	if err := m.transition(instance, StateStopping); err != nil {
 		return err
 	}
 	// Finish the stop even if the request is cancelled.

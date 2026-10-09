@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // The Manager holds a process handle for the VMM of every active instance and
@@ -25,21 +25,21 @@ type supervised struct {
 
 	// health is the instance's health monitor, or nil if it has no check.
 	// stopMonitor ends it.
-	health      *healthMonitor
+	health      *health.Monitor
 	stopMonitor context.CancelFunc
 }
 
 // supervise registers vmm as the VMM of instance, watches it for exit, and
 // monitors health if status has a check. The caller must hold the instance
 // lock.
-func (m *Manager) supervise(ctx context.Context, instance types.InstanceSpec, vmm *process.Process, status types.InstanceStatus) {
+func (m *Manager) supervise(ctx context.Context, instance Spec, vmm *process.Process, status Status) {
 	ctx = context.WithoutCancel(ctx)
 
 	s := &supervised{vmm: vmm, stopMonitor: func() {}}
 	if status.HealthCheck != nil {
 		var monitorCtx context.Context
 		monitorCtx, s.stopMonitor = context.WithCancel(ctx)
-		s.health = newHealthMonitor(*status.HealthCheck, status.StartedAt)
+		s.health = health.NewMonitor(*status.HealthCheck, status.StartedAt)
 		m.watchers.Go(func() { m.monitor(monitorCtx, instance, vmm, status.VsockPath, s.health) })
 	}
 
@@ -89,7 +89,7 @@ func (m *Manager) forget(instanceID string) {
 // first asks the guest to shut down within stopGracePeriod. Otherwise, or
 // after that, the guest's disks are synced and the VMM is shut down, then
 // killed if it overstays. The caller must hold the instance lock.
-func (m *Manager) stopVMM(ctx context.Context, instance types.InstanceSpec, status types.InstanceStatus, graceful bool) stopOutcome {
+func (m *Manager) stopVMM(ctx context.Context, instance Spec, status Status, graceful bool) stopOutcome {
 	vmm := m.vmm(instance.ID)
 	if vmm == nil {
 		return stopNotRunning
@@ -156,8 +156,8 @@ func stopMessage(outcome stopOutcome, grace, took, ranFor time.Duration) string 
 
 // shutdownGracefully asks a running guest to shut down and waits up to
 // stopGracePeriod for its VMM to exit.
-func (m *Manager) shutdownGracefully(ctx context.Context, instance types.InstanceSpec, status types.InstanceStatus, vmm *process.Process) stopOutcome {
-	if status.State != types.InstanceStateRunning || status.VsockPath == "" {
+func (m *Manager) shutdownGracefully(ctx context.Context, instance Spec, status Status, vmm *process.Process) stopOutcome {
+	if status.State != StateRunning || status.VsockPath == "" {
 		return stopForced
 	}
 
@@ -180,7 +180,7 @@ func (m *Manager) shutdownGracefully(ctx context.Context, instance types.Instanc
 
 // handleExit handles a VMM that exited unexpectedly. The runtime directory
 // is kept for the VMM's log.
-func (m *Manager) handleExit(ctx context.Context, instance types.InstanceSpec, vmm *process.Process) {
+func (m *Manager) handleExit(ctx context.Context, instance Spec, vmm *process.Process) {
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -208,7 +208,7 @@ func (m *Manager) handleExit(ctx context.Context, instance types.InstanceSpec, v
 // applies its restart policy: Stopped after a clean exit, Failed otherwise,
 // or Restarting. prev is the status before it ended. The caller must
 // hold the instance lock.
-func (m *Manager) ended(ctx context.Context, instance types.InstanceSpec, prev types.InstanceStatus, exit Exit) {
+func (m *Manager) ended(ctx context.Context, instance Spec, prev Status, exit Exit) {
 	m.teardownNetwork(ctx, instance)
 
 	var ranFor time.Duration
@@ -227,18 +227,18 @@ func (m *Manager) ended(ctx context.Context, instance types.InstanceSpec, prev t
 
 	switch {
 	case decision.restart:
-		status.State = types.InstanceStateRestarting
+		status.State = StateRestarting
 		status.NextRestartAt = status.FinishedAt.Add(decision.delay)
 		if !exit.Clean() {
 			status.StateError = exit.Failure.Error()
 		}
 	case exit.Clean():
-		status.State = types.InstanceStateStopped
+		status.State = StateStopped
 	case decision.gaveUp:
-		status.State = types.InstanceStateFailed
+		status.State = StateFailed
 		status.StateError = fmt.Sprintf("gave up after %s: %v", humanize.Count(decision.restarts, "restart"), exit.Failure)
 	default:
-		status.State = types.InstanceStateFailed
+		status.State = StateFailed
 		status.StateError = exit.Failure.Error()
 	}
 
@@ -275,7 +275,7 @@ func (m *Manager) ended(ctx context.Context, instance types.InstanceSpec, prev t
 
 // scheduleRemoval deletes an instance with RemoveOnExit set. It runs in a
 // goroutine because callers hold the instance lock, which Delete takes.
-func (m *Manager) scheduleRemoval(ctx context.Context, instance types.InstanceSpec) {
+func (m *Manager) scheduleRemoval(ctx context.Context, instance Spec) {
 	if !instance.RemoveOnExit {
 		return
 	}
@@ -351,7 +351,7 @@ func (m *Manager) restart(ctx context.Context, instanceID string, pending *pendi
 		return
 	}
 	status, err := m.Status(instance)
-	if err != nil || status.State != types.InstanceStateRestarting {
+	if err != nil || status.State != StateRestarting {
 		return
 	}
 

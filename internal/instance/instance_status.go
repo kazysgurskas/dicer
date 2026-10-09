@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/atomicfile"
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/process"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // An instance's status is read from and written to its runtime directory
@@ -23,27 +23,27 @@ import (
 
 // Status returns an instance's status. An instance with no status file is
 // Stopped.
-func (m *Manager) Status(instance types.InstanceSpec) (types.InstanceStatus, error) {
+func (m *Manager) Status(instance Spec) (Status, error) {
 	status, err := m.readStatus(instance.ID)
 	if err != nil {
-		return types.InstanceStatus{}, err
+		return Status{}, err
 	}
 	// Standby leaves no runtime status, which a reboot would lose: the guest
 	// frozen to disk is what says the instance is on standby.
-	if status.State == types.InstanceStateStopped && m.onStandby(instance) {
-		status.State = types.InstanceStateStandby
+	if status.State == StateStopped && m.onStandby(instance) {
+		status.State = StateStandby
 	}
 	return status, nil
 }
 
 // readStatus returns the status of an instance by ID.
-func (m *Manager) readStatus(instanceID string) (types.InstanceStatus, error) {
+func (m *Manager) readStatus(instanceID string) (Status, error) {
 	data, err := os.ReadFile(m.statusPath(instanceID))
 	if errors.Is(err, fs.ErrNotExist) {
-		return types.InstanceStatus{InstanceID: instanceID, State: types.InstanceStateStopped}, nil
+		return Status{InstanceID: instanceID, State: StateStopped}, nil
 	}
 
-	var status types.InstanceStatus
+	var status Status
 	if err == nil {
 		err = json.Unmarshal(data, &status)
 	}
@@ -51,9 +51,9 @@ func (m *Manager) readStatus(instanceID string) (types.InstanceStatus, error) {
 		// Report Failed so recovery cleans up.
 		m.logger.Warn("corrupt instance status, treating instance as failed",
 			"instance_id", instanceID, "error", err)
-		return types.InstanceStatus{
+		return Status{
 			InstanceID: instanceID,
-			State:      types.InstanceStateFailed,
+			State:      StateFailed,
 			StateError: "corrupt instance status",
 		}, nil
 	}
@@ -62,7 +62,7 @@ func (m *Manager) readStatus(instanceID string) (types.InstanceStatus, error) {
 }
 
 // writeStatus records an instance's status.
-func (m *Manager) writeStatus(status types.InstanceStatus) error {
+func (m *Manager) writeStatus(status Status) error {
 	if err := m.ensureRuntimeDir(status.InstanceID); err != nil {
 		return err
 	}
@@ -80,24 +80,24 @@ func (m *Manager) writeStatus(status types.InstanceStatus) error {
 // runRecord is what a start or restore records of the guest it launched.
 type runRecord struct {
 	hypervisorVersion string
-	held              types.Resources
+	held              Resources
 	imageDigest       string
 	// vsockCID is the guest's vsock context ID: its own instance's, or,
 	// for a fork, that of the instance it is a copy of.
 	vsockCID int64
 
 	restarts    int
-	healthCheck *types.HealthCheck
+	healthCheck *health.Check
 }
 
 // recordRunning records that an instance is running on vmm and returns the
 // recorded state.
-func (m *Manager) recordRunning(instance types.InstanceSpec, vmm *process.Process, run runRecord) (types.InstanceStatus, error) {
+func (m *Manager) recordRunning(instance Spec, vmm *process.Process, run runRecord) (Status, error) {
 	pid := vmm.PID()
 
-	status := types.InstanceStatus{
+	status := Status{
 		InstanceID:           instance.ID,
-		State:                types.InstanceStateRunning,
+		State:                StateRunning,
 		VMMPID:               &pid,
 		HypervisorSocketPath: m.hypervisorSocketPath(instance.ID),
 		HypervisorVersion:    run.hypervisorVersion,
@@ -111,7 +111,7 @@ func (m *Manager) recordRunning(instance types.InstanceSpec, vmm *process.Proces
 		RestartCount:         run.restarts,
 	}
 	if err := m.writeStatus(status); err != nil {
-		return types.InstanceStatus{}, fmt.Errorf("record instance status: %w", err)
+		return Status{}, fmt.Errorf("record instance status: %w", err)
 	}
 
 	return status, nil
@@ -141,7 +141,7 @@ func (m *Manager) ensureRuntimeDir(instanceID string) error {
 // prepareRuntimeDir readies an instance's runtime directory for a new VMM.
 // It removes sockets a previous VMM left behind, and links the overlay disk
 // and the console and hypervisor logs in from the instance directory.
-func (m *Manager) prepareRuntimeDir(instance types.InstanceSpec) error {
+func (m *Manager) prepareRuntimeDir(instance Spec) error {
 	if err := m.ensureRuntimeDir(instance.ID); err != nil {
 		return err
 	}

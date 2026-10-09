@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Admission keeps the host from committing more CPU and memory than it
@@ -17,7 +16,7 @@ import (
 
 // CheckResources reports whether an instance asking for r could ever start on
 // this host. An instance may not have more vCPUs than the host has CPUs.
-func (m *Manager) CheckResources(r types.Resources) error {
+func (m *Manager) CheckResources(r Resources) error {
 	if m.capacity.Unlimited() {
 		return nil
 	}
@@ -37,7 +36,7 @@ func (m *Manager) CheckResources(r types.Resources) error {
 // admit records instance as Starting, holding need, if the host has room
 // (ErrResourceExhausted otherwise) and its ports and volumes are free
 // (ErrInvalidState otherwise). The caller must hold the instance lock.
-func (m *Manager) admit(instance types.InstanceSpec, need types.Resources) error {
+func (m *Manager) admit(instance Spec, need Resources) error {
 	m.admissionMu.Lock()
 	defer m.admissionMu.Unlock()
 
@@ -57,7 +56,7 @@ func (m *Manager) admit(instance types.InstanceSpec, need types.Resources) error
 		return err
 	}
 
-	return m.transitionWith(instance, types.InstanceStateStarting, func(status *types.InstanceStatus) {
+	return m.transitionWith(instance, StateStarting, func(status *Status) {
 		status.VCPUs = need.VCPUs
 		status.MemoryBytes = need.MemoryBytes
 	})
@@ -66,14 +65,14 @@ func (m *Manager) admit(instance types.InstanceSpec, need types.Resources) error
 // reserve makes a running instance hold need in place of what it holds, if
 // the host has room (ErrResourceExhausted otherwise). The caller must hold
 // the instance lock.
-func (m *Manager) reserve(instance types.InstanceSpec, need types.Resources) error {
+func (m *Manager) reserve(instance Spec, need Resources) error {
 	m.admissionMu.Lock()
 	defer m.admissionMu.Unlock()
 
 	if err := m.checkRoom(instance, need); err != nil {
 		return err
 	}
-	return m.transitionWith(instance, types.InstanceStateRunning, func(status *types.InstanceStatus) {
+	return m.transitionWith(instance, StateRunning, func(status *Status) {
 		status.VCPUs = need.VCPUs
 		status.MemoryBytes = need.MemoryBytes
 	})
@@ -82,7 +81,7 @@ func (m *Manager) reserve(instance types.InstanceSpec, need types.Resources) err
 // checkRoom returns ErrResourceExhausted unless the host has room for
 // instance to hold need beside what the others hold. The caller must hold
 // admissionMu.
-func (m *Manager) checkRoom(instance types.InstanceSpec, need types.Resources) error {
+func (m *Manager) checkRoom(instance Spec, need Resources) error {
 	if m.capacity.Unlimited() {
 		return nil
 	}
@@ -101,10 +100,10 @@ func (m *Manager) checkRoom(instance types.InstanceSpec, need types.Resources) e
 }
 
 // allocated returns what the instances other than excludeID hold.
-func (m *Manager) allocated(excludeID string) (types.Resources, error) {
+func (m *Manager) allocated(excludeID string) (Resources, error) {
 	instances := m.definitions.Instances()
 
-	var total types.Resources
+	var total Resources
 	for _, instance := range instances {
 		if instance.ID == excludeID {
 			continue
@@ -112,7 +111,7 @@ func (m *Manager) allocated(excludeID string) (types.Resources, error) {
 
 		status, err := m.Status(instance)
 		if err != nil {
-			return types.Resources{}, err
+			return Resources{}, err
 		}
 		total = total.Add(status.HeldResources())
 	}
@@ -122,7 +121,7 @@ func (m *Manager) allocated(excludeID string) (types.Resources, error) {
 
 // checkPorts refuses an instance that would publish a host port another
 // instance holds. The caller must hold admissionMu.
-func (m *Manager) checkPorts(instance types.InstanceSpec) error {
+func (m *Manager) checkPorts(instance Spec) error {
 	if len(instance.Ports) == 0 {
 		return nil
 	}
@@ -155,7 +154,7 @@ func (m *Manager) checkPorts(instance types.InstanceSpec) error {
 
 // checkVolumes refuses an instance that would share a volume with another
 // that holds it, unless both mount it read-only. The caller must hold admissionMu.
-func (m *Manager) checkVolumes(instance types.InstanceSpec) error {
+func (m *Manager) checkVolumes(instance Spec) error {
 	if !slices.ContainsFunc(instance.Mounts, isVolume) {
 		return nil
 	}
@@ -192,4 +191,4 @@ func (m *Manager) checkVolumes(instance types.InstanceSpec) error {
 }
 
 // isVolume reports whether a mount is of a volume.
-func isVolume(mount types.Mount) bool { return mount.Type == types.MountTypeVolume }
+func isVolume(mount Mount) bool { return mount.Type == MountTypeVolume }

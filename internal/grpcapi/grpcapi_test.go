@@ -14,7 +14,6 @@ import (
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 	"github.com/konradasb/dicer/internal/volume"
 )
 
@@ -37,8 +36,8 @@ func (f *fakeRecorder) Record(e events.Event) { f.events = append(f.events, e) }
 
 // testCapacity is a 4-CPU, 8GiB host with the daemon's default admission:
 // 16 vCPUs and 7GiB.
-var testCapacity = types.Capacity{
-	Host:                types.Resources{VCPUs: 4, MemoryBytes: 8 << 30},
+var testCapacity = instance.Capacity{
+	Host:                instance.Resources{VCPUs: 4, MemoryBytes: 8 << 30},
 	ReservedMemoryBytes: 1 << 30,
 	CPUOvercommit:       4,
 	MemoryOvercommit:    1,

@@ -10,8 +10,37 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
+
+func TestNetworkValidate(t *testing.T) {
+	valid := map[string]Network{
+		"plain":                        {Name: "lan", MTU: 1500},
+		"nameservers":                  {Name: "lan", MTU: 1500, Nameservers: []string{"8.8.8.8"}},
+		"internal without nameservers": {Name: "lan", MTU: 1500, Internal: true},
+	}
+	for name, n := range valid {
+		t.Run(name, func(t *testing.T) {
+			if err := n.Validate(); err != nil {
+				t.Errorf("Validate() = %v, want nil", err)
+			}
+		})
+	}
+
+	invalid := map[string]Network{
+		"bad name":                  {Name: "Not Valid", MTU: 1500},
+		"MTU too small":             {Name: "lan", MTU: 100},
+		"MTU too large":             {Name: "lan", MTU: 10000},
+		"bad nameserver":            {Name: "lan", MTU: 1500, Nameservers: []string{"dns.example"}},
+		"internal with nameservers": {Name: "lan", MTU: 1500, Internal: true, Nameservers: []string{"8.8.8.8"}},
+	}
+	for name, n := range invalid {
+		t.Run(name, func(t *testing.T) {
+			if err := n.Validate(); !errors.Is(err, errdefs.ErrInvalidArgument) {
+				t.Errorf("Validate() = %v, want an invalid argument error", err)
+			}
+		})
+	}
+}
 
 func TestNewFillsInDefaults(t *testing.T) {
 	tests := []struct {
@@ -58,7 +87,7 @@ func TestNewRefusesWhatCannotWork(t *testing.T) {
 }
 
 func TestOverlappingSubnetsAreRefused(t *testing.T) {
-	networks := []types.Network{{Name: "lan", Subnet: "10.9.0.0/24"}}
+	networks := []Network{{Name: "lan", Subnet: "10.9.0.0/24"}}
 	hostSubnets := []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}
 
 	tests := []struct {
@@ -72,7 +101,7 @@ func TestOverlappingSubnetsAreRefused(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.subnet, func(t *testing.T) {
-			err := CheckSubnetOverlap(types.Network{Subnet: tt.subnet}, networks, hostSubnets)
+			err := CheckSubnetOverlap(Network{Subnet: tt.subnet}, networks, hostSubnets)
 			if got := errors.Is(err, errdefs.ErrExists); got != tt.overlap {
 				t.Errorf("CheckSubnetOverlap = %v, want an overlap %v", err, tt.overlap)
 			}

@@ -1,9 +1,13 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package types
+package image
 
-import "time"
+import (
+	"time"
+
+	"github.com/konradasb/dicer/internal/health"
+)
 
 // Image is a container image pulled and converted into a disk a guest boots
 // from.
@@ -19,7 +23,7 @@ type Image struct {
 
 	// HealthCheck is the check the image declares, used by an instance that
 	// sets none of its own. Nil if it declares none.
-	HealthCheck *HealthCheck `json:"health_check,omitempty"`
+	HealthCheck *health.Check `json:"health_check,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

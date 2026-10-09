@@ -17,7 +17,6 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // standbyFile records, in an instance's standby directory, what its frozen
@@ -28,14 +27,14 @@ const standbyFile = "standby.json"
 // that it holds no CPU or memory. Start resumes it where it was; Stop
 // discards what was frozen. Its disk stays where it is, and its address, host
 // ports and writable volumes stay its own.
-func (m *Manager) Standby(ctx context.Context, instance types.InstanceSpec) error {
+func (m *Manager) Standby(ctx context.Context, instance Spec) error {
 	return m.standby(ctx, instance, 0)
 }
 
 // standby is Standby. If idleFor is set, the instance has been idle that
 // long, and is put on standby only if it is still running and its
 // StandbyAfter, as defined now, has passed.
-func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idleFor time.Duration) (err error) {
+func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Duration) (err error) {
 	started := time.Now()
 
 	lock := m.lock(instance.ID)
@@ -49,7 +48,7 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 	}
 	if idleFor > 0 {
 		current, err := m.definitions.Instance(instance.ID)
-		if err != nil || status.State != types.InstanceStateRunning ||
+		if err != nil || status.State != StateRunning ||
 			current.StandbyAfter == 0 || idleFor < current.StandbyAfter {
 			return nil
 		}
@@ -87,7 +86,7 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 	}
 	defer func() { _ = os.RemoveAll(staged) }()
 
-	running := status.State == types.InstanceStateRunning
+	running := status.State == StateRunning
 	snapshotCtx, cancel := context.WithTimeout(ctx, memoryTransferTimeout(status.MemoryBytes))
 	defer cancel()
 	if _, err := snapshotVM(snapshotCtx, hv, running, staged); err != nil {
@@ -103,9 +102,9 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 		}
 	}()
 
-	standby := types.Snapshot{
+	standby := Snapshot{
 		Name:              "standby",
-		Kind:              types.SnapshotKindMemory,
+		Kind:              SnapshotKindMemory,
 		Instance:          instance,
 		IP:                allocation.IP,
 		MAC:               allocation.MAC,
@@ -128,7 +127,7 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 	// shut down.
 	frozen = true
 	ending := status
-	ending.State = types.InstanceStatePaused
+	ending.State = StatePaused
 	ctx = context.WithoutCancel(ctx)
 	m.stopVMM(ctx, instance, ending, false)
 
@@ -158,7 +157,7 @@ func (m *Manager) standby(ctx context.Context, instance types.InstanceSpec, idle
 // resumeStandby resumes an instance on standby where it was, and discards
 // what was frozen. wokenByPort is the published port a connection that woke
 // it came to, or 0 for a start. The caller must hold the instance lock.
-func (m *Manager) resumeStandby(ctx context.Context, instance types.InstanceSpec, wokenByPort uint16) error {
+func (m *Manager) resumeStandby(ctx context.Context, instance Spec, wokenByPort uint16) error {
 	started := time.Now()
 
 	standby, err := m.readStandby(instance)
@@ -197,27 +196,27 @@ func (m *Manager) resumeStandby(ctx context.Context, instance types.InstanceSpec
 // readStandby returns what an instance on standby recorded of its frozen
 // guest. If the instance is not on standby, the error matches
 // fs.ErrNotExist.
-func (m *Manager) readStandby(instance types.InstanceSpec) (types.Snapshot, error) {
+func (m *Manager) readStandby(instance Spec) (Snapshot, error) {
 	data, err := os.ReadFile(filepath.Join(m.standbyDir(instance), standbyFile))
 	if err != nil {
-		return types.Snapshot{}, fmt.Errorf("read standby: %w", err)
+		return Snapshot{}, fmt.Errorf("read standby: %w", err)
 	}
-	var standby types.Snapshot
+	var standby Snapshot
 	if err := json.Unmarshal(data, &standby); err != nil {
-		return types.Snapshot{}, fmt.Errorf("parse standby: %w", err)
+		return Snapshot{}, fmt.Errorf("parse standby: %w", err)
 	}
 	return standby, nil
 }
 
 // onStandby reports whether instance has a guest frozen on standby.
-func (m *Manager) onStandby(instance types.InstanceSpec) bool {
+func (m *Manager) onStandby(instance Spec) bool {
 	_, err := os.Stat(filepath.Join(m.standbyDir(instance), standbyFile))
 	return err == nil
 }
 
 // discardStandby removes what an instance on standby has frozen, if it has
 // anything.
-func (m *Manager) discardStandby(instance types.InstanceSpec) error {
+func (m *Manager) discardStandby(instance Spec) error {
 	if err := os.RemoveAll(m.standbyDir(instance)); err != nil {
 		return fmt.Errorf("discard standby: %w", err)
 	}

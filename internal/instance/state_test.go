@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 func TestTransitionRejectsIllegalMove(t *testing.T) {
@@ -17,11 +16,11 @@ func TestTransitionRejectsIllegalMove(t *testing.T) {
 
 	// Stopped -> Paused is not a legal move; it must be refused before
 	// anything touches the host.
-	if err := manager.transition(instance, types.InstanceStatePaused); !errors.Is(err, errdefs.ErrInvalidState) {
+	if err := manager.transition(instance, StatePaused); !errors.Is(err, errdefs.ErrInvalidState) {
 		t.Errorf("error = %v, want ErrInvalidState", err)
 	}
 
-	if err := manager.transition(instance, types.InstanceStateStarting); err != nil {
+	if err := manager.transition(instance, StateStarting); err != nil {
 		t.Errorf("Stopped -> Starting should be allowed: %v", err)
 	}
 }
@@ -32,12 +31,12 @@ func TestTransitionKeepsProcessDetails(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
 
-	if err := h.manager.transition(h.instance, types.InstanceStatePaused); err != nil {
+	if err := h.manager.transition(h.instance, StatePaused); err != nil {
 		t.Fatalf("transition: %v", err)
 	}
 
 	status := h.status(t)
-	if status.State != types.InstanceStatePaused {
+	if status.State != StatePaused {
 		t.Errorf("state = %s, want Paused", status.State)
 	}
 	if status.VMMPID == nil || status.HypervisorVersion != testHypervisorVersion {
@@ -53,7 +52,7 @@ func TestFailClearsProcessDetails(t *testing.T) {
 	h.manager.fail(h.instance.ID, errors.New("boom"))
 
 	status := h.status(t)
-	if status.State != types.InstanceStateFailed || status.StateError != "boom" {
+	if status.State != StateFailed || status.StateError != "boom" {
 		t.Errorf("status = %+v, want Failed/boom", status)
 	}
 	if status.VMMPID != nil {

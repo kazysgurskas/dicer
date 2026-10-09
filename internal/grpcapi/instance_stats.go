@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -64,7 +64,7 @@ func (h *instanceHandler) GetInstanceStats(
 
 // readStats reads the stats of the instances in wanted, by instance ID, or
 // of every instance if wanted is nil.
-func (h *instanceHandler) readStats(wanted map[string]bool) []types.InstanceStats {
+func (h *instanceHandler) readStats(wanted map[string]bool) []instance.Stats {
 	stats := h.instances.Stats()
 	if wanted == nil {
 		return stats
@@ -82,8 +82,8 @@ func (h *instanceHandler) readStats(wanted map[string]bool) []types.InstanceStat
 // instanceStatsBatch converts current into a batch, each instance's CPU use
 // measured since it was read in previous. An instance without a comparable
 // read in previous is left out.
-func instanceStatsBatch(previous, current []types.InstanceStats) *dicerdv1.GetInstanceStatsResponse {
-	byID := make(map[string]types.InstanceStats, len(previous))
+func instanceStatsBatch(previous, current []instance.Stats) *dicerdv1.GetInstanceStatsResponse {
+	byID := make(map[string]instance.Stats, len(previous))
 	for _, s := range previous {
 		byID[s.InstanceID] = s
 	}

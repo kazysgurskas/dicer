@@ -69,7 +69,7 @@ func (h *resourceHandler) GetResources(
 // diskUsage reports on the data directory's filesystem and what is
 // provisioned on it.
 func (h *resourceHandler) diskUsage() (*dicerdv1.DiskUsage, error) {
-	filesystem, err := hostinfo.DiskUsage(h.dataDir)
+	filesystem, err := hostinfo.DiskUsageOf(h.dataDir)
 	if err != nil {
 		return nil, err
 	}

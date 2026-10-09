@@ -121,8 +121,8 @@ type discardMetrics struct{}
 func (discardMetrics) RecordDNSQuery(string, string)          {}
 func (discardMetrics) RecordDNSForward(string, time.Duration) {}
 
-// network is what a server needs to know of the network it serves.
-type network struct {
+// servedNetwork is what a server needs to know of the network it serves.
+type servedNetwork struct {
 	name string
 	// domain is the network's name as queries, lowercased, end in it.
 	domain string
@@ -143,7 +143,7 @@ type network struct {
 
 // server serves one network.
 type server struct {
-	network  network
+	network  servedNetwork
 	resolver Resolver
 	metrics  Metrics
 	logger   *slog.Logger
@@ -165,7 +165,7 @@ type server struct {
 
 // listen starts a server for nw on addr.
 func listen(
-	ctx context.Context, addr string, nw network, resolver Resolver, metrics Metrics, logger *slog.Logger,
+	ctx context.Context, addr string, nw servedNetwork, resolver Resolver, metrics Metrics, logger *slog.Logger,
 ) (*server, error) {
 	var lc net.ListenConfig
 	udp, err := lc.ListenPacket(ctx, "udp4", addr)

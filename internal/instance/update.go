@@ -19,16 +19,16 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Update replaces a stopped instance's definition. A change to its restart
 // policy or standby_after alone is accepted in any state. Changing the network or static IP
 // releases the instance's address. A larger disk_bytes grows the overlay
 // disk at the next start; a smaller one than the overlay disk is refused.
-func (m *Manager) Update(ctx context.Context, updated types.InstanceSpec) error {
+func (m *Manager) Update(ctx context.Context, updated Spec) error {
 	lock := m.lock(updated.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -64,8 +64,8 @@ func (m *Manager) Update(ctx context.Context, updated types.InstanceSpec) error 
 // checkCanUpdate returns an error unless current, in state, can be changed
 // to updated: only its restart policy and standby_after can change while it
 // is not stopped, and its overlay disk cannot shrink.
-func (m *Manager) checkCanUpdate(current, updated types.InstanceSpec, state types.InstanceState) error {
-	if state != types.InstanceStateStopped && !onlyPoliciesDiffer(current, updated) {
+func (m *Manager) checkCanUpdate(current, updated Spec, state State) error {
+	if state != StateStopped && !onlyPoliciesDiffer(current, updated) {
 		return errdefs.InvalidState("instance %q is %s; stop it before changing it", current.Name, state.Lowercase())
 	}
 	if updated.DiskBytes == current.DiskBytes {
@@ -90,13 +90,13 @@ func (m *Manager) checkCanUpdate(current, updated types.InstanceSpec, state type
 }
 
 // updateMessage describes what an update changed and when it takes effect.
-func updateMessage(current, updated types.InstanceSpec, state types.InstanceState) string {
+func updateMessage(current, updated Spec, state State) string {
 	changed := definitionChanges(current, updated)
 	if len(changed) == 0 {
 		return "Updated instance: nothing changed"
 	}
 	when := "takes effect on next start"
-	if state != types.InstanceStateStopped {
+	if state != StateStopped {
 		when = "takes effect at once"
 	}
 	return "Updated instance: " + strings.Join(changed, ", ") + "; " + when
@@ -104,7 +104,7 @@ func updateMessage(current, updated types.InstanceSpec, state types.InstanceStat
 
 // definitionChanges lists what differs between two definitions:
 // "memory 256 MiB → 512 MiB", "environment changed".
-func definitionChanges(a, b types.InstanceSpec) []string {
+func definitionChanges(a, b Spec) []string {
 	var out []string
 	from := func(name, x, y string) {
 		if x != y {
@@ -157,14 +157,14 @@ func definitionChanges(a, b types.InstanceSpec) []string {
 	changed("command", slices.Equal(a.Cmd, b.Cmd))
 	changed("environment", maps.Equal(a.Env, b.Env))
 	changed("ports", slices.Equal(a.Ports, b.Ports))
-	changed("mounts", slices.EqualFunc(a.Mounts, b.Mounts, types.Mount.Equal))
+	changed("mounts", slices.EqualFunc(a.Mounts, b.Mounts, Mount.Equal))
 	changed("labels", maps.Equal(a.Labels, b.Labels))
 	return out
 }
 
 // healthCheckString describes an instance's health check; nil is the
 // image's.
-func healthCheckString(c *types.HealthCheck) string {
+func healthCheckString(c *health.Check) string {
 	if c == nil {
 		return "the image's"
 	}
@@ -184,8 +184,8 @@ func standbyAfter(d time.Duration) string {
 // daemon decides by rather than what the guest runs with, which can change
 // in any state: their restart policy, when they go on standby, and
 // UpdatedAt.
-func onlyPoliciesDiffer(a, b types.InstanceSpec) bool {
-	a.Restart, b.Restart = types.RestartPolicy{}, types.RestartPolicy{}
+func onlyPoliciesDiffer(a, b Spec) bool {
+	a.Restart, b.Restart = RestartPolicy{}, RestartPolicy{}
 	a.StandbyAfter, b.StandbyAfter = 0, 0
 	a.UpdatedAt = b.UpdatedAt
 	return reflect.DeepEqual(a, b)

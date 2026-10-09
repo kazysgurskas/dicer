@@ -17,7 +17,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // DefaultBurstMultiplier is the upload and download burst multiplier used
@@ -69,7 +69,7 @@ type Host struct {
 
 	// mu guards networks, those whose bridges are set up, by bridge.
 	mu       sync.Mutex
-	networks map[string]types.Network
+	networks map[string]network.Network
 }
 
 // NewHost creates a host network configurator. Close releases it.
@@ -79,7 +79,7 @@ func NewHost(cfg Config) *Host {
 	h := &Host{
 		config:   cfg,
 		logger:   cfg.Logger.With("component", "hostnet"),
-		networks: make(map[string]types.Network),
+		networks: make(map[string]network.Network),
 	}
 	var err error
 	if h.firewalld, err = connectFirewalld(); err != nil {

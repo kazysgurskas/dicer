@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 func TestInstanceToProtoStatusFields(t *testing.T) {
-	instance := types.InstanceSpec{
+	spec := instance.Spec{
 		ID:          "id-web",
 		Name:        "web",
 		ImageRef:    "docker.io/library/alpine:3.21",
@@ -25,7 +26,7 @@ func TestInstanceToProtoStatusFields(t *testing.T) {
 	}
 
 	t.Run("stopped instance carries no status detail", func(t *testing.T) {
-		got := instanceToProto(types.Instance{Spec: instance, Status: types.InstanceStatus{State: types.InstanceStateStopped}})
+		got := instanceToProto(instance.Instance{Spec: spec, Status: instance.Status{State: instance.StateStopped}})
 
 		if got.GetState() != dicerdv1.InstanceState_INSTANCE_STATE_STOPPED {
 			t.Errorf("state = %v, want stopped", got.GetState())
@@ -43,15 +44,15 @@ func TestInstanceToProtoStatusFields(t *testing.T) {
 
 	t.Run("running instance carries pid and address", func(t *testing.T) {
 		pid := 4242
-		status := types.InstanceStatus{
-			State:             types.InstanceStateRunning,
+		status := instance.Status{
+			State:             instance.StateRunning,
 			VMMPID:            &pid,
 			HypervisorVersion: "v49.0.0",
 			StartedAt:         time.Now(),
 		}
 		status.IP, status.MAC = "10.0.0.5", "02:00:00:00:00:01"
 
-		got := instanceToProto(types.Instance{Spec: instance, Status: status})
+		got := instanceToProto(instance.Instance{Spec: spec, Status: status})
 
 		if got.GetHypervisorPid() != int64(pid) {
 			t.Errorf("pid = %d, want %d", got.GetHypervisorPid(), pid)
@@ -66,7 +67,7 @@ func TestInstanceToProtoStatusFields(t *testing.T) {
 	})
 
 	t.Run("sizes are carried as bytes", func(t *testing.T) {
-		got := instanceToProto(types.Instance{Spec: instance, Status: types.InstanceStatus{State: types.InstanceStateStopped}})
+		got := instanceToProto(instance.Instance{Spec: spec, Status: instance.Status{State: instance.StateStopped}})
 
 		if got.GetMemoryBytes() != 2<<30 {
 			t.Errorf("memory = %d, want %d", got.GetMemoryBytes(), 2<<30)
@@ -78,17 +79,17 @@ func TestInstanceToProtoStatusFields(t *testing.T) {
 }
 
 func TestInstanceToProtoMounts(t *testing.T) {
-	instance := types.InstanceSpec{
+	spec := instance.Spec{
 		ID:   "id-web",
 		Name: "web",
-		Mounts: []types.Mount{
-			{Type: types.MountTypeVolume, Source: "data", Target: "/var/lib/data"},
-			{Type: types.MountTypeFile, Source: "/etc/dicer/db-password", Target: "/run/secrets/db-password", ReadOnly: true},
+		Mounts: []instance.Mount{
+			{Type: instance.MountTypeVolume, Source: "data", Target: "/var/lib/data"},
+			{Type: instance.MountTypeFile, Source: "/etc/dicer/db-password", Target: "/run/secrets/db-password", ReadOnly: true},
 		},
-		Ports: []types.PortMapping{{HostPort: 8080, GuestPort: 80}},
+		Ports: []network.PortMapping{{HostPort: 8080, GuestPort: 80}},
 	}
 
-	got := instanceToProto(types.Instance{Spec: instance, Status: types.InstanceStatus{State: types.InstanceStateStopped}})
+	got := instanceToProto(instance.Instance{Spec: spec, Status: instance.Status{State: instance.StateStopped}})
 
 	mounts := got.GetMounts()
 	if len(mounts) != 2 {
@@ -106,7 +107,7 @@ func TestInstanceToProtoMounts(t *testing.T) {
 }
 
 func TestNetworkToProtoUsage(t *testing.T) {
-	n := types.Network{
+	n := network.Network{
 		ID: "net-1", Name: "default",
 		Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
 	}
@@ -125,7 +126,7 @@ func TestNetworkToProtoUsage(t *testing.T) {
 // TestAllocationToProtoDerivesTAP pins the design decision that the TAP name
 // is computed from the instance ID rather than stored.
 func TestAllocationToProtoDerivesTAP(t *testing.T) {
-	got := allocationToProto(types.NetworkAllocation{InstanceID: "id-web", IP: "10.0.0.5"}, "web")
+	got := allocationToProto(network.Allocation{InstanceID: "id-web", IP: "10.0.0.5"}, "web")
 
 	if got.GetInstanceName() != "web" {
 		t.Errorf("instance name = %q, want web", got.GetInstanceName())
@@ -134,7 +135,7 @@ func TestAllocationToProtoDerivesTAP(t *testing.T) {
 		t.Error("TAP device should be derived, not left empty")
 	}
 	// Derivation must be stable: recovery depends on recomputing this name.
-	again := allocationToProto(types.NetworkAllocation{InstanceID: "id-web", IP: "10.0.0.5"}, "web")
+	again := allocationToProto(network.Allocation{InstanceID: "id-web", IP: "10.0.0.5"}, "web")
 	if got.GetTapDevice() != again.GetTapDevice() {
 		t.Errorf("TAP name is not deterministic: %q then %q",
 			got.GetTapDevice(), again.GetTapDevice())
@@ -143,14 +144,14 @@ func TestAllocationToProtoDerivesTAP(t *testing.T) {
 
 // An instance that leaves the init mode to the guest says it is auto.
 func TestInstanceInitModeDefaultsToAuto(t *testing.T) {
-	if got := instanceToProto(types.Instance{Status: types.InstanceStatus{State: types.InstanceStateStopped}}).GetInitMode(); got != dicerdv1.InitMode_INIT_MODE_AUTO {
+	if got := instanceToProto(instance.Instance{Status: instance.Status{State: instance.StateStopped}}).GetInitMode(); got != dicerdv1.InitMode_INIT_MODE_AUTO {
 		t.Errorf("init mode of an instance with none = %v, want auto", got)
 	}
 }
 
 // An instance created without a hypervisor says which one it runs on.
 func TestInstanceHypervisorTypeDefaultsToCloudHypervisor(t *testing.T) {
-	got := instanceToProto(types.Instance{Status: types.InstanceStatus{State: types.InstanceStateStopped}}).GetHypervisorType()
+	got := instanceToProto(instance.Instance{Status: instance.Status{State: instance.StateStopped}}).GetHypervisorType()
 	if got != dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR {
 		t.Errorf("hypervisor type of an instance with none = %v, want Cloud Hypervisor", got)
 	}

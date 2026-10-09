@@ -10,7 +10,7 @@ import (
 
 	"github.com/nrednav/cuid2"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -50,10 +50,10 @@ type forkRequest interface {
 // forkDefinition returns the definition of the instance a fork request makes
 // of source: source's, less what was source's alone, its ID and name, its
 // address, and its host ports.
-func forkDefinition(source types.InstanceSpec, req forkRequest) (types.InstanceSpec, error) {
+func forkDefinition(source instance.Spec, req forkRequest) (instance.Spec, error) {
 	ports, err := portMappingsFromProto(req.GetPorts())
 	if err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 
 	now := time.Now()
@@ -66,7 +66,7 @@ func forkDefinition(source types.InstanceSpec, req forkRequest) (types.InstanceS
 	fork.CreatedAt, fork.UpdatedAt = now, now
 
 	if err := fork.Validate(); err != nil {
-		return types.InstanceSpec{}, err
+		return instance.Spec{}, err
 	}
 	return fork, nil
 }

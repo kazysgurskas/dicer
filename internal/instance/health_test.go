@@ -8,17 +8,16 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/konradasb/dicer/internal/guest"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/image"
 )
 
 // quickCheck is a check that reaches a verdict in milliseconds.
-var quickCheck = types.HealthCheck{
+var quickCheck = health.Check{
 	Exec:     []string{"true"},
 	Interval: 5 * time.Millisecond,
 	Timeout:  5 * time.Millisecond,
@@ -27,7 +26,7 @@ var quickCheck = types.HealthCheck{
 
 // monitored returns a harness whose instance is checked with quickCheck,
 // probed by the returned fake.
-func monitored(t *testing.T, restart types.RestartPolicy, healthy bool) (*harness, *fakeProbe) {
+func monitored(t *testing.T, restart RestartPolicy, healthy bool) (*harness, *fakeProbe) {
 	t.Helper()
 
 	h := newHarness(t)
@@ -41,29 +40,29 @@ func monitored(t *testing.T, restart types.RestartPolicy, healthy bool) (*harnes
 }
 
 // waitForHealth polls until the instance's health is want.
-func (h *harness) waitForHealth(t *testing.T, want types.HealthStatus) types.Health {
+func (h *harness) waitForHealth(t *testing.T, want health.Status) health.Health {
 	t.Helper()
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if _, health, ok := h.manager.Health(h.instance); ok && health.Status == want {
-			return health
+		if _, got, ok := h.manager.Health(h.instance); ok && got.Status == want {
+			return got
 		}
 		if time.Now().After(deadline) {
-			_, health, ok := h.manager.Health(h.instance)
-			t.Fatalf("health = %+v (monitored: %v), want %s", health, ok, want)
+			_, got, ok := h.manager.Health(h.instance)
+			t.Fatalf("health = %+v (monitored: %v), want %s", got, ok, want)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 
 func TestHealthyInstanceIsReportedHealthy(t *testing.T) {
-	h, _ := monitored(t, types.RestartPolicy{}, true)
+	h, _ := monitored(t, RestartPolicy{}, true)
 	h.start(t)
 
-	health := h.waitForHealth(t, types.HealthStatusHealthy)
-	if health.LastOutput != "ok" || health.LastCheck.IsZero() {
-		t.Errorf("health = %+v, want the last probe's output and time", health)
+	got := h.waitForHealth(t, health.StatusHealthy)
+	if got.LastOutput != "ok" || got.LastCheck.IsZero() {
+		t.Errorf("health = %+v, want the last probe's output and time", got)
 	}
 
 	check, _, _ := h.manager.Health(h.instance)
@@ -72,14 +71,14 @@ func TestHealthyInstanceIsReportedHealthy(t *testing.T) {
 	}
 }
 
-// types.Usage counts checked instances by verdict, naming every verdict.
+// Usage counts checked instances by verdict, naming every verdict.
 func TestUsageCountsHealth(t *testing.T) {
-	h, _ := monitored(t, types.RestartPolicy{}, true)
+	h, _ := monitored(t, RestartPolicy{}, true)
 	h.start(t)
-	h.waitForHealth(t, types.HealthStatusHealthy)
+	h.waitForHealth(t, health.StatusHealthy)
 
 	got := h.manager.Usage().ByHealth
-	want := map[types.HealthStatus]int{types.HealthStatusStarting: 0, types.HealthStatusHealthy: 1, types.HealthStatusUnhealthy: 0}
+	want := map[health.Status]int{health.StatusStarting: 0, health.StatusHealthy: 1, health.StatusUnhealthy: 0}
 	if !maps.Equal(got, want) {
 		t.Errorf("ByHealth = %v, want %v", got, want)
 	}
@@ -88,14 +87,14 @@ func TestUsageCountsHealth(t *testing.T) {
 // Unhealthy is a failure to the restart policy: the VM is stopped and the
 // policy restarts it.
 func TestUnhealthyInstanceIsRestarted(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{Mode: types.RestartModeAlways}, false)
+	h, probe := monitored(t, RestartPolicy{Mode: RestartModeAlways}, false)
 	h.restartAtOnce()
 	h.start(t)
 	first := h.starter.vmm()
 
 	h.waitForVMMs(t, 2)
 	probe.set(true, nil)
-	status := h.waitForState(t, types.InstanceStateRunning)
+	status := h.waitForState(t, StateRunning)
 
 	select {
 	case <-first.Done():
@@ -108,22 +107,22 @@ func TestUnhealthyInstanceIsRestarted(t *testing.T) {
 	if n := h.hostNetwork.cancelledTeardowns.Load(); n > 0 {
 		t.Errorf("%d network teardowns were asked for with a cancelled context", n)
 	}
-	h.waitForHealth(t, types.HealthStatusHealthy)
+	h.waitForHealth(t, health.StatusHealthy)
 }
 
 // Under the policy no, an unhealthy instance is reported and left running:
 // stopping it would only make things worse.
 func TestUnhealthyInstanceWithoutRestartPolicyKeepsRunning(t *testing.T) {
-	h, _ := monitored(t, types.RestartPolicy{Mode: types.RestartModeNo}, false)
+	h, _ := monitored(t, RestartPolicy{Mode: RestartModeNo}, false)
 	h.start(t)
 
-	health := h.waitForHealth(t, types.HealthStatusUnhealthy)
-	if health.FailingStreak < quickCheck.Retries || !strings.Contains(health.LastOutput, "refused") {
-		t.Errorf("health = %+v, want the failures and what the probe said", health)
+	got := h.waitForHealth(t, health.StatusUnhealthy)
+	if got.FailingStreak < quickCheck.Retries || !strings.Contains(got.LastOutput, "refused") {
+		t.Errorf("health = %+v, want the failures and what the probe said", got)
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	if status := h.status(t); status.State != types.InstanceStateRunning || h.starter.vmmCount() != 1 {
+	if status := h.status(t); status.State != StateRunning || h.starter.vmmCount() != 1 {
 		t.Errorf("state = %s with %d VMMs launched, want the first still running", status.State, h.starter.vmmCount())
 	}
 }
@@ -131,11 +130,11 @@ func TestUnhealthyInstanceWithoutRestartPolicyKeepsRunning(t *testing.T) {
 // An on-failure:N instance that is still unhealthy after its N restarts
 // ends as Failed, as one that keeps exiting with an error does.
 func TestUnhealthyInstanceFailsOnceRestartsAreUsedUp(t *testing.T) {
-	h, _ := monitored(t, types.RestartPolicy{Mode: types.RestartModeOnFailure, MaxRetries: 1}, false)
+	h, _ := monitored(t, RestartPolicy{Mode: RestartModeOnFailure, MaxRetries: 1}, false)
 	h.restartAtOnce()
 	h.start(t)
 
-	status := h.waitForState(t, types.InstanceStateFailed)
+	status := h.waitForState(t, StateFailed)
 	if !strings.Contains(status.StateError, "gave up after 1 restart") ||
 		!strings.Contains(status.StateError, "health check") {
 		t.Errorf("state error = %q, want the restarts given up after and the failing check", status.StateError)
@@ -151,9 +150,9 @@ func TestUnhealthyInstanceFailsOnceRestartsAreUsedUp(t *testing.T) {
 // Whatever ends the run ends its health checks: nothing is left probing a
 // VM that is gone.
 func TestStopEndsHealthChecks(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{}, true)
+	h, probe := monitored(t, RestartPolicy{}, true)
 	h.start(t)
-	h.waitForHealth(t, types.HealthStatusHealthy)
+	h.waitForHealth(t, health.StatusHealthy)
 
 	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
@@ -172,9 +171,9 @@ func TestStopEndsHealthChecks(t *testing.T) {
 // A daemon shutting down stops checking, and does not wait for the VMMs it
 // checks, which outlive it: the next daemon checks them.
 func TestCloseStopsHealthChecks(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{}, true)
+	h, probe := monitored(t, RestartPolicy{}, true)
 	h.start(t)
-	h.waitForHealth(t, types.HealthStatusHealthy)
+	h.waitForHealth(t, health.StatusHealthy)
 
 	closed := make(chan struct{})
 	go func() {
@@ -196,7 +195,7 @@ func TestCloseStopsHealthChecks(t *testing.T) {
 
 // A paused guest cannot answer, and has not failed for it.
 func TestPausedInstanceIsNotProbed(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{Mode: types.RestartModeAlways}, false)
+	h, probe := monitored(t, RestartPolicy{Mode: RestartModeAlways}, false)
 	h.start(t)
 	if err := h.manager.Pause(t.Context(), h.instance); err != nil {
 		t.Fatalf("Pause: %v", err)
@@ -209,7 +208,7 @@ func TestPausedInstanceIsNotProbed(t *testing.T) {
 	if after := probe.count(); after != before {
 		t.Errorf("%d probes while paused, want none", after-before)
 	}
-	if status := h.status(t); status.State != types.InstanceStatePaused {
+	if status := h.status(t); status.State != StatePaused {
 		t.Errorf("state = %s, want Paused", status.State)
 	}
 }
@@ -217,17 +216,17 @@ func TestPausedInstanceIsNotProbed(t *testing.T) {
 // A guest whose agent predates health checks cannot be checked, which is no
 // evidence against it.
 func TestOutdatedAgentIsNotUnhealthy(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{Mode: types.RestartModeAlways}, false)
+	h, probe := monitored(t, RestartPolicy{Mode: RestartModeAlways}, false)
 	probe.set(false, grpcstatus.Error(codes.Unimplemented, "unknown method Probe"))
 	h.start(t)
 
 	for probe.count() < 5 {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if _, health, _ := h.manager.Health(h.instance); health.Status != types.HealthStatusStarting {
-		t.Errorf("health = %s, want starting", health.Status)
+	if _, got, _ := h.manager.Health(h.instance); got.Status != health.StatusStarting {
+		t.Errorf("health = %s, want starting", got.Status)
 	}
-	if status := h.status(t); status.State != types.InstanceStateRunning {
+	if status := h.status(t); status.State != StateRunning {
 		t.Errorf("state = %s, want Running", status.State)
 	}
 }
@@ -235,14 +234,14 @@ func TestOutdatedAgentIsNotUnhealthy(t *testing.T) {
 // An instance with no check of its own gets its image's, unless it switches
 // it off.
 func TestHealthCheckComesFromTheImage(t *testing.T) {
-	imageCheck := &types.HealthCheck{TCP: &types.TCPProbe{Port: 5432}}
+	imageCheck := &health.Check{TCP: &health.TCPProbe{Port: 5432}}
 
 	for name, tt := range map[string]struct {
-		own       *types.HealthCheck
+		own       *health.Check
 		monitored bool
 	}{
 		"inherited":    {own: nil, monitored: true},
-		"switched off": {own: &types.HealthCheck{Disabled: true}, monitored: false},
+		"switched off": {own: &health.Check{Disabled: true}, monitored: false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
@@ -250,7 +249,7 @@ func TestHealthCheckComesFromTheImage(t *testing.T) {
 			if !ok {
 				t.Fatalf("images is %T", h.manager.images)
 			}
-			images.held = &types.Image{
+			images.held = &image.Image{
 				Name: "img", Digest: "sha256:aaaa", DiskPath: images.diskPath,
 				Entrypoint: []string{"/bin/sh"}, HealthCheck: imageCheck,
 			}
@@ -262,106 +261,9 @@ func TestHealthCheckComesFromTheImage(t *testing.T) {
 			if ok != tt.monitored {
 				t.Fatalf("monitored = %v, want %v", ok, tt.monitored)
 			}
-			if ok && (check.TCP == nil || check.Interval != types.DefaultHealthCheckInterval) {
+			if ok && (check.TCP == nil || check.Interval != health.DefaultInterval) {
 				t.Errorf("check = %+v, want the image's, with the defaults", check)
 			}
 		})
-	}
-}
-
-// TestHealthAfter is the rule a run of failures is judged by: a failure inside
-// the start period is recorded but does not count, a success counts at once,
-// and the retries decide when a workload is unhealthy.
-func TestHealthAfter(t *testing.T) {
-	check := types.HealthCheck{Retries: 3, StartPeriod: time.Minute}
-	at := time.Now()
-
-	for _, tc := range []struct {
-		name       string
-		results    []probeResult
-		sinceStart time.Duration
-		wantStatus types.HealthStatus
-		wantStreak int
-	}{
-		{
-			name:       "a fresh check has reached no verdict",
-			sinceStart: time.Hour,
-			wantStatus: types.HealthStatusStarting,
-		},
-		{
-			name:       "one pass is healthy",
-			results:    []probeResult{{Healthy: true, At: at}},
-			sinceStart: time.Hour,
-			wantStatus: types.HealthStatusHealthy,
-		},
-		{
-			name:       "failures short of the retries are not yet a verdict",
-			results:    []probeResult{{At: at}, {At: at}},
-			sinceStart: time.Hour,
-			wantStatus: types.HealthStatusStarting,
-			wantStreak: 2,
-		},
-		{
-			name:       "the retries in a row are unhealthy",
-			results:    []probeResult{{At: at}, {At: at}, {At: at}},
-			sinceStart: time.Hour,
-			wantStatus: types.HealthStatusUnhealthy,
-			wantStreak: 3,
-		},
-		{
-			name:       "failures in the start period do not count",
-			results:    []probeResult{{At: at}, {At: at}, {At: at}, {At: at}},
-			sinceStart: time.Second,
-			wantStatus: types.HealthStatusStarting,
-		},
-		{
-			name:       "a pass clears the streak",
-			results:    []probeResult{{At: at}, {At: at}, {Healthy: true, At: at}},
-			sinceStart: time.Hour,
-			wantStatus: types.HealthStatusHealthy,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			health := types.NewHealth()
-			for _, r := range tc.results {
-				health = healthAfter(health, check, r, tc.sinceStart)
-			}
-
-			if health.Status != tc.wantStatus {
-				t.Errorf("status = %q, want %q", health.Status, tc.wantStatus)
-			}
-			if health.FailingStreak != tc.wantStreak {
-				t.Errorf("failing streak = %d, want %d", health.FailingStreak, tc.wantStreak)
-			}
-		})
-	}
-}
-
-// A success in the start period counts at once: a workload that is up is up,
-// however long it was given to get there.
-func TestHealthAfterTakesASuccessInTheStartPeriod(t *testing.T) {
-	health := healthAfter(types.NewHealth(), types.HealthCheck{Retries: 3, StartPeriod: time.Hour},
-		probeResult{Healthy: true, At: time.Now()}, time.Second)
-
-	if health.Status != types.HealthStatusHealthy {
-		t.Errorf("status = %q, want healthy", health.Status)
-	}
-}
-
-// What a probe said is kept, bounded, and cut on a rune boundary: the output
-// is the guest's to choose, so its size is not to be trusted.
-func TestHealthAfterKeepsWhatTheProbeSaid(t *testing.T) {
-	at := time.Now()
-	health := healthAfter(types.NewHealth(), types.HealthCheck{Retries: 1},
-		probeResult{Output: strings.Repeat("é", guest.MaxProbeOutput), At: at}, time.Hour)
-
-	if len(health.LastOutput) > guest.MaxProbeOutput {
-		t.Errorf("output is %d bytes, want at most %d", len(health.LastOutput), guest.MaxProbeOutput)
-	}
-	if !utf8.ValidString(health.LastOutput) {
-		t.Error("output was cut in the middle of a rune")
-	}
-	if !health.LastCheck.Equal(at) {
-		t.Errorf("last check = %v, want %v", health.LastCheck, at)
 	}
 }

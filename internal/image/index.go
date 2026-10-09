@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // index is the in-memory set of images this host holds, keyed by digest. It
@@ -16,16 +15,16 @@ import (
 // business. It is safe for concurrent use.
 type index struct {
 	mu     sync.RWMutex
-	images map[string]*types.Image
+	images map[string]*Image
 }
 
 // newIndex returns an empty index.
 func newIndex() *index {
-	return &index{images: make(map[string]*types.Image)}
+	return &index{images: make(map[string]*Image)}
 }
 
 // get returns the image with digest, and whether there is one.
-func (x *index) get(digest string) (*types.Image, bool) {
+func (x *index) get(digest string) (*Image, bool) {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 
@@ -36,11 +35,11 @@ func (x *index) get(digest string) (*types.Image, bool) {
 // latestByName returns the image most recently pulled under a reference,
 // and whether there is one. A tag that moved and was pulled again names
 // several images; the latest pull is what the tag means on this host.
-func (x *index) latestByName(name string) (*types.Image, bool) {
+func (x *index) latestByName(name string) (*Image, bool) {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 
-	var found *types.Image
+	var found *Image
 	for _, image := range x.images {
 		if image.Name == name && (found == nil || image.CreatedAt.After(found.CreatedAt)) {
 			found = image
@@ -51,11 +50,11 @@ func (x *index) latestByName(name string) (*types.Image, bool) {
 }
 
 // list returns all images.
-func (x *index) list() []*types.Image {
+func (x *index) list() []*Image {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 
-	images := make([]*types.Image, 0, len(x.images))
+	images := make([]*Image, 0, len(x.images))
 	for _, image := range x.images {
 		images = append(images, image)
 	}
@@ -66,7 +65,7 @@ func (x *index) list() []*types.Image {
 // create adds a new image to the index, or returns errdefs.ErrExists if one
 // with its digest is there. Its times are its own: set when it was pulled,
 // and kept as they were recorded when it is loaded again.
-func (x *index) create(image *types.Image) error {
+func (x *index) create(image *Image) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 
@@ -81,7 +80,7 @@ func (x *index) create(image *types.Image) error {
 // markUsed records that the image with digest was used at at, if later than
 // recorded, and returns the updated copy to save. It returns false if
 // nothing changed.
-func (x *index) markUsed(digest string, at time.Time) (*types.Image, bool) {
+func (x *index) markUsed(digest string, at time.Time) (*Image, bool) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 

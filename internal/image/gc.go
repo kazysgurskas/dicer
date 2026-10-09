@@ -15,7 +15,6 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // GCPolicy decides when unused images are removed: once unused for longer
@@ -60,18 +59,18 @@ type GCResult struct {
 
 // GCRemoval is one image garbage collection removed, and why.
 type GCRemoval struct {
-	Image  *types.Image
+	Image  *Image
 	Reason GCReason
 }
 
 // expiredImages returns those of images not in use and unused for longer
 // than the policy allows at now.
-func (p GCPolicy) expiredImages(images []*types.Image, inUse map[string]struct{}, now time.Time) []*types.Image {
+func (p GCPolicy) expiredImages(images []*Image, inUse map[string]struct{}, now time.Time) []*Image {
 	if p.MaxUnusedAge <= 0 {
 		return nil
 	}
 
-	var out []*types.Image
+	var out []*Image
 	for _, image := range collectableImages(images, inUse, now) {
 		if now.Sub(image.LastUsedAt) > p.MaxUnusedAge {
 			out = append(out, image)
@@ -83,8 +82,8 @@ func (p GCPolicy) expiredImages(images []*types.Image, inUse map[string]struct{}
 // collectableImages returns those of images garbage collection may remove
 // at now -- not in use, nor used within gcGracePeriod -- least recently used
 // first.
-func collectableImages(images []*types.Image, inUse map[string]struct{}, now time.Time) []*types.Image {
-	var out []*types.Image
+func collectableImages(images []*Image, inUse map[string]struct{}, now time.Time) []*Image {
+	var out []*Image
 	for _, image := range images {
 		if _, used := inUse[image.Digest]; used || now.Sub(image.LastUsedAt) < gcGracePeriod {
 			continue
@@ -92,7 +91,7 @@ func collectableImages(images []*types.Image, inUse map[string]struct{}, now tim
 		out = append(out, image)
 	}
 
-	slices.SortFunc(out, func(a, b *types.Image) int {
+	slices.SortFunc(out, func(a, b *Image) int {
 		return cmp.Or(a.LastUsedAt.Compare(b.LastUsedAt), cmp.Compare(a.Digest, b.Digest))
 	})
 	return out
@@ -124,7 +123,7 @@ func (m *Manager) CollectGarbage(p GCPolicy, inUse map[string]struct{}, now time
 		if size <= p.MaxSize {
 			break
 		}
-		if err := m.collect(p, []*types.Image{image}, GCReasonSize, &result); err != nil {
+		if err := m.collect(p, []*Image{image}, GCReasonSize, &result); err != nil {
 			return result, err
 		}
 	}
@@ -133,7 +132,7 @@ func (m *Manager) CollectGarbage(p GCPolicy, inUse map[string]struct{}, now time
 }
 
 // collect removes images for reason, under p, adding them to result.
-func (m *Manager) collect(p GCPolicy, images []*types.Image, reason GCReason, result *GCResult) error {
+func (m *Manager) collect(p GCPolicy, images []*Image, reason GCReason, result *GCResult) error {
 	if len(images) == 0 {
 		return nil
 	}
@@ -150,7 +149,7 @@ func (m *Manager) collect(p GCPolicy, images []*types.Image, reason GCReason, re
 }
 
 // gcMessage says why garbage collection under p removed image.
-func gcMessage(p GCPolicy, image *types.Image, reason GCReason) string {
+func gcMessage(p GCPolicy, image *Image, reason GCReason) string {
 	removed := fmt.Sprintf("Garbage-collected image %s (%s)", image.Name, reference.ShortDigest(image.Digest))
 	lastUsed := image.LastUsedAt.Local().Format(time.DateTime)
 	if reason == GCReasonSize {

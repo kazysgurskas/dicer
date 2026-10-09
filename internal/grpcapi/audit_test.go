@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/token"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -35,7 +35,7 @@ func callUnary(t *testing.T, a Audit, caller *peer.Peer, tokenName, method strin
 
 	ctx := peer.NewContext(t.Context(), caller)
 	if tokenName != "" {
-		ctx = context.WithValue(ctx, tokenKey{}, types.Token{Name: tokenName})
+		ctx = context.WithValue(ctx, tokenKey{}, token.Token{Name: tokenName})
 	}
 	info := &grpc.UnaryServerInfo{FullMethod: "/dicerd.v1.DaemonService/" + method}
 	handler := func(context.Context, any) (any, error) { return &emptypb.Empty{}, nil }

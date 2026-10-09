@@ -9,13 +9,12 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // checkCanStart rejects a definition that could never start: a missing
 // kernel, network or volume, more volumes than a guest can have, or more
 // resources than the host allows.
-func (h *instanceHandler) checkCanStart(instance types.InstanceSpec) error {
+func (h *instanceHandler) checkCanStart(instance instance.Spec) error {
 	if _, err := h.definitions.Kernel(instance.KernelName); err != nil {
 		return errdefs.InvalidArgument("%v", err)
 	}
@@ -54,10 +53,10 @@ func (h *instanceHandler) checkStaticIP(networkName, ip string) error {
 
 // checkMounts checks what of an instance's mounts needs the host: the
 // volumes must exist, and fit the guest's disks.
-func (h *instanceHandler) checkMounts(mounts []types.Mount) error {
+func (h *instanceHandler) checkMounts(mounts []instance.Mount) error {
 	volumes := 0
 	for _, m := range mounts {
-		if m.Type != types.MountTypeVolume {
+		if m.Type != instance.MountTypeVolume {
 			continue
 		}
 		volumes++

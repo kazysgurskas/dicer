@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // interfaceAddresses are the addresses of one of the host's interfaces.
@@ -25,7 +25,7 @@ type interfaceAddresses struct {
 // those of its interfaces that are up, other than loopback and link-local
 // ones and those of the networks' bridges. The uplink's come first, then
 // the rest in the order of their interfaces, IPv4 before IPv6 on each.
-func (h *Host) Addresses(networks []types.Network) ([]netip.Addr, error) {
+func (h *Host) Addresses(networks []network.Network) ([]netip.Addr, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("list interfaces: %w", err)

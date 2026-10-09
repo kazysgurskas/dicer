@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/image"
 )
 
 // TestCreateFollowsThePullPolicy checks that Create pulls the image as its
@@ -16,16 +16,16 @@ import (
 func TestCreateFollowsThePullPolicy(t *testing.T) {
 	tests := []struct {
 		name      string
-		policy    types.PullPolicy
+		policy    image.PullPolicy
 		held      bool
 		wantPulls int
 		wantErr   error
 	}{
-		{name: "missing pulls an image the host lacks", policy: types.PullPolicyMissing, wantPulls: 1},
-		{name: "missing uses the image held", policy: types.PullPolicyMissing, held: true},
-		{name: "always pulls an image held", policy: types.PullPolicyAlways, held: true, wantPulls: 1},
-		{name: "never uses the image held", policy: types.PullPolicyNever, held: true},
-		{name: "never refuses an image the host lacks", policy: types.PullPolicyNever, wantErr: errdefs.ErrNotFound},
+		{name: "missing pulls an image the host lacks", policy: image.PullPolicyMissing, wantPulls: 1},
+		{name: "missing uses the image held", policy: image.PullPolicyMissing, held: true},
+		{name: "always pulls an image held", policy: image.PullPolicyAlways, held: true, wantPulls: 1},
+		{name: "never uses the image held", policy: image.PullPolicyNever, held: true},
+		{name: "never refuses an image the host lacks", policy: image.PullPolicyNever, wantErr: errdefs.ErrNotFound},
 	}
 
 	for _, tt := range tests {
@@ -36,10 +36,10 @@ func TestCreateFollowsThePullPolicy(t *testing.T) {
 				t.Fatalf("images is a %T, want the fake", h.manager.images)
 			}
 			if tt.held {
-				images.held = &types.Image{Name: "alpine", Digest: "sha256:bbbb", DiskPath: images.diskPath}
+				images.held = &image.Image{Name: "alpine", Digest: "sha256:bbbb", DiskPath: images.diskPath}
 			}
 
-			instance := types.InstanceSpec{ID: "new-id", Name: "new", ImageRef: "alpine"}
+			instance := Spec{ID: "new-id", Name: "new", ImageRef: "alpine"}
 			err := h.manager.Create(t.Context(), instance, tt.policy)
 
 			if images.pulls != tt.wantPulls {

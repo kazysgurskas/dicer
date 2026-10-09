@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/token"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -48,25 +48,25 @@ func TestEveryMethodNeedsAScope(t *testing.T) {
 func TestAuthorizationAllowsOnlyWhatTheTokensScopesDo(t *testing.T) {
 	tests := []struct {
 		name   string
-		scopes []types.Scope
+		scopes []token.Scope
 		method string
 		want   error
 	}{
-		{"everything", []types.Scope{types.ScopeAll}, "DeleteInstance", nil},
-		{"its scope", []types.Scope{"instances:write"}, "DeleteInstance", nil},
-		{"reading what it may write", []types.Scope{"instances:write"}, "ListInstances", nil},
-		{"writing what it may read", []types.Scope{"instances:read"}, "DeleteInstance", errdefs.ErrPermissionDenied},
-		{"another resource", []types.Scope{"volumes:write"}, "ListInstances", errdefs.ErrPermissionDenied},
-		{"exec, which reaches into the guest", []types.Scope{"instances:read"}, "ExecInstance", errdefs.ErrPermissionDenied},
-		{"host info, which any token may ask", []types.Scope{"kernels:read"}, "GetHostInfo", nil},
-		{"events, which have a scope of their own", []types.Scope{"instances:write"}, "GetEvents", errdefs.ErrPermissionDenied},
-		{"events, with it", []types.Scope{"events:read"}, "GetEvents", nil},
-		{"the host's capacity, which shows instances", []types.Scope{"instances:read"}, "GetResources", nil},
-		{"a method it does not know", []types.Scope{types.ScopeAll}, "LaunchMissiles", errdefs.ErrPermissionDenied},
+		{"everything", []token.Scope{token.ScopeAll}, "DeleteInstance", nil},
+		{"its scope", []token.Scope{"instances:write"}, "DeleteInstance", nil},
+		{"reading what it may write", []token.Scope{"instances:write"}, "ListInstances", nil},
+		{"writing what it may read", []token.Scope{"instances:read"}, "DeleteInstance", errdefs.ErrPermissionDenied},
+		{"another resource", []token.Scope{"volumes:write"}, "ListInstances", errdefs.ErrPermissionDenied},
+		{"exec, which reaches into the guest", []token.Scope{"instances:read"}, "ExecInstance", errdefs.ErrPermissionDenied},
+		{"host info, which any token may ask", []token.Scope{"kernels:read"}, "GetHostInfo", nil},
+		{"events, which have a scope of their own", []token.Scope{"instances:write"}, "GetEvents", errdefs.ErrPermissionDenied},
+		{"events, with it", []token.Scope{"events:read"}, "GetEvents", nil},
+		{"the host's capacity, which shows instances", []token.Scope{"instances:read"}, "GetResources", nil},
+		{"a method it does not know", []token.Scope{token.ScopeAll}, "LaunchMissiles", errdefs.ErrPermissionDenied},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.WithValue(t.Context(), tokenKey{}, types.Token{Name: "ci", Scopes: tt.scopes})
+			ctx := context.WithValue(t.Context(), tokenKey{}, token.Token{Name: "ci", Scopes: tt.scopes})
 			info := &grpc.UnaryServerInfo{FullMethod: "/dicerd.v1.DaemonService/" + tt.method}
 
 			called := false

@@ -10,15 +10,14 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/hypervisor"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // Pause halts the guest's vCPUs without tearing anything down.
-func (m *Manager) Pause(ctx context.Context, instance types.InstanceSpec) error {
+func (m *Manager) Pause(ctx context.Context, instance Spec) error {
 	return m.setPaused(ctx, instance, pauseMove{
 		operation: operationPause,
-		from:      types.InstanceStateRunning,
-		to:        types.InstanceStatePaused,
+		from:      StateRunning,
+		to:        StatePaused,
 		do:        hypervisor.Hypervisor.PauseVM,
 		event:     events.ActionPaused,
 		message:   "Paused instance: vCPUs halted, memory kept",
@@ -26,11 +25,11 @@ func (m *Manager) Pause(ctx context.Context, instance types.InstanceSpec) error 
 }
 
 // Resume restarts the vCPUs of a paused instance.
-func (m *Manager) Resume(ctx context.Context, instance types.InstanceSpec) error {
+func (m *Manager) Resume(ctx context.Context, instance Spec) error {
 	return m.setPaused(ctx, instance, pauseMove{
 		operation: operationResume,
-		from:      types.InstanceStatePaused,
-		to:        types.InstanceStateRunning,
+		from:      StatePaused,
+		to:        StateRunning,
 		do:        hypervisor.Hypervisor.ResumeVM,
 		event:     events.ActionResumed,
 		message:   "Resumed instance: vCPUs running",
@@ -40,14 +39,14 @@ func (m *Manager) Resume(ctx context.Context, instance types.InstanceSpec) error
 // pauseMove describes a pause or resume.
 type pauseMove struct {
 	operation string
-	from, to  types.InstanceState
+	from, to  State
 	do        func(hypervisor.Hypervisor, context.Context) error
 	event     events.Action
 	message   string
 }
 
 // setPaused moves a live instance between running and paused.
-func (m *Manager) setPaused(ctx context.Context, instance types.InstanceSpec, move pauseMove) (err error) {
+func (m *Manager) setPaused(ctx context.Context, instance Spec, move pauseMove) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(move.operation, started, err) }()
 

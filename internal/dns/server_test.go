@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // fakeResolver is a network's instances: their names, and addresses.
@@ -152,7 +152,7 @@ func newUpstream(t *testing.T) *upstream {
 func startServer(t *testing.T, instances fakeResolver, upstreams []string, isolated bool) *server {
 	t.Helper()
 
-	srv, err := listen(t.Context(), "127.0.0.1:0", network{
+	srv, err := listen(t.Context(), "127.0.0.1:0", servedNetwork{
 		name:             "shop",
 		domain:           "shop",
 		subnet:           netip.MustParsePrefix("10.8.0.0/24"),
@@ -277,7 +277,7 @@ func TestServerAnswersForTheNetworksInstances(t *testing.T) {
 func TestServerAnswersUnderANetworkNamedInCapitals(t *testing.T) {
 	resolver := fakeResolver{"db": "10.8.0.5"}
 	servers := NewServers(Config{Resolver: resolver, Logger: slog.New(slog.DiscardHandler)})
-	nw, err := servers.networkOf(types.Network{Name: "Shop", Subnet: "10.8.0.0/24", Gateway: "10.8.0.1"})
+	nw, err := servers.networkOf(network.Network{Name: "Shop", Subnet: "10.8.0.0/24", Gateway: "10.8.0.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +508,7 @@ func TestServerOnAnIsolatedNetworkOnlyForwards(t *testing.T) {
 // An internal network's guests can reach neither the host nor the outside,
 // so its server answers for the network's instances and nothing else.
 func TestServerOnAnInternalNetworkAnswersOnlyItsInstances(t *testing.T) {
-	srv, err := listen(t.Context(), "127.0.0.1:0", network{
+	srv, err := listen(t.Context(), "127.0.0.1:0", servedNetwork{
 		name:             "shop",
 		domain:           "shop",
 		subnet:           netip.MustParsePrefix("10.8.0.0/24"),
@@ -630,7 +630,7 @@ func TestServersServeAndStop(t *testing.T) {
 	})
 	t.Cleanup(servers.Close)
 
-	nw := types.Network{Name: "shop", Subnet: "127.0.0.0/8", Gateway: "127.0.0.1"}
+	nw := network.Network{Name: "shop", Subnet: "127.0.0.0/8", Gateway: "127.0.0.1"}
 	if err := servers.Serve(t.Context(), nw); err != nil {
 		t.Fatal(err)
 	}
@@ -669,7 +669,7 @@ func TestServersServeAndStop(t *testing.T) {
 	}
 
 	// An address the host does not have cannot be served.
-	if err := servers.Serve(t.Context(), types.Network{
+	if err := servers.Serve(t.Context(), network.Network{
 		Name: "elsewhere", Subnet: "192.0.2.0/24", Gateway: "192.0.2.1",
 	}); err == nil {
 		t.Error("serving on an address the host does not have succeeded")

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/metrics"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 // metricSection is a section of the metrics reference: a group's table, and
@@ -83,7 +83,7 @@ func writeMetrics(dir string) error {
 	// too; they are never read here.
 	m := metrics.New(metrics.Options{Sources: metrics.Sources{
 		Instances:     func() metrics.InstanceSummary { return metrics.InstanceSummary{} },
-		InstanceStats: func() []types.InstanceStats { return nil },
+		InstanceStats: func() []instance.Stats { return nil },
 		Networks:      func() []metrics.NetworkSummary { return nil },
 		Images:        func() metrics.ImageSummary { return metrics.ImageSummary{} },
 		Kernels:       func() metrics.KernelSummary { return metrics.KernelSummary{} },

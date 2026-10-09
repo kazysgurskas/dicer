@@ -26,9 +26,9 @@ import (
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
-	"github.com/konradasb/dicer/internal/types"
 )
 
 const (
@@ -325,15 +325,15 @@ func (r *ResourcesConfig) validate() error {
 
 // capacity is what instances may be given on a host with the given CPUs and
 // memory.
-func (r *ResourcesConfig) capacity(cpus int, memoryBytes int64) (types.Capacity, error) {
+func (r *ResourcesConfig) capacity(cpus int, memoryBytes int64) (instance.Capacity, error) {
 	if r.ReservedMemoryBytes >= memoryBytes {
-		return types.Capacity{}, fmt.Errorf(
+		return instance.Capacity{}, fmt.Errorf(
 			"resources.reserved_memory_bytes (%d) leaves nothing of the host's %d bytes of memory for instances",
 			r.ReservedMemoryBytes, memoryBytes)
 	}
 
-	return types.Capacity{
-		Host:                types.Resources{VCPUs: cpus, MemoryBytes: memoryBytes},
+	return instance.Capacity{
+		Host:                instance.Resources{VCPUs: cpus, MemoryBytes: memoryBytes},
 		ReservedMemoryBytes: r.ReservedMemoryBytes,
 		CPUOvercommit:       r.CPUOvercommit,
 		MemoryOvercommit:    r.MemoryOvercommit,

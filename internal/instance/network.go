@@ -10,19 +10,18 @@ import (
 
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/network"
-	"github.com/konradasb/dicer/internal/types"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
 // Allocation returns the allocation an instance holds on its network, or an
 // errdefs.ErrNotFound error if it holds none.
-func (m *Manager) Allocation(instance types.InstanceSpec) (types.NetworkAllocation, error) {
+func (m *Manager) Allocation(instance Spec) (network.Allocation, error) {
 	return m.networks.Allocation(instance.NetworkName, instance.ID)
 }
 
 // networkSetup holds the result of attaching an instance to its network.
 type networkSetup struct {
-	network     types.Network
+	network     network.Network
 	nic         hypervisor.NetworkInterfaceConfig
 	gateway     string
 	nameservers []string
@@ -32,7 +31,7 @@ type networkSetup struct {
 
 // setupNetwork allocates an address and attaches a TAP device to the
 // network's bridge.
-func (m *Manager) setupNetwork(ctx context.Context, instance types.InstanceSpec) (*networkSetup, error) {
+func (m *Manager) setupNetwork(ctx context.Context, instance Spec) (*networkSetup, error) {
 	nw, err := m.definitions.Network(instance.NetworkName)
 	if err != nil {
 		return nil, fmt.Errorf("get network %q: %w", instance.NetworkName, err)
@@ -117,7 +116,7 @@ func (s *networkSetup) guestAddress() string {
 
 // guestIdentity is what a fork's guest is told it is in place of what its
 // snapshot holds: instance's hostname, and the address setup gave it.
-func guestIdentity(instance types.InstanceSpec, setup *networkSetup) *diceragentv1.SetIdentityRequest {
+func guestIdentity(instance Spec, setup *networkSetup) *diceragentv1.SetIdentityRequest {
 	return &diceragentv1.SetIdentityRequest{
 		Hostname: cmp.Or(instance.Hostname, instance.Name),
 		Interfaces: []*diceragentv1.NetworkInterface{{
@@ -134,7 +133,7 @@ func guestIdentity(instance types.InstanceSpec, setup *networkSetup) *diceragent
 // upstreamNameservers are the nameservers a network's names are looked up
 // in: its own, or the default. An internal network, whose guests cannot
 // reach any, has none.
-func upstreamNameservers(nw types.Network) []string {
+func upstreamNameservers(nw network.Network) []string {
 	if nw.Internal {
 		return nil
 	}
@@ -148,7 +147,7 @@ func upstreamNameservers(nw types.Network) []string {
 // attaches the instance's TAP device to it, limited to bandwidth, under the
 // network lock. It reports whether the network's DNS server is serving.
 func (m *Manager) attachTAP(
-	ctx context.Context, nw *types.Network, allocation *types.NetworkAllocation, bandwidth network.Bandwidth,
+	ctx context.Context, nw *network.Network, allocation *network.Allocation, bandwidth network.Bandwidth,
 ) (bool, error) {
 	lock := m.networkLock(nw.Name)
 	lock.Lock()
@@ -168,7 +167,7 @@ func (m *Manager) attachTAP(
 // reports whether it is. One that cannot start costs the guests their
 // neighbours' names, not their DNS: they are given the upstream
 // nameservers instead.
-func (m *Manager) serveDNS(ctx context.Context, nw types.Network) bool {
+func (m *Manager) serveDNS(ctx context.Context, nw network.Network) bool {
 	if m.dnsServers == nil {
 		return false
 	}
@@ -183,7 +182,7 @@ func (m *Manager) serveDNS(ctx context.Context, nw types.Network) bool {
 // teardownNetwork removes an instance's published ports and TAP device, and
 // the network's bridge if no other instance uses it. The address is kept.
 // Failures are logged.
-func (m *Manager) teardownNetwork(ctx context.Context, instance types.InstanceSpec) {
+func (m *Manager) teardownNetwork(ctx context.Context, instance Spec) {
 	nw, err := m.definitions.Network(instance.NetworkName)
 	if err != nil {
 		m.logger.WarnContext(ctx, "network not found while tearing it down",
@@ -212,7 +211,7 @@ func (m *Manager) teardownNetwork(ctx context.Context, instance types.InstanceSp
 
 // networkInUse reports whether any instance other than excludeID is active
 // on the network. It errs towards true.
-func (m *Manager) networkInUse(nw types.Network, excludeID string) bool {
+func (m *Manager) networkInUse(nw network.Network, excludeID string) bool {
 	instances := m.definitions.Instances()
 
 	for _, other := range instances {
@@ -223,7 +222,7 @@ func (m *Manager) networkInUse(nw types.Network, excludeID string) bool {
 		if err != nil {
 			return true
 		}
-		if status.State.IsActive() || status.State == types.InstanceStateStarting {
+		if status.State.IsActive() || status.State == StateStarting {
 			return true
 		}
 	}

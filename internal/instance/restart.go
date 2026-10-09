@@ -3,11 +3,7 @@
 
 package instance
 
-import (
-	"time"
-
-	"github.com/konradasb/dicer/internal/types"
-)
+import "time"
 
 // Restart backoff: the delay starts at restartBackoffBase and doubles with
 // each restart in a row, up to restartBackoffMax. A run lasting
@@ -34,18 +30,18 @@ type restartDecision struct {
 
 // decideRestart applies a restart policy to an instance that ended after
 // ranFor with restarts restarts in a row so far.
-func decideRestart(policy types.RestartPolicy, exit Exit, restarts int, ranFor time.Duration) restartDecision {
+func decideRestart(policy RestartPolicy, exit Exit, restarts int, ranFor time.Duration) restartDecision {
 	if ranFor >= restartBackoffReset {
 		restarts = 0
 	}
 
 	wanted := false
 	switch policy.Mode {
-	case types.RestartModeAlways, types.RestartModeUnlessStopped:
+	case RestartModeAlways, RestartModeUnlessStopped:
 		wanted = true
-	case types.RestartModeOnFailure:
+	case RestartModeOnFailure:
 		wanted = !exit.Clean()
-	case "", types.RestartModeNo:
+	case "", RestartModeNo:
 	}
 
 	if !wanted {

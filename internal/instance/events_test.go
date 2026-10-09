@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/events"
-	"github.com/konradasb/dicer/internal/types"
+	"github.com/konradasb/dicer/internal/image"
 )
 
 // waitForAction polls until action has been recorded.
@@ -35,8 +35,8 @@ func TestLifecycleIsRecorded(t *testing.T) {
 	h := newHarness(t)
 	ctx := t.Context()
 
-	created := types.InstanceSpec{ID: "new-id", Name: "new", ImageRef: "alpine"}
-	if err := h.manager.Create(ctx, created, types.PullPolicyMissing); err != nil {
+	created := Spec{ID: "new-id", Name: "new", ImageRef: "alpine"}
+	if err := h.manager.Create(ctx, created, image.PullPolicyMissing); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	h.start(t)
@@ -87,13 +87,13 @@ func TestLifecycleIsRecorded(t *testing.T) {
 // will be restarted, when; it started again.
 func TestCrashAndRestartAreRecorded(t *testing.T) {
 	h := newHarness(t)
-	h.setRestart(t, types.RestartPolicy{Mode: types.RestartModeAlways})
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
 	h.restartAtOnce()
 	h.start(t)
 
 	h.crash(t)
 	h.waitForVMMs(t, 2)
-	h.waitForState(t, types.InstanceStateRunning)
+	h.waitForState(t, StateRunning)
 	restarted, _ := h.events.last(events.ActionStarted)
 
 	died, _ := h.events.last(events.ActionDied)
@@ -142,7 +142,7 @@ func TestFailedStartIsRecorded(t *testing.T) {
 
 // A health check reaching a verdict is recorded; starting is not a verdict.
 func TestHealthVerdictsAreRecorded(t *testing.T) {
-	h, probe := monitored(t, types.RestartPolicy{}, false)
+	h, probe := monitored(t, RestartPolicy{}, false)
 	h.start(t)
 
 	unhealthy := h.waitForAction(t, events.ActionUnhealthy)
@@ -198,20 +198,20 @@ func TestStopMessage(t *testing.T) {
 
 // An update says what it changed, and when that takes effect.
 func TestUpdateMessage(t *testing.T) {
-	before := types.InstanceSpec{ImageRef: "docker.io/library/nginx:1.27", VCPUs: 1, MemoryBytes: 256 << 20, DiskBytes: 10 << 30}
+	before := Spec{ImageRef: "docker.io/library/nginx:1.27", VCPUs: 1, MemoryBytes: 256 << 20, DiskBytes: 10 << 30}
 	after := before
 	after.MemoryBytes = 512 << 20
 	after.Env = map[string]string{"A": "1"}
 
 	want := "Updated instance: memory 256 MiB → 512 MiB, environment changed; takes effect on next start"
-	if got := updateMessage(before, after, types.InstanceStateStopped); got != want {
+	if got := updateMessage(before, after, StateStopped); got != want {
 		t.Errorf("updateMessage =\n%q\nwant\n%q", got, want)
 	}
 
 	after = before
-	after.Restart = types.RestartPolicy{Mode: types.RestartModeOnFailure, MaxRetries: 3}
+	after.Restart = RestartPolicy{Mode: RestartModeOnFailure, MaxRetries: 3}
 	want = "Updated instance: restart policy no → on-failure:3; takes effect at once"
-	if got := updateMessage(before, after, types.InstanceStateRunning); got != want {
+	if got := updateMessage(before, after, StateRunning); got != want {
 		t.Errorf("updateMessage =\n%q\nwant\n%q", got, want)
 	}
 
@@ -221,7 +221,7 @@ func TestUpdateMessage(t *testing.T) {
 	before.DownloadBytesPerSecond = 1 << 20
 	want = "Updated instance: disk rate unlimited → 50 MiB/s, disk IOPS unlimited → 1000, " +
 		"download rate 1 MiB/s → unlimited; takes effect on next start"
-	if got := updateMessage(before, after, types.InstanceStateStopped); got != want {
+	if got := updateMessage(before, after, StateStopped); got != want {
 		t.Errorf("updateMessage =\n%q\nwant\n%q", got, want)
 	}
 }
