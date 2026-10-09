@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // resizable makes the harness's instance one with 1 vCPU and 1GiB that can
@@ -47,7 +47,7 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 		t.Errorf("definition asks for %s, want %s", saved.Resources(), want)
 	}
 
-	e, ok := h.events.last(events.ActionResized)
+	e, ok := h.events.last(event.ActionResized)
 	if !ok {
 		t.Fatalf("no resized event in %v", h.events.actions())
 	}
@@ -140,7 +140,7 @@ func TestResizeRefusals(t *testing.T) {
 			if h.hv.vCPUs != 0 || h.hv.memoryBytes != 0 {
 				t.Error("the guest was resized anyway")
 			}
-			if _, ok := h.events.last(events.ActionResized); ok {
+			if _, ok := h.events.last(event.ActionResized); ok {
 				t.Error("a refused resize was recorded")
 			}
 		})
@@ -166,7 +166,7 @@ func TestFailedResizeKeepsTheLargerReservation(t *testing.T) {
 	if saved, _ := h.store.Instance(h.instance.Name); saved.Resources() != want {
 		t.Errorf("definition asks for %s, want %s", saved.Resources(), want)
 	}
-	if _, ok := h.events.last(events.ActionResized); ok {
+	if _, ok := h.events.last(event.ActionResized); ok {
 		t.Error("a failed resize was recorded")
 	}
 }
@@ -226,7 +226,7 @@ func TestRefusedResizeChangesNothing(t *testing.T) {
 	if saved, _ := h.store.Instance(h.instance.Name); saved.Resources() != before {
 		t.Errorf("definition asks for %s, want %s as before", saved.Resources(), before)
 	}
-	if _, ok := h.events.last(events.ActionResized); ok {
+	if _, ok := h.events.last(event.ActionResized); ok {
 		t.Error("a refused resize was recorded")
 	}
 }

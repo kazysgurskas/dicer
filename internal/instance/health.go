@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/process"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
@@ -144,10 +144,10 @@ func (m *Manager) handleUnhealthy(ctx context.Context, instance Spec, vmm *proce
 func (m *Manager) recordHealth(instance Spec, check health.Check, verdict health.Health) {
 	switch verdict.Status {
 	case health.StatusHealthy:
-		m.record(instance, events.ActionHealthy,
+		m.record(instance, event.ActionHealthy,
 			fmt.Sprintf("Health check %q passed: %s", check.String(), firstLine(verdict.LastOutput)), nil)
 	case health.StatusUnhealthy:
-		m.record(instance, events.ActionUnhealthy,
+		m.record(instance, event.ActionUnhealthy,
 			fmt.Sprintf("Health check %q failed %d times in a row: %s",
 				check.String(), verdict.FailingStreak, firstLine(verdict.LastOutput)),
 			map[string]string{"failing_streak": strconv.Itoa(verdict.FailingStreak)})

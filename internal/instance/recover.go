@@ -9,7 +9,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
 )
@@ -134,7 +134,7 @@ func (m *Manager) recoverInstance(ctx context.Context, instance Spec) recovery {
 
 	m.teardownNetwork(ctx, instance)
 	m.fail(instance.ID, cause)
-	m.record(instance, events.ActionDied, "Instance failed: "+cause.Error(), nil)
+	m.record(instance, event.ActionDied, "Instance failed: "+cause.Error(), nil)
 
 	return recoveryCleaned
 }

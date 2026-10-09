@@ -132,7 +132,7 @@ internal/
   hypervisor/           the hypervisor interface, and its two drivers
   process/              supervising hypervisor processes
   guest/                the host–guest contract, and dicer-init and dicer-agent
-  events/ metrics/      the event log and the Prometheus metrics
+  event/ metrics/       the event log and the Prometheus metrics
   archive/              the tar streams file copies travel as
   errdefs/ naming/      error classes, and the rule resource names follow
   defaults/ version/    host paths, and build identity

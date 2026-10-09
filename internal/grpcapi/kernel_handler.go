@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/instance"
@@ -76,7 +76,7 @@ func (h *kernelHandler) ImportKernel(
 	if start.GetSha256() == "" {
 		verified = "no checksum given to verify it by"
 	}
-	h.record(k, events.ActionImported, fmt.Sprintf("Imported kernel for %s: %s, %s",
+	h.record(k, event.ActionImported, fmt.Sprintf("Imported kernel for %s: %s, %s",
 		k.Architecture, humanize.Bytes(h.kernelManager.DiskBytes(k.ID)), verified))
 
 	return stream.SendAndClose(kernelToProto(k))
@@ -169,7 +169,7 @@ func (h *kernelHandler) DeleteKernel(
 	if err := h.store.DeleteKernel(k.Name); err != nil {
 		return nil, err
 	}
-	h.record(k, events.ActionDeleted, "Deleted kernel and its copy on the host")
+	h.record(k, event.ActionDeleted, "Deleted kernel and its copy on the host")
 
 	if err := h.kernelManager.Delete(k.ID); err != nil {
 		return nil, fmt.Errorf("remove kernel binary: %w", err)
@@ -180,9 +180,9 @@ func (h *kernelHandler) DeleteKernel(
 
 // record records that action happened to k, with its architecture among
 // the attributes.
-func (h *kernelHandler) record(k kernel.Kernel, action events.Action, message string) {
-	h.events.Record(events.Event{
-		Kind:       events.KindKernel,
+func (h *kernelHandler) record(k kernel.Kernel, action event.Action, message string) {
+	h.events.Record(event.Event{
+		Kind:       event.KindKernel,
 		ID:         k.ID,
 		Name:       k.Name,
 		Action:     action,

@@ -5,7 +5,7 @@ package grpcapi
 
 import (
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/hypervisor"
@@ -108,35 +108,35 @@ var snapshotKinds = enum[instance.SnapshotKind, dicerdv1.SnapshotKind]{"snapshot
 	instance.SnapshotKindDisk:   dicerdv1.SnapshotKind_SNAPSHOT_KIND_DISK,
 }}
 
-var eventKinds = enum[events.Kind, dicerdv1.EventKind]{"event kind", map[events.Kind]dicerdv1.EventKind{
-	events.KindInstance: dicerdv1.EventKind_EVENT_KIND_INSTANCE,
-	events.KindSnapshot: dicerdv1.EventKind_EVENT_KIND_SNAPSHOT,
-	events.KindImage:    dicerdv1.EventKind_EVENT_KIND_IMAGE,
-	events.KindNetwork:  dicerdv1.EventKind_EVENT_KIND_NETWORK,
-	events.KindVolume:   dicerdv1.EventKind_EVENT_KIND_VOLUME,
-	events.KindKernel:   dicerdv1.EventKind_EVENT_KIND_KERNEL,
+var eventKinds = enum[event.Kind, dicerdv1.EventKind]{"event kind", map[event.Kind]dicerdv1.EventKind{
+	event.KindInstance: dicerdv1.EventKind_EVENT_KIND_INSTANCE,
+	event.KindSnapshot: dicerdv1.EventKind_EVENT_KIND_SNAPSHOT,
+	event.KindImage:    dicerdv1.EventKind_EVENT_KIND_IMAGE,
+	event.KindNetwork:  dicerdv1.EventKind_EVENT_KIND_NETWORK,
+	event.KindVolume:   dicerdv1.EventKind_EVENT_KIND_VOLUME,
+	event.KindKernel:   dicerdv1.EventKind_EVENT_KIND_KERNEL,
 }}
 
-var eventActions = enum[events.Action, dicerdv1.EventAction]{"event action", map[events.Action]dicerdv1.EventAction{
-	events.ActionCreated:          dicerdv1.EventAction_EVENT_ACTION_CREATED,
-	events.ActionUpdated:          dicerdv1.EventAction_EVENT_ACTION_UPDATED,
-	events.ActionDeleted:          dicerdv1.EventAction_EVENT_ACTION_DELETED,
-	events.ActionStarted:          dicerdv1.EventAction_EVENT_ACTION_STARTED,
-	events.ActionStopped:          dicerdv1.EventAction_EVENT_ACTION_STOPPED,
-	events.ActionPaused:           dicerdv1.EventAction_EVENT_ACTION_PAUSED,
-	events.ActionResumed:          dicerdv1.EventAction_EVENT_ACTION_RESUMED,
-	events.ActionStandby:          dicerdv1.EventAction_EVENT_ACTION_STANDBY,
-	events.ActionExited:           dicerdv1.EventAction_EVENT_ACTION_EXITED,
-	events.ActionDied:             dicerdv1.EventAction_EVENT_ACTION_DIED,
-	events.ActionRestarting:       dicerdv1.EventAction_EVENT_ACTION_RESTARTING,
-	events.ActionRenamed:          dicerdv1.EventAction_EVENT_ACTION_RENAMED,
-	events.ActionResized:          dicerdv1.EventAction_EVENT_ACTION_RESIZED,
-	events.ActionHealthy:          dicerdv1.EventAction_EVENT_ACTION_HEALTHY,
-	events.ActionUnhealthy:        dicerdv1.EventAction_EVENT_ACTION_UNHEALTHY,
-	events.ActionSnapshotRestored: dicerdv1.EventAction_EVENT_ACTION_SNAPSHOT_RESTORED,
-	events.ActionPulled:           dicerdv1.EventAction_EVENT_ACTION_PULLED,
-	events.ActionCollected:        dicerdv1.EventAction_EVENT_ACTION_COLLECTED,
-	events.ActionImported:         dicerdv1.EventAction_EVENT_ACTION_IMPORTED,
+var eventActions = enum[event.Action, dicerdv1.EventAction]{"event action", map[event.Action]dicerdv1.EventAction{
+	event.ActionCreated:          dicerdv1.EventAction_EVENT_ACTION_CREATED,
+	event.ActionUpdated:          dicerdv1.EventAction_EVENT_ACTION_UPDATED,
+	event.ActionDeleted:          dicerdv1.EventAction_EVENT_ACTION_DELETED,
+	event.ActionStarted:          dicerdv1.EventAction_EVENT_ACTION_STARTED,
+	event.ActionStopped:          dicerdv1.EventAction_EVENT_ACTION_STOPPED,
+	event.ActionPaused:           dicerdv1.EventAction_EVENT_ACTION_PAUSED,
+	event.ActionResumed:          dicerdv1.EventAction_EVENT_ACTION_RESUMED,
+	event.ActionStandby:          dicerdv1.EventAction_EVENT_ACTION_STANDBY,
+	event.ActionExited:           dicerdv1.EventAction_EVENT_ACTION_EXITED,
+	event.ActionDied:             dicerdv1.EventAction_EVENT_ACTION_DIED,
+	event.ActionRestarting:       dicerdv1.EventAction_EVENT_ACTION_RESTARTING,
+	event.ActionRenamed:          dicerdv1.EventAction_EVENT_ACTION_RENAMED,
+	event.ActionResized:          dicerdv1.EventAction_EVENT_ACTION_RESIZED,
+	event.ActionHealthy:          dicerdv1.EventAction_EVENT_ACTION_HEALTHY,
+	event.ActionUnhealthy:        dicerdv1.EventAction_EVENT_ACTION_UNHEALTHY,
+	event.ActionSnapshotRestored: dicerdv1.EventAction_EVENT_ACTION_SNAPSHOT_RESTORED,
+	event.ActionPulled:           dicerdv1.EventAction_EVENT_ACTION_PULLED,
+	event.ActionCollected:        dicerdv1.EventAction_EVENT_ACTION_COLLECTED,
+	event.ActionImported:         dicerdv1.EventAction_EVENT_ACTION_IMPORTED,
 }}
 
 var logSources = enum[instance.LogSource, dicerdv1.LogSource]{"log source", map[instance.LogSource]dicerdv1.LogSource{

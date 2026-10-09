@@ -15,7 +15,7 @@ import (
 	"gvisor.dev/gvisor/pkg/cleanup"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
@@ -55,7 +55,7 @@ func (m *Manager) Start(ctx context.Context, instance Spec) (err error) {
 
 	if err := m.boot(ctx, instance, 0); err != nil {
 		m.fail(instance.ID, err)
-		m.record(instance, events.ActionDied, "Failed to start instance: "+err.Error(), nil)
+		m.record(instance, event.ActionDied, "Failed to start instance: "+err.Error(), nil)
 		return err
 	}
 	return nil
@@ -139,7 +139,7 @@ func (m *Manager) boot(ctx context.Context, instance Spec, restarts int) error {
 	message := fmt.Sprintf("%s instance on %s %s in %s%s: %s, %s memory, IP %s, PID %d",
 		verb, instance.EffectiveHypervisorType(), starter.Version(), humanize.Duration(time.Since(booting)), why,
 		humanize.Count(instance.VCPUs, "vCPU"), humanize.Bytes(instance.MemoryBytes), setup.nic.IP, vmm.PID())
-	m.record(instance, events.ActionStarted, message, attrs)
+	m.record(instance, event.ActionStarted, message, attrs)
 
 	m.logger.InfoContext(ctx, "started instance",
 		"instance", instance.Name, "pid", vmm.PID(), "ip", setup.nic.IP)

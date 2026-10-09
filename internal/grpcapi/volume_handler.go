@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/instance"
@@ -52,7 +52,7 @@ func (h *volumeHandler) CreateVolume(
 		_ = h.volumeManager.Delete(volume.ID)
 		return nil, err
 	}
-	h.record(*volume, events.ActionCreated, "Created volume of "+humanize.Bytes(volume.SizeBytes)+", formatted ext4")
+	h.record(*volume, event.ActionCreated, "Created volume of "+humanize.Bytes(volume.SizeBytes)+", formatted ext4")
 
 	return volumeToProto(*volume), nil
 }
@@ -106,7 +106,7 @@ func (h *volumeHandler) DeleteVolume(
 	if err := h.store.DeleteVolume(volume.Name); err != nil {
 		return nil, err
 	}
-	h.record(volume, events.ActionDeleted, "Deleted volume of "+humanize.Bytes(volume.SizeBytes)+" and its data")
+	h.record(volume, event.ActionDeleted, "Deleted volume of "+humanize.Bytes(volume.SizeBytes)+" and its data")
 
 	if err := h.volumeManager.Delete(volume.ID); err != nil {
 		return nil, fmt.Errorf("remove volume disk: %w", err)
@@ -117,9 +117,9 @@ func (h *volumeHandler) DeleteVolume(
 
 // record records that action happened to volume, with its size among the
 // attributes.
-func (h *volumeHandler) record(volume volumepkg.Volume, action events.Action, message string) {
-	h.events.Record(events.Event{
-		Kind:       events.KindVolume,
+func (h *volumeHandler) record(volume volumepkg.Volume, action event.Action, message string) {
+	h.events.Record(event.Event{
+		Kind:       event.KindVolume,
 		ID:         volume.ID,
 		Name:       volume.Name,
 		Action:     action,

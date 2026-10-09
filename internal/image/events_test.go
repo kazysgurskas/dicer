@@ -9,16 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // fakeRecorder remembers the events it is given.
-type fakeRecorder []events.Event
+type fakeRecorder []event.Event
 
-func (r *fakeRecorder) Record(e events.Event) { *r = append(*r, e) }
+func (r *fakeRecorder) Record(e event.Event) { *r = append(*r, e) }
 
-func (r *fakeRecorder) actions() []events.Action {
-	out := make([]events.Action, 0, len(*r))
+func (r *fakeRecorder) actions() []event.Action {
+	out := make([]event.Action, 0, len(*r))
 	for _, e := range *r {
 		out = append(out, e.Action)
 	}
@@ -43,14 +43,14 @@ func TestPullIsRecorded(t *testing.T) {
 	pullTestImage(t, m, fakeRegistry, "docker.io/library/nginx:1.27", "sha256:aaa")
 	pullTestImage(t, m, fakeRegistry, "docker.io/library/nginx:1.27", "sha256:aaa")
 
-	if got := recorded.actions(); !slices.Equal(got, []events.Action{events.ActionPulled}) {
+	if got := recorded.actions(); !slices.Equal(got, []event.Action{event.ActionPulled}) {
 		t.Fatalf("recorded %v, want one pull", got)
 	}
 	e := (*recorded)[0]
 	if e.Message == "" {
 		t.Errorf("pulled has no description")
 	}
-	if e.Kind != events.KindImage || e.Name != "docker.io/library/nginx:1.27" || e.Attributes["digest"] != "sha256:aaa" {
+	if e.Kind != event.KindImage || e.Name != "docker.io/library/nginx:1.27" || e.Attributes["digest"] != "sha256:aaa" {
 		t.Errorf("pulled = %+v, want the image by its reference, with its digest", e)
 	}
 }
@@ -77,13 +77,13 @@ func TestRemovalsAreRecorded(t *testing.T) {
 
 	want := []struct {
 		name   string
-		action events.Action
+		action event.Action
 		attr   string
 		value  string
 	}{
-		{"docker.io/library/a:1", events.ActionDeleted, "by", "user"},
-		{"docker.io/library/c:1", events.ActionCollected, "reason", "unused"},
-		{"docker.io/library/b:1", events.ActionDeleted, "by", "prune"},
+		{"docker.io/library/a:1", event.ActionDeleted, "by", "user"},
+		{"docker.io/library/c:1", event.ActionCollected, "reason", "unused"},
+		{"docker.io/library/b:1", event.ActionDeleted, "by", "prune"},
 	}
 	if len(*recorded) != len(want) {
 		t.Fatalf("recorded %v, want %d events", recorded.actions(), len(want))

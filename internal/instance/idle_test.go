@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // TestIdleTrackerCountsOnlyAnUnbrokenIdleSpell checks that an instance is
@@ -96,7 +96,7 @@ func TestIdleInstanceIsPutOnStandby(t *testing.T) {
 			if got := h.status(t).State; got != tt.want {
 				t.Errorf("state = %s, want %s", got, tt.want)
 			}
-			if e, ok := h.events.last(events.ActionStandby); tt.want == StateStandby &&
+			if e, ok := h.events.last(event.ActionStandby); tt.want == StateStandby &&
 				(!ok || e.Attributes["idle_seconds"] != "120") {
 				t.Errorf("standby event = %+v, want one saying it was idle 120s", e)
 			}

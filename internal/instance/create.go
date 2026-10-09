@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/image/reference"
@@ -26,7 +26,7 @@ func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPoli
 	if err := m.store.CreateInstance(instance); err != nil {
 		return err
 	}
-	m.record(instance, events.ActionCreated,
+	m.record(instance, event.ActionCreated,
 		fmt.Sprintf("Created instance from image %s with %s, %s memory, %s disk; restart policy %s",
 			reference.FamiliarString(instance.ImageRef), humanize.Count(instance.VCPUs, "vCPU"), humanize.Bytes(instance.MemoryBytes), humanize.Bytes(instance.DiskBytes),
 			instance.Restart),

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // Delete removes an instance and everything it owns: its VM, network
@@ -53,7 +53,7 @@ func (m *Manager) Delete(ctx context.Context, instance Spec, force bool) (err er
 		return fmt.Errorf("delete instance %q: %w", instance.Name, err)
 	}
 
-	m.record(instance, events.ActionDeleted,
+	m.record(instance, event.ActionDeleted,
 		"Deleted instance: removed its definition and disks; released its address on network "+instance.NetworkName, nil)
 	m.logger.InfoContext(ctx, "deleted instance", "instance", instance.Name)
 	return nil

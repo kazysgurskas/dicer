@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/diskfile"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 )
 
@@ -72,7 +72,7 @@ func (m *Manager) fork(
 	}
 	created := maps.Clone(attrs)
 	created["image"] = instance.ImageRef
-	m.record(instance, events.ActionCreated, "Forked instance from "+from, created)
+	m.record(instance, event.ActionCreated, "Forked instance from "+from, created)
 	defer func() {
 		if err == nil {
 			return
@@ -104,7 +104,7 @@ func (m *Manager) fork(
 	}
 	attrs = maps.Clone(attrs)
 	attrs["ip"] = allocation.IP
-	m.record(instance, events.ActionStarted,
+	m.record(instance, event.ActionStarted,
 		fmt.Sprintf("Started instance from %s in %s, as itself: IP %s", from, humanize.Duration(time.Since(started)), allocation.IP),
 		attrs)
 	m.logger.InfoContext(ctx, "forked instance", "instance", instance.Name, "from", from, "ip", allocation.IP)

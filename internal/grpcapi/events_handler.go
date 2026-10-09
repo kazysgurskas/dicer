@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/image/reference"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -21,7 +21,7 @@ const eventBatchSize = 500
 
 // eventsHandler handles GetEvents.
 type eventsHandler struct {
-	events *events.Log
+	events *event.Log
 }
 
 // GetEvents sends the matching history, then new events if the request
@@ -37,7 +37,7 @@ func (h *eventsHandler) GetEvents(
 	if err != nil {
 		return err
 	}
-	filter := events.Filter{
+	filter := event.Filter{
 		Kind:  kind,
 		ID:    req.GetId(),
 		Names: eventNames(req.GetName()),
@@ -63,7 +63,7 @@ func (h *eventsHandler) GetEvents(
 			return nil
 		case e, ok := <-subscription.Events():
 			if !ok {
-				if err := subscription.Err(); errors.Is(err, events.ErrFellBehind) {
+				if err := subscription.Err(); errors.Is(err, event.ErrFellBehind) {
 					return errdefs.ResourceExhausted("%v", err)
 				}
 				return nil
@@ -91,7 +91,7 @@ func eventNames(name string) []string {
 
 // sendHistory sends history in batches, the last marked caught up. An empty
 // history is sent as one empty batch.
-func sendHistory(stream grpc.ServerStreamingServer[dicerdv1.GetEventsResponse], history []events.Event) error {
+func sendHistory(stream grpc.ServerStreamingServer[dicerdv1.GetEventsResponse], history []event.Event) error {
 	for {
 		n := min(len(history), eventBatchSize)
 		resp := &dicerdv1.GetEventsResponse{
@@ -111,7 +111,7 @@ func sendHistory(stream grpc.ServerStreamingServer[dicerdv1.GetEventsResponse], 
 	}
 }
 
-func eventToProto(e events.Event) *dicerdv1.Event {
+func eventToProto(e event.Event) *dicerdv1.Event {
 	return &dicerdv1.Event{
 		Time:       timestamppb.New(e.Time),
 		Kind:       eventKinds.toProto(e.Kind),

@@ -13,7 +13,7 @@ import (
 	"github.com/nrednav/cuid2"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/kernel"
@@ -42,11 +42,11 @@ func (d *daemon) ensureDefaultNetwork() error {
 		return fmt.Errorf("create the default network: %w", err)
 	}
 
-	d.events.Record(events.Event{
-		Kind:       events.KindNetwork,
+	d.events.Record(event.Event{
+		Kind:       event.KindNetwork,
 		ID:         n.ID,
 		Name:       n.Name,
-		Action:     events.ActionCreated,
+		Action:     event.ActionCreated,
 		Message:    fmt.Sprintf("Created the default network with subnet %s, gateway %s", n.Subnet, n.Gateway),
 		Attributes: map[string]string{"subnet": n.Subnet, "gateway": n.Gateway},
 	})
@@ -59,9 +59,9 @@ func (d *daemon) ensureDefaultNetwork() error {
 // Dicer carried.
 func (d *daemon) ensureDefaultKernel() error {
 	want := kernel.Default()
-	record := func(k kernel.Kernel, action events.Action, message string) {
-		d.events.Record(events.Event{
-			Kind:       events.KindKernel,
+	record := func(k kernel.Kernel, action event.Action, message string) {
+		d.events.Record(event.Event{
+			Kind:       event.KindKernel,
 			ID:         k.ID,
 			Name:       k.Name,
 			Action:     action,
@@ -81,7 +81,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		if err := d.store.CreateKernel(want); err != nil {
 			return fmt.Errorf("define the default kernel: %w", err)
 		}
-		record(want, events.ActionImported, fmt.Sprintf("Imported the default kernel for %s, version %s: %s",
+		record(want, event.ActionImported, fmt.Sprintf("Imported the default kernel for %s, version %s: %s",
 			want.Architecture, kernel.DefaultVersion, humanize.Bytes(d.kernelManager.DiskBytes(want.ID))))
 		return nil
 	case err != nil:
@@ -93,7 +93,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		if err := d.kernelManager.ExtractDefault(k.ID); err != nil {
 			return err
 		}
-		record(k, events.ActionImported,
+		record(k, event.ActionImported,
 			"Imported the default kernel again, as its copy on the host was missing or damaged")
 		return nil
 	}
@@ -105,7 +105,7 @@ func (d *daemon) ensureDefaultKernel() error {
 	if err := d.store.UpdateKernel(k); err != nil {
 		return fmt.Errorf("update the default kernel: %w", err)
 	}
-	record(k, events.ActionUpdated, fmt.Sprintf("Updated the default kernel to version %s, which this version of Dicer carries",
+	record(k, event.ActionUpdated, fmt.Sprintf("Updated the default kernel to version %s, which this version of Dicer carries",
 		kernel.DefaultVersion))
 	return nil
 }

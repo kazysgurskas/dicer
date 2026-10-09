@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -54,10 +54,10 @@ func history(t *testing.T, h *eventsHandler, req *dicerdv1.GetEventsRequest) []*
 	return out
 }
 
-func newEventsHandler(t *testing.T) (*eventsHandler, *events.Log) {
+func newEventsHandler(t *testing.T) (*eventsHandler, *event.Log) {
 	t.Helper()
 
-	log, err := events.Open(events.Config{
+	log, err := event.Open(event.Config{
 		File:   filepath.Join(t.TempDir(), "events.jsonl"),
 		Logger: slog.New(slog.DiscardHandler),
 	})
@@ -70,10 +70,10 @@ func newEventsHandler(t *testing.T) (*eventsHandler, *events.Log) {
 
 func TestGetEventsHistory(t *testing.T) {
 	h, log := newEventsHandler(t)
-	log.Record(events.Event{Kind: events.KindInstance, ID: "1", Name: "web", Action: events.ActionCreated})
-	log.Record(events.Event{Kind: events.KindImage, Name: "nginx", Action: events.ActionPulled})
-	log.Record(events.Event{
-		Kind: events.KindInstance, ID: "1", Name: "web", Action: events.ActionDied,
+	log.Record(event.Event{Kind: event.KindInstance, ID: "1", Name: "web", Action: event.ActionCreated})
+	log.Record(event.Event{Kind: event.KindImage, Name: "nginx", Action: event.ActionPulled})
+	log.Record(event.Event{
+		Kind: event.KindInstance, ID: "1", Name: "web", Action: event.ActionDied,
 		Message: "exit code 1", Attributes: map[string]string{"exit_code": "1"},
 	})
 
@@ -99,7 +99,7 @@ func TestGetEventsBatchesTheHistory(t *testing.T) {
 	}
 
 	for range eventBatchSize + 1 {
-		log.Record(events.Event{Kind: events.KindInstance, Name: "web", Action: events.ActionStarted})
+		log.Record(event.Event{Kind: event.KindInstance, Name: "web", Action: event.ActionStarted})
 	}
 	sent := history(t, h, &dicerdv1.GetEventsRequest{})
 	if len(sent) != 2 || len(sent[0].GetEvents()) != eventBatchSize || sent[0].GetCaughtUp() ||
@@ -111,8 +111,8 @@ func TestGetEventsBatchesTheHistory(t *testing.T) {
 // An image is known by its full reference, and found by the short one too.
 func TestGetEventsFindsAnImageByItsShortName(t *testing.T) {
 	h, log := newEventsHandler(t)
-	log.Record(events.Event{Kind: events.KindImage, Name: "docker.io/library/busybox:latest", Action: events.ActionPulled})
-	log.Record(events.Event{Kind: events.KindInstance, Name: "web", Action: events.ActionStarted})
+	log.Record(event.Event{Kind: event.KindImage, Name: "docker.io/library/busybox:latest", Action: event.ActionPulled})
+	log.Record(event.Event{Kind: event.KindInstance, Name: "web", Action: event.ActionStarted})
 
 	for _, name := range []string{"busybox", "busybox:latest", "docker.io/library/busybox:latest"} {
 		sent := history(t, h, &dicerdv1.GetEventsRequest{Name: name})
@@ -129,7 +129,7 @@ func TestGetEventsFindsAnImageByItsShortName(t *testing.T) {
 // goes.
 func TestGetEventsFollow(t *testing.T) {
 	h, log := newEventsHandler(t)
-	log.Record(events.Event{Kind: events.KindInstance, Name: "web", Action: events.ActionStarted})
+	log.Record(event.Event{Kind: event.KindInstance, Name: "web", Action: event.ActionStarted})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	stream := newEventStream(ctx)
@@ -148,7 +148,7 @@ func TestGetEventsFollow(t *testing.T) {
 	if resp := next(); !resp.GetCaughtUp() || len(resp.GetEvents()) != 1 || resp.GetEvents()[0].GetAction() != dicerdv1.EventAction_EVENT_ACTION_STARTED {
 		t.Errorf("first = %v, want the history, caught up", resp)
 	}
-	log.Record(events.Event{Kind: events.KindInstance, Name: "web", Action: events.ActionStopped})
+	log.Record(event.Event{Kind: event.KindInstance, Name: "web", Action: event.ActionStopped})
 	if resp := next(); len(resp.GetEvents()) != 1 || resp.GetEvents()[0].GetAction() != dicerdv1.EventAction_EVENT_ACTION_STOPPED {
 		t.Errorf("then = %v, want the new event", resp)
 	}

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
 )
@@ -100,7 +100,7 @@ func (m *Manager) Resize(ctx context.Context, instance Spec, want Resources) (er
 		return err
 	}
 
-	m.record(resized, events.ActionResized,
+	m.record(resized, event.ActionResized,
 		fmt.Sprintf("Resized instance from %s, %s memory to %s, %s memory in %s",
 			humanize.Count(held.VCPUs, "vCPU"), humanize.Bytes(held.MemoryBytes),
 			humanize.Count(want.VCPUs, "vCPU"), humanize.Bytes(want.MemoryBytes), humanize.Duration(time.Since(started))),

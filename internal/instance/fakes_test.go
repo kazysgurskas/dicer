@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
@@ -783,21 +783,21 @@ func (f *fakeProbe) count() int {
 // fakeRecorder remembers the events it is given.
 type fakeRecorder struct {
 	mu     sync.Mutex
-	events []events.Event
+	events []event.Event
 }
 
-func (f *fakeRecorder) Record(e events.Event) {
+func (f *fakeRecorder) Record(e event.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, e)
 }
 
 // undescribed returns the events recorded without a description.
-func (f *fakeRecorder) undescribed() []events.Event {
+func (f *fakeRecorder) undescribed() []event.Event {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	var out []events.Event
+	var out []event.Event
 	for _, e := range f.events {
 		if e.Message == "" {
 			out = append(out, e)
@@ -807,11 +807,11 @@ func (f *fakeRecorder) undescribed() []events.Event {
 }
 
 // actions returns the actions recorded so far, in order.
-func (f *fakeRecorder) actions() []events.Action {
+func (f *fakeRecorder) actions() []event.Action {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	out := make([]events.Action, 0, len(f.events))
+	out := make([]event.Action, 0, len(f.events))
 	for _, e := range f.events {
 		out = append(out, e.Action)
 	}
@@ -819,7 +819,7 @@ func (f *fakeRecorder) actions() []events.Action {
 }
 
 // last returns the last event with action, and whether there is one.
-func (f *fakeRecorder) last(action events.Action) (events.Event, bool) {
+func (f *fakeRecorder) last(action event.Action) (event.Event, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -828,7 +828,7 @@ func (f *fakeRecorder) last(action events.Action) (events.Event, bool) {
 			return e, true
 		}
 	}
-	return events.Event{}, false
+	return event.Event{}, false
 }
 
 // fakeGuestAgent stands in for a restored guest's agent, remembering what it

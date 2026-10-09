@@ -23,7 +23,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/konradasb/dicer/internal/defaults"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -580,7 +580,7 @@ func defaultConfig() Config {
 		LogLevel: "info",
 		Metrics:  MetricsConfig{Listen: defaultMetricsListen},
 		Images:   ImagesConfig{GCInterval: defaultGCInterval},
-		Events:   EventsConfig{MaxCount: events.DefaultMaxCount},
+		Events:   EventsConfig{MaxCount: event.DefaultMaxCount},
 	}
 }
 

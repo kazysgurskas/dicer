@@ -15,7 +15,7 @@ import (
 	"github.com/konradasb/dicer/internal/atomicfile"
 	"github.com/konradasb/dicer/internal/diskfile"
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 )
 
@@ -148,7 +148,7 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 		attrs["idle_seconds"] = strconv.FormatInt(int64(idleFor.Seconds()), 10)
 		why = " after " + humanize.Duration(idleFor) + " idle"
 	}
-	m.record(instance, events.ActionStandby, fmt.Sprintf("Put instance on standby%s, in %s: %s frozen to disk, %s memory released",
+	m.record(instance, event.ActionStandby, fmt.Sprintf("Put instance on standby%s, in %s: %s frozen to disk, %s memory released",
 		why, humanize.Duration(time.Since(started)), humanize.Bytes(size), humanize.Bytes(status.MemoryBytes)), attrs)
 	m.logger.InfoContext(ctx, "put instance on standby", "instance", instance.Name, "size_bytes", size)
 	return nil
@@ -171,7 +171,7 @@ func (m *Manager) resumeStandby(ctx context.Context, instance Spec, wokenByPort 
 	m.stopWaker(instance.ID)
 
 	if err := m.resume(ctx, instance, frozenGuest{snapshot: standby, dir: m.standbyDir(instance)}); err != nil {
-		m.record(instance, events.ActionDied, "Failed to resume instance from standby: "+err.Error(), nil)
+		m.record(instance, event.ActionDied, "Failed to resume instance from standby: "+err.Error(), nil)
 		return err
 	}
 	// The VMM has what it reads of the frozen guest open, which outlives
@@ -187,7 +187,7 @@ func (m *Manager) resumeStandby(ctx context.Context, instance Spec, wokenByPort 
 		attrs["woken_by_port"] = strconv.Itoa(int(wokenByPort))
 		why = fmt.Sprintf(", woken by a connection to port %d,", wokenByPort)
 	}
-	m.record(instance, events.ActionStarted, fmt.Sprintf("Resumed instance from standby%s in %s, where it was %s ago: IP %s",
+	m.record(instance, event.ActionStarted, fmt.Sprintf("Resumed instance from standby%s in %s, where it was %s ago: IP %s",
 		why, humanize.Duration(time.Since(started)), humanize.Duration(started.Sub(standby.CreatedAt)), allocation.IP), attrs)
 	m.logger.InfoContext(ctx, "resumed instance from standby", "instance", instance.Name)
 	return nil

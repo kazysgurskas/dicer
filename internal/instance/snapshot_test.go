@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/hypervisor"
 )
 
@@ -59,9 +59,9 @@ func TestCreateMemorySnapshot(t *testing.T) {
 	}
 	assertSameFile(t, filepath.Join(dir, overlayDiskFile), h.overlay)
 
-	event, ok := h.events.last(events.ActionCreated)
-	if !ok || event.Kind != events.KindSnapshot || event.Attributes["paused_seconds"] == "" {
-		t.Errorf("event = %+v, want a snapshot's creation saying how long the guest was paused", event)
+	got, ok := h.events.last(event.ActionCreated)
+	if !ok || got.Kind != event.KindSnapshot || got.Attributes["paused_seconds"] == "" {
+		t.Errorf("event = %+v, want a snapshot's creation saying how long the guest was paused", got)
 	}
 }
 

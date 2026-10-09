@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/network"
 )
 
@@ -73,7 +73,7 @@ func TestConnectionWakesInstanceOnStandby(t *testing.T) {
 	if want := net.JoinHostPort(allocation.IP, "80"); len(dialed) == 0 || dialed[0] != want {
 		t.Errorf("forwarded to %v, want the guest's %s", dialed, want)
 	}
-	if e, _ := h.events.last(events.ActionStarted); e.Attributes["woken_by_port"] != strconv.Itoa(h.port) {
+	if e, _ := h.events.last(event.ActionStarted); e.Attributes["woken_by_port"] != strconv.Itoa(h.port) {
 		t.Errorf("start event = %+v, want it to say what woke the instance", e)
 	}
 	if h.listening() {

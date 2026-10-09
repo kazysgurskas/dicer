@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/dns"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hostinfo"
 	"github.com/konradasb/dicer/internal/hostnet"
@@ -58,7 +58,7 @@ type daemon struct {
 	starters map[hypervisor.Type][]hypervisor.Starter
 
 	metrics *metrics.Metrics
-	events  *events.Log
+	events  *event.Log
 }
 
 // newDaemon returns a daemon for cfg, which must be valid, as loadConfig
@@ -243,7 +243,7 @@ const eventsFile = "events.jsonl"
 // and the instance manager itself.
 func (d *daemon) initServices() error {
 	var err error
-	d.events, err = events.Open(events.Config{
+	d.events, err = event.Open(event.Config{
 		File:     filepath.Join(d.cfg.DataDir, eventsFile),
 		MaxCount: d.cfg.Events.MaxCount,
 		MaxAge:   d.cfg.Events.MaxAge,

@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
@@ -37,7 +37,7 @@ func newDefinitionsDaemon(t *testing.T) *daemon {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := events.Open(events.Config{File: filepath.Join(dataDir, eventsFile), Logger: logger})
+	log, err := event.Open(event.Config{File: filepath.Join(dataDir, eventsFile), Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}

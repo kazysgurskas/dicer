@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // Stop shuts down an instance and releases its host resources, keeping its
@@ -39,7 +39,7 @@ func (m *Manager) Stop(ctx context.Context, instance Spec) (err error) {
 	case StateStopped:
 		return nil
 	case StateStandby:
-		m.record(instance, events.ActionStopped, "Stopped instance: discarded what it had frozen on standby", nil)
+		m.record(instance, event.ActionStopped, "Stopped instance: discarded what it had frozen on standby", nil)
 		m.logger.InfoContext(ctx, "stopped instance", "instance", instance.Name)
 		m.scheduleRemoval(ctx, instance)
 		return nil
@@ -64,7 +64,7 @@ func (m *Manager) Stop(ctx context.Context, instance Spec) (err error) {
 	if !status.StartedAt.IsZero() {
 		ranFor = time.Since(status.StartedAt)
 	}
-	m.record(instance, events.ActionStopped, stopMessage(outcome, m.stopGracePeriod, took, ranFor), nil)
+	m.record(instance, event.ActionStopped, stopMessage(outcome, m.stopGracePeriod, took, ranFor), nil)
 	m.logger.InfoContext(ctx, "stopped instance", "instance", instance.Name)
 
 	m.scheduleRemoval(ctx, instance)

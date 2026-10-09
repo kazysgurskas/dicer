@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -108,12 +108,12 @@ func TestNetworkCreatedAndDeletedAreRecorded(t *testing.T) {
 		t.Fatalf("DeleteNetwork: %v", err)
 	}
 
-	want := []events.Action{events.ActionCreated, events.ActionDeleted}
+	want := []event.Action{event.ActionCreated, event.ActionDeleted}
 	if len(recorded.events) != len(want) {
 		t.Fatalf("recorded %+v, want %v", recorded.events, want)
 	}
 	for i, e := range recorded.events {
-		if e.Kind != events.KindNetwork || e.ID != n.GetId() || e.Name != "lan" || e.Action != want[i] {
+		if e.Kind != event.KindNetwork || e.ID != n.GetId() || e.Name != "lan" || e.Action != want[i] {
 			t.Errorf("event %d = %+v, want network lan %s", i, e, want[i])
 		}
 		if e.Attributes["subnet"] != "10.9.0.0/24" || e.Attributes["gateway"] != "10.9.0.1" {

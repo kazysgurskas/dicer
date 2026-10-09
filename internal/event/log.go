@@ -1,11 +1,11 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package events defines the events recorded about what happens on this
+// Package event defines the events recorded about what happens on this
 // host, keeps their log, and delivers new ones to subscribers. Recording never
 // waits on the disk: the events file is written behind, in the order the
 // events were recorded.
-package events
+package event
 
 import (
 	"bytes"
@@ -154,7 +154,7 @@ func open(cfg Config, f *eventsFile, buffer int) (*Log, error) {
 		path:          cfg.File,
 		maxCount:      cfg.MaxCount,
 		maxAge:        cfg.MaxAge,
-		logger:        cfg.Logger.With("component", "events"),
+		logger:        cfg.Logger.With("component", "event"),
 		now:           time.Now,
 		writes:        make(chan pendingEvent, buffer),
 		stopped:       make(chan struct{}),

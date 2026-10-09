@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/volume"
@@ -46,7 +46,7 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 			t.Errorf("standby is missing %s: %v", f, err)
 		}
 	}
-	if _, ok := h.events.last(events.ActionStandby); !ok {
+	if _, ok := h.events.last(event.ActionStandby); !ok {
 		t.Error("no standby event was recorded")
 	}
 

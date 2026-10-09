@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 func TestRename(t *testing.T) {
@@ -54,7 +54,7 @@ func TestRenameRecordsAnEvent(t *testing.T) {
 		t.Fatalf("Rename: %v", err)
 	}
 
-	e, ok := h.events.last(events.ActionRenamed)
+	e, ok := h.events.last(event.ActionRenamed)
 	if !ok {
 		t.Fatalf("no renamed event recorded, got %v", h.events.actions())
 	}
@@ -117,7 +117,7 @@ func TestRenameToTheSameNameDoesNothing(t *testing.T) {
 	if renamed.Name != h.instance.Name {
 		t.Errorf("name = %q, want it unchanged", renamed.Name)
 	}
-	if _, ok := h.events.last(events.ActionRenamed); ok {
+	if _, ok := h.events.last(event.ActionRenamed); ok {
 		t.Error("a rename that changed nothing recorded an event")
 	}
 }

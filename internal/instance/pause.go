@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/hypervisor"
 )
 
@@ -19,7 +19,7 @@ func (m *Manager) Pause(ctx context.Context, instance Spec) error {
 		from:      StateRunning,
 		to:        StatePaused,
 		do:        hypervisor.Hypervisor.PauseVM,
-		event:     events.ActionPaused,
+		event:     event.ActionPaused,
 		message:   "Paused instance: vCPUs halted, memory kept",
 	})
 }
@@ -31,7 +31,7 @@ func (m *Manager) Resume(ctx context.Context, instance Spec) error {
 		from:      StatePaused,
 		to:        StateRunning,
 		do:        hypervisor.Hypervisor.ResumeVM,
-		event:     events.ActionResumed,
+		event:     event.ActionResumed,
 		message:   "Resumed instance: vCPUs running",
 	})
 }
@@ -41,7 +41,7 @@ type pauseMove struct {
 	operation string
 	from, to  State
 	do        func(hypervisor.Hypervisor, context.Context) error
-	event     events.Action
+	event     event.Action
 	message   string
 }
 

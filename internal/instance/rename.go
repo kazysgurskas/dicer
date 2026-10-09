@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 )
 
 // Rename changes a Stopped or Failed instance's name and returns the renamed
@@ -43,7 +43,7 @@ func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ 
 		return Spec{}, fmt.Errorf("rename instance %q: %w", current.Name, err)
 	}
 
-	m.record(renamed, events.ActionRenamed, fmt.Sprintf("Renamed instance %s to %s", current.Name, newName),
+	m.record(renamed, event.ActionRenamed, fmt.Sprintf("Renamed instance %s to %s", current.Name, newName),
 		map[string]string{"previous_name": current.Name})
 	m.logger.InfoContext(ctx, "renamed instance", "instance", newName, "previous_name", current.Name)
 

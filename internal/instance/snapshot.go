@@ -22,7 +22,7 @@ import (
 
 	"github.com/konradasb/dicer/internal/diskfile"
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
@@ -283,7 +283,7 @@ func (m *Manager) recordSnapshotCreated(snapshot Snapshot, took, paused time.Dur
 		attrs["paused_seconds"] = strconv.FormatFloat(paused.Seconds(), 'f', 3, 64)
 		message += ", pausing it for " + humanize.Duration(paused)
 	}
-	m.recordSnapshot(snapshot, events.ActionCreated, message+": "+humanize.Bytes(snapshot.SizeBytes), attrs)
+	m.recordSnapshot(snapshot, event.ActionCreated, message+": "+humanize.Bytes(snapshot.SizeBytes), attrs)
 }
 
 // memoryTransferTimeout bounds writing or reading a guest's memory of the
@@ -330,7 +330,7 @@ func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot Snapshot) (err er
 		return err
 	}
 
-	m.recordSnapshot(snapshot, events.ActionDeleted, "Deleted snapshot of instance "+snapshot.Instance.Name,
+	m.recordSnapshot(snapshot, event.ActionDeleted, "Deleted snapshot of instance "+snapshot.Instance.Name,
 		map[string]string{"instance": snapshot.Instance.Name})
 	m.logger.InfoContext(ctx, "deleted snapshot", "instance", snapshot.Instance.Name, "snapshot", snapshot.Name)
 
@@ -401,7 +401,7 @@ func (m *Manager) restoreDisk(ctx context.Context, instance Spec, snapshot Snaps
 		return fmt.Errorf("restore overlay disk: %w", err)
 	}
 
-	m.record(instance, events.ActionSnapshotRestored, fmt.Sprintf("Rolled back disk to snapshot %q taken %s",
+	m.record(instance, event.ActionSnapshotRestored, fmt.Sprintf("Rolled back disk to snapshot %q taken %s",
 		snapshot.Name, snapshot.CreatedAt.Local().Format(time.DateTime)), map[string]string{"snapshot": snapshot.Name})
 	m.logger.DebugContext(ctx, "restored overlay disk", "instance", instance.Name, "snapshot", snapshot.Name)
 
@@ -431,7 +431,7 @@ func (m *Manager) restoreMemory(ctx context.Context, instance Spec, snapshot Sna
 		return err
 	}
 
-	m.record(instance, events.ActionSnapshotRestored, fmt.Sprintf("Restored instance from snapshot %q taken %s in %s: memory and disk rolled back",
+	m.record(instance, event.ActionSnapshotRestored, fmt.Sprintf("Restored instance from snapshot %q taken %s in %s: memory and disk rolled back",
 		snapshot.Name, snapshot.CreatedAt.Local().Format(time.DateTime), humanize.Duration(time.Since(started))),
 		map[string]string{"snapshot": snapshot.Name})
 	return nil

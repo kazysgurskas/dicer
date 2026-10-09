@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
@@ -49,7 +49,7 @@ func (m *Manager) Update(ctx context.Context, updated Spec) error {
 	if err := m.store.UpdateInstance(updated); err != nil {
 		return fmt.Errorf("update instance %q: %w", current.Name, err)
 	}
-	m.record(updated, events.ActionUpdated, updateMessage(current, updated, status.State), nil)
+	m.record(updated, event.ActionUpdated, updateMessage(current, updated, status.State), nil)
 
 	if current.NetworkName != updated.NetworkName || current.StaticIP != updated.StaticIP {
 		if err := m.networks.Release(current.NetworkName, current.ID); err != nil {

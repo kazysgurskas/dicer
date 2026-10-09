@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image/reference"
 )
@@ -141,7 +141,7 @@ func (m *Manager) collect(p GCPolicy, images []*Image, reason GCReason, result *
 	for _, image := range removed.Images {
 		result.Removed = append(result.Removed, GCRemoval{Image: &image, Reason: reason})
 		m.metrics.RecordImageGCCollected(string(reason))
-		m.record(&image, events.ActionCollected, gcMessage(p, &image, reason), map[string]string{"reason": string(reason)})
+		m.record(&image, event.ActionCollected, gcMessage(p, &image, reason), map[string]string{"reason": string(reason)})
 	}
 	result.ReclaimedBytes += removed.ReclaimedBytes
 	m.metrics.RecordImageGCReclaimed(removed.ReclaimedBytes)

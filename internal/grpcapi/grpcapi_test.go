@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
@@ -29,10 +29,10 @@ func wantClass(t *testing.T, err, class error) {
 
 // fakeRecorder keeps the events recorded.
 type fakeRecorder struct {
-	events []events.Event
+	events []event.Event
 }
 
-func (f *fakeRecorder) Record(e events.Event) { f.events = append(f.events, e) }
+func (f *fakeRecorder) Record(e event.Event) { f.events = append(f.events, e) }
 
 // testCapacity is a 4-CPU, 8GiB host with the daemon's default admission:
 // 16 vCPUs and 7GiB.

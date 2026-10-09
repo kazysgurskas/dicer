@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
@@ -99,17 +99,17 @@ func TestKernelImportedAndDeletedAreRecorded(t *testing.T) {
 	}
 
 	want := []struct {
-		action  events.Action
+		action  event.Action
 		message string
 	}{
-		{events.ActionImported, "Imported kernel for x86_64: 7 B, no checksum given to verify it by"},
-		{events.ActionDeleted, "Deleted kernel and its copy on the host"},
+		{event.ActionImported, "Imported kernel for x86_64: 7 B, no checksum given to verify it by"},
+		{event.ActionDeleted, "Deleted kernel and its copy on the host"},
 	}
 	if len(recorded.events) != len(want) {
 		t.Fatalf("recorded %d events, want %d: %+v", len(recorded.events), len(want), recorded.events)
 	}
 	for i, e := range recorded.events {
-		if e.Kind != events.KindKernel || e.ID != k.GetId() || e.Name != "k" || e.Action != want[i].action {
+		if e.Kind != event.KindKernel || e.ID != k.GetId() || e.Name != "k" || e.Action != want[i].action {
 			t.Errorf("event %d = %+v, want kernel k %s", i, e, want[i].action)
 		}
 		if e.Message != want[i].message {

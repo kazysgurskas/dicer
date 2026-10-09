@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
@@ -39,7 +39,7 @@ type Config struct {
 
 	// Events is the event log GetEvents reads and the handlers record to.
 	// Nil records nothing.
-	Events *events.Log
+	Events *event.Log
 
 	// ListenAddress is the address the TCP listener is bound to, such as
 	// [::]:9000, or empty if the API is not served over TCP.
@@ -72,16 +72,16 @@ type Config struct {
 
 // recorder records what happens to the resources the API changes.
 type recorder interface {
-	Record(e events.Event)
+	Record(e event.Event)
 }
 
 // discardRecorder is the recorder used when no event log is configured.
 type discardRecorder struct{}
 
-func (discardRecorder) Record(events.Event) {}
+func (discardRecorder) Record(event.Event) {}
 
 // recorderOf returns log as a recorder, or one that discards if log is nil.
-func recorderOf(log *events.Log) recorder {
+func recorderOf(log *event.Log) recorder {
 	if log == nil {
 		return discardRecorder{}
 	}

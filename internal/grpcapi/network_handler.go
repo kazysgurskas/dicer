@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
@@ -67,7 +67,7 @@ func (h *networkHandler) CreateNetwork(
 	if n.Internal {
 		message += "; internal: its instances cannot reach the host or beyond it"
 	}
-	h.record(n, events.ActionCreated, message)
+	h.record(n, event.ActionCreated, message)
 
 	return networkToProto(n, 0), nil
 }
@@ -130,7 +130,7 @@ func (h *networkHandler) DeleteNetwork(
 	if err := h.store.DeleteNetwork(n.Name); err != nil {
 		return nil, err
 	}
-	h.record(n, events.ActionDeleted, "Deleted network with subnet "+n.Subnet)
+	h.record(n, event.ActionDeleted, "Deleted network with subnet "+n.Subnet)
 
 	if err := h.networkManager.Forget(n.Name); err != nil {
 		return nil, fmt.Errorf("discard allocations: %w", err)
@@ -141,9 +141,9 @@ func (h *networkHandler) DeleteNetwork(
 
 // record records that action happened to n, with its subnet and gateway
 // among the attributes.
-func (h *networkHandler) record(n network.Network, action events.Action, message string) {
-	h.events.Record(events.Event{
-		Kind:       events.KindNetwork,
+func (h *networkHandler) record(n network.Network, action event.Action, message string) {
+	h.events.Record(event.Event{
+		Kind:       event.KindNetwork,
 		ID:         n.ID,
 		Name:       n.Name,
 		Action:     action,

@@ -8,24 +8,24 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 )
 
 // Recorder records what happens to instances.
 type Recorder interface {
-	Record(e events.Event)
+	Record(e event.Event)
 }
 
 // discardRecorder is the Recorder used when none is configured.
 type discardRecorder struct{}
 
-func (discardRecorder) Record(events.Event) {}
+func (discardRecorder) Record(event.Event) {}
 
 // record records an event about instance.
-func (m *Manager) record(instance Spec, action events.Action, message string, attrs map[string]string) {
-	m.events.Record(events.Event{
-		Kind:       events.KindInstance,
+func (m *Manager) record(instance Spec, action event.Action, message string, attrs map[string]string) {
+	m.events.Record(event.Event{
+		Kind:       event.KindInstance,
 		ID:         instance.ID,
 		Name:       instance.Name,
 		Action:     action,
@@ -35,9 +35,9 @@ func (m *Manager) record(instance Spec, action events.Action, message string, at
 }
 
 // recordSnapshot records an event of a snapshot.
-func (m *Manager) recordSnapshot(snapshot Snapshot, action events.Action, message string, attrs map[string]string) {
-	m.events.Record(events.Event{
-		Kind:       events.KindSnapshot,
+func (m *Manager) recordSnapshot(snapshot Snapshot, action event.Action, message string, attrs map[string]string) {
+	m.events.Record(event.Event{
+		Kind:       event.KindSnapshot,
 		ID:         snapshot.ID,
 		Name:       snapshot.Name,
 		Action:     action,
@@ -59,13 +59,13 @@ func (m *Manager) recordEnd(instance Spec, exit Exit, decision restartDecision, 
 		after = " after running for " + humanize.Duration(ranFor)
 	}
 	if exit.Clean() {
-		m.record(instance, events.ActionExited, fmt.Sprintf("Instance exited with code %d%s", *exit.Code, after), attrs)
+		m.record(instance, event.ActionExited, fmt.Sprintf("Instance exited with code %d%s", *exit.Code, after), attrs)
 	} else {
 		message := fmt.Sprintf("Instance failed%s: %v", after, exit.Failure)
 		if decision.gaveUp {
 			message += fmt.Sprintf("; restart policy %s gave up after %s", instance.Restart, humanize.Count(decision.restarts, "restart"))
 		}
-		m.record(instance, events.ActionDied, message, attrs)
+		m.record(instance, event.ActionDied, message, attrs)
 	}
 
 	if decision.restart {
@@ -73,7 +73,7 @@ func (m *Manager) recordEnd(instance Spec, exit Exit, decision restartDecision, 
 		if exit.Clean() {
 			what = "exited"
 		}
-		m.record(instance, events.ActionRestarting,
+		m.record(instance, event.ActionRestarting,
 			fmt.Sprintf("Back-off restarting %s instance in %s (%s)", what, humanize.Duration(decision.delay), restartCount(instance.Restart, decision.restarts)),
 			map[string]string{"delay": decision.delay.String(), "restart_count": strconv.Itoa(decision.restarts)})
 	}
