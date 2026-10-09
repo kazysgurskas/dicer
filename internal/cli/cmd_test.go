@@ -182,3 +182,28 @@ func clientOf(t *testing.T, srv dicerdv1.DaemonServiceServer) *dicer.Client {
 func stateWord(s dicerdv1.InstanceState) string {
 	return strings.ToLower(strings.TrimPrefix(s.String(), "INSTANCE_STATE_"))
 }
+
+func TestShortcutsAreGrouped(t *testing.T) {
+	root := NewCommand()
+	for _, name := range []string{
+		"run", "ps", "exec", "logs", "start", "stop", "restart", "pause", "resume", "rm",
+		"create", "update", "inspect", "cp", "pull", "images", "rmi",
+	} {
+		cmd, _, err := root.Find([]string{name})
+		if err != nil || cmd.Name() != name {
+			t.Errorf("dicer %s is not a command: %v", name, err)
+			continue
+		}
+		if cmd.GroupID != groupCommon {
+			t.Errorf("dicer %s is in group %q, want %q", name, cmd.GroupID, groupCommon)
+		}
+	}
+}
+
+func TestResourcesCommandIsGone(t *testing.T) {
+	isolateConfig(t)
+
+	if _, err := run(t, "resources"); err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("dicer resources = %v, want an unknown command", err)
+	}
+}

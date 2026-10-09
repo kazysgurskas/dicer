@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
@@ -380,4 +381,50 @@ func TestStartOnBootStartsFailedInstance(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRecoverReschedulesRestart(t *testing.T) {
+	h := newHarness(t)
+	h.setRestart(t, RestartPolicy{Mode: RestartModeAlways})
+	err := h.manager.writeStatus(Status{
+		InstanceID:    h.instance.ID,
+		State:         StateRestarting,
+		RestartCount:  2,
+		NextRestartAt: time.Now().Add(-time.Second),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h.manager.Recover(context.Background())
+
+	h.waitForVMMs(t, 1)
+	status := h.waitForState(t, StateRunning)
+	if status.RestartCount != 2 {
+		t.Errorf("restart count = %d, want the count carried over", status.RestartCount)
+	}
+}
+
+// A VMM that died while the daemon was down is an end the policy applies to,
+// as if it had been seen to happen.
+func TestRecoverAppliesPolicyToInstanceThatEnded(t *testing.T) {
+	h := newHarness(t)
+	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure})
+	h.restartAtOnce()
+
+	dead := deadPID(t)
+	err := h.manager.writeStatus(Status{
+		InstanceID: h.instance.ID,
+		State:      StateRunning,
+		VMMPID:     &dead,
+		StartedAt:  time.Now().Add(-time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h.manager.Recover(context.Background())
+
+	h.waitForVMMs(t, 1)
+	h.waitForState(t, StateRunning)
 }

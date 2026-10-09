@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // testCapacity is a host with 4 CPUs and 8GiB, overcommitted as the daemon
@@ -278,4 +279,53 @@ func TestAdmitVolumeSharing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// seedRunning defines another instance, recorded as in state.
+func (h *harness) seedRunning(t *testing.T, name string, state State, ports ...network.PortMapping) Spec {
+	t.Helper()
+
+	other := seedInstance(t, h.store, name)
+	other.Ports = ports
+	h.store.instances[name] = other
+
+	if err := h.manager.writeStatus(Status{InstanceID: other.ID, State: state}); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	return other
+}
+
+func TestStartRefusesPortHeldByAnotherInstance(t *testing.T) {
+	for _, state := range []State{StateRunning, StatePaused, StateStarting, StateStopping} {
+		t.Run(string(state), func(t *testing.T) {
+			h := newHarness(t)
+			h.withPorts(network.PortMapping{HostIP: "192.0.2.1", HostPort: 8080, GuestPort: 80})
+			h.seedRunning(t, "db", state, network.PortMapping{HostPort: 8080, GuestPort: 5432})
+
+			err := h.manager.start(t.Context(), h.instance)
+			if !errors.Is(err, errdefs.ErrInvalidState) {
+				t.Fatalf("Start = %v, want a refusal for the port %s instance holds", err, state)
+			}
+			if len(h.hostNetwork.published) != 0 {
+				t.Errorf("published = %+v, want nothing", h.hostNetwork.published)
+			}
+			// Refused at admission: the instance was never Starting, so
+			// it is left as it was rather than Failed.
+			if status := h.status(t); status.State != StateStopped {
+				t.Errorf("state = %s, want %s", status.State, StateStopped)
+			}
+		})
+	}
+}
+
+func TestStartAllowsPortsThatDoNotClash(t *testing.T) {
+	h := newHarness(t)
+	h.withPorts(network.PortMapping{HostPort: 8080, GuestPort: 80})
+	// A different port, a different protocol, and the same port on an
+	// instance that is not running.
+	h.seedRunning(t, "db", StateRunning, network.PortMapping{HostPort: 5432, GuestPort: 5432})
+	h.seedRunning(t, "dns", StateRunning, network.PortMapping{HostPort: 8080, GuestPort: 80, Protocol: "udp"})
+	h.seedRunning(t, "old", StateStopped, network.PortMapping{HostPort: 8080, GuestPort: 80})
+
+	h.start(t)
 }

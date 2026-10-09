@@ -299,3 +299,9 @@ func forceState(t *testing.T, manager *Manager, instanceID string, state State) 
 		t.Fatalf("writeStatus: %v", err)
 	}
 }
+
+// withPorts gives the harness's instance ports, in its definition too.
+func (h *harness) withPorts(ports ...network.PortMapping) {
+	h.instance.Ports = ports
+	h.store.instances[h.instance.Name] = h.instance
+}

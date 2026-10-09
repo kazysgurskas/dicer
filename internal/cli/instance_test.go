@@ -4,14 +4,22 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"gopkg.in/yaml.v3"
 
 	"github.com/konradasb/dicer"
+	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // runBuild parses argv through a real create command and returns the create
@@ -237,5 +245,401 @@ func TestBuildCreateRequestRemoveOnExit(t *testing.T) {
 
 	if got, _ := runBuild(t, "web", "--image", "alpine"); got.spec.RemoveOnExit {
 		t.Error("an instance that did not ask to be deleted says it did")
+	}
+}
+
+func TestPsIsInstanceList(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
+
+	ps, err := run(t, "ps")
+	if err != nil {
+		t.Fatalf("ps: %v\n%s", err, ps)
+	}
+	ls, err := run(t, "instance", "ls")
+	if err != nil {
+		t.Fatalf("instance ls: %v\n%s", err, ls)
+	}
+
+	if ps != ls {
+		t.Errorf("dicer ps and dicer instance ls differ:\n%s\n---\n%s", ps, ls)
+	}
+	for _, want := range []string{"NAME", "web", "db", "cache", "8080->80/tcp"} {
+		if !strings.Contains(ps, want) {
+			t.Errorf("ps output is missing %q:\n%s", want, ps)
+		}
+	}
+
+	// -a is taken for Docker's sake, and changes nothing.
+	if all, err := run(t, "ps", "-a"); err != nil || all != ps {
+		t.Errorf("ps -a = %q, %v; want what ps shows", all, err)
+	}
+}
+
+func TestPsQuietAndFilters(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"ps", "-q"}, "cache\ndb\nweb\n"},
+		{[]string{"ps", "-q", "--filter", "state=running"}, "web\n"},
+		{[]string{"ps", "-q", "-f", "state=Running", "-f", "state=paused"}, "cache\nweb\n"},
+		{[]string{"ps", "-q", "--filter", "label=team"}, "db\nweb\n"},
+		{[]string{"ps", "-q", "--filter", "label=team=data"}, "db\n"},
+		{[]string{"ps", "-q", "--filter", "network=default", "--filter", "name=w"}, "web\n"},
+		{[]string{"ps", "-q", "--filter", "image=redis"}, "cache\n"},
+		{[]string{"ps", "--format", "{{.Name}}:{{.State}}", "--filter", "state=stopped"}, "db:Stopped\n"},
+	} {
+		out, err := run(t, tc.args...)
+		if err != nil {
+			t.Errorf("%v: %v\n%s", tc.args, err, out)
+			continue
+		}
+		if out != tc.want {
+			t.Errorf("%v = %q, want %q", tc.args, out, tc.want)
+		}
+	}
+
+	if out, err := run(t, "ps", "--filter", "colour=red"); err == nil || !strings.Contains(err.Error(), "name, state") {
+		t.Errorf("an unknown filter key should be refused, naming the known ones: %v\n%s", err, out)
+	}
+}
+
+func TestPsYAMLAndColumns(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
+
+	out, err := run(t, "ps", "--format", "yaml", "-c", "name,ip", "--filter", "name=web")
+	if err != nil {
+		t.Fatalf("ps: %v\n%s", err, out)
+	}
+
+	var rows []map[string]string
+	if err := yaml.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("not YAML: %v\n%s", err, out)
+	}
+	if want := []map[string]string{{"Name": "web", "IP": "10.0.0.5"}}; len(rows) != 1 ||
+		rows[0]["Name"] != want[0]["Name"] || rows[0]["IP"] != want[0]["IP"] || len(rows[0]) != 2 {
+		t.Errorf("rows = %v, want %v", rows, want)
+	}
+}
+
+func TestRun(t *testing.T) {
+	d := newFakeInstanceDaemon()
+	serveFakeDaemon(t, d)
+
+	out, err := run(t, "run", "-d", "--name", "web", "-p", "8080:80", "-e", "A=1,2", "-m", "1GiB",
+		"nginx:1.27", "nginx", "-g", "daemon off;")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+
+	req := d.created
+	want := &dicerdv1.CreateInstanceRequest{
+		Name:        "web",
+		ImageRef:    "nginx:1.27",
+		Cmd:         []string{"nginx", "-g", "daemon off;"},
+		Start:       true,
+		Vcpus:       1,
+		MemoryBytes: 1 << 30,
+		DiskBytes:   10 << 30,
+		Env:         map[string]string{"A": "1,2"},
+		Ports:       []*dicerdv1.PortMapping{{HostPort: 8080, GuestPort: 80}},
+		PullPolicy:  dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+	}
+	if !proto.Equal(req, want) {
+		t.Errorf("request = %v\nwant      %v", req, want)
+	}
+	if !regexp.MustCompile(`Instance web started in [0-9.]+m?s \(10\.0\.0\.9\)`).MatchString(out) {
+		t.Errorf("output = %q, want it to say how long the start took and the address", out)
+	}
+
+	// The image was pulled first, so its download could be shown, and then
+	// the instance created.
+	if want := []string{"pull nginx:1.27"}; !slices.Equal(d.calls, want) {
+		t.Errorf("calls = %q, want %q", d.calls, want)
+	}
+	if !strings.Contains(out, "Image nginx:1.27 pulled in") {
+		t.Errorf("a download should be reported: %q", out)
+	}
+}
+
+// TestPullFlagSaysWhenTheImageIsPulled checks that run and create pull the
+// image themselves as --pull says, so that its progress shows, and leave the
+// daemon only to find it; and that --pull never leaves the daemon to refuse
+// an image the host lacks.
+func TestPullFlagSaysWhenTheImageIsPulled(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		cached    bool
+		wantCalls []string
+		wantPull  dicerdv1.PullPolicy
+	}{
+		{
+			name:      "missing pulls an image the host lacks",
+			args:      []string{"run", "-d", "--name", "web", "nginx:1.27"},
+			wantCalls: []string{"pull nginx:1.27"},
+			wantPull:  dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+		},
+		{
+			name:     "missing uses the image held",
+			args:     []string{"run", "-d", "--name", "web", "--pull", "missing", "nginx:1.27"},
+			cached:   true,
+			wantPull: dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+		},
+		{
+			name:      "always pulls the image held",
+			args:      []string{"run", "-d", "--name", "web", "--pull", "always", "nginx:1.27"},
+			cached:    true,
+			wantCalls: []string{"pull nginx:1.27"},
+			wantPull:  dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+		},
+		{
+			name:     "never leaves it to the daemon",
+			args:     []string{"run", "-d", "--name", "web", "--pull", "never", "nginx:1.27"},
+			wantPull: dicerdv1.PullPolicy_PULL_POLICY_NEVER,
+		},
+		{
+			name:      "create pulls too",
+			args:      []string{"create", "web", "-i", "nginx:1.27"},
+			wantCalls: []string{"pull nginx:1.27"},
+			wantPull:  dicerdv1.PullPolicy_PULL_POLICY_MISSING,
+		},
+		{
+			name:     "create honours never",
+			args:     []string{"create", "web", "-i", "nginx:1.27", "--pull", "never"},
+			wantPull: dicerdv1.PullPolicy_PULL_POLICY_NEVER,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newFakeInstanceDaemon()
+			d.cached["nginx:1.27"] = tt.cached
+			serveFakeDaemon(t, d)
+
+			if out, err := run(t, tt.args...); err != nil {
+				t.Fatalf("%s: %v\n%s", tt.args[0], err, out)
+			}
+
+			if !slices.Equal(d.calls, tt.wantCalls) {
+				t.Errorf("calls = %q, want %q", d.calls, tt.wantCalls)
+			}
+			if got := d.created.GetPullPolicy(); got != tt.wantPull {
+				t.Errorf("created with pull policy %v, want %v", got, tt.wantPull)
+			}
+		})
+	}
+}
+
+func TestRunNamesAfterTheImage(t *testing.T) {
+	d := newFakeInstanceDaemon()
+	serveFakeDaemon(t, d)
+
+	if out, err := run(t, "run", "-d", "ghcr.io/acme/Web_App:2@sha256:abc", "--", "serve"); err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+
+	name := d.created.GetName()
+	if !strings.HasPrefix(name, "web-app-") || len(name) != len("web-app-")+4 {
+		t.Errorf("name = %q, want web-app- and a four-character suffix", name)
+	}
+	if !slices.Equal(d.created.GetCmd(), []string{"serve"}) {
+		t.Errorf("cmd = %q, want the -- dropped", d.created.GetCmd())
+	}
+}
+
+func TestUpdateSendsOnlyWhatChanged(t *testing.T) {
+	d := newFakeInstanceDaemon(fakeInstances()...)
+	serveFakeDaemon(t, d)
+
+	if out, err := run(t, "update", "db", "--memory", "2GiB", "--restart", "always", "--init-mode", "exec",
+		"-l", "tier=gold"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	memory := int64(2 << 30)
+	want := &dicerdv1.UpdateInstanceRequest{
+		Name:          "db",
+		MemoryBytes:   &memory,
+		RestartPolicy: &dicerdv1.RestartPolicy{Mode: dicerdv1.RestartMode_RESTART_MODE_ALWAYS},
+		InitMode:      dicerdv1.InitMode_INIT_MODE_EXEC,
+		Labels:        map[string]string{"tier": "gold"},
+	}
+	if !proto.Equal(d.updated, want) {
+		t.Errorf("request = %v\nwant      %v", d.updated, want)
+	}
+
+	if _, err := run(t, "update", "db"); err == nil || !strings.Contains(err.Error(), "needs something to change") {
+		t.Errorf("an update with nothing to change should say so, got %v", err)
+	}
+}
+
+func TestUpdateSetsAndRemovesMaximums(t *testing.T) {
+	d := newFakeInstanceDaemon(fakeInstances()...)
+	serveFakeDaemon(t, d)
+
+	if out, err := run(t, "update", "db", "--max-vcpus", "8", "--max-memory", "0"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+	vcpus, memory := int32(8), int64(0)
+	want := &dicerdv1.UpdateInstanceRequest{Name: "db", MaxVcpus: &vcpus, MaxMemoryBytes: &memory}
+	if !proto.Equal(d.updated, want) {
+		t.Errorf("request = %v\nwant      %v", d.updated, want)
+	}
+}
+
+func TestUpdateSetsAndRemovesRateLimits(t *testing.T) {
+	d := newFakeInstanceDaemon(fakeInstances()...)
+	serveFakeDaemon(t, d)
+
+	if out, err := run(t, "update", "db", "--disk-rate", "50MiB/s", "--disk-iops", "1000",
+		"--download-rate", "0"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+	diskRate, iops, download := int64(50<<20), int64(1000), int64(0)
+	want := &dicerdv1.UpdateInstanceRequest{
+		Name: "db", DiskBytesPerSecond: &diskRate, DiskIops: &iops, DownloadBytesPerSecond: &download,
+	}
+	if !proto.Equal(d.updated, want) {
+		t.Errorf("request = %v\nwant      %v", d.updated, want)
+	}
+
+	if _, err := run(t, "update", "db", "--upload-rate", "fast"); err == nil ||
+		!strings.Contains(err.Error(), "invalid --upload-rate") {
+		t.Errorf("an invalid rate should be refused, got %v", err)
+	}
+}
+
+func TestInspect(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
+
+	out, err := run(t, "inspect", "web")
+	if err != nil {
+		t.Fatalf("inspect: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"● web — docker.io/library/nginx:1.27\n",
+		"     Active: running\n",
+		"    Command: nginx -g 'daemon off;'\n",
+		"    Machine: 2 vCPUs, 1 GiB memory, 10 GiB disk\n",
+		"      Ports: 8080->80/tcp\n             10.1.0.1:5353->53/udp\n",
+		"        Env: A=1\n             B=2\n",
+		"     Labels: team=web\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inspect output is missing %q:\n%s", want, out)
+		}
+	}
+	// What an instance does not have is left out, not shown as "-".
+	if strings.Contains(out, "Volumes") || strings.Contains(out, "\x1b[") {
+		t.Errorf("inspect output lists an empty field, or is coloured when piped:\n%s", out)
+	}
+
+	out, err = run(t, "inspect", "web", "db", "--format", "json")
+	if err != nil {
+		t.Fatalf("inspect json: %v\n%s", err, out)
+	}
+	var records []map[string]any
+	if err := json.Unmarshal([]byte(out), &records); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	// The whole record, as the client has it: its field names, and its
+	// enumerations as the CLI writes them.
+	if len(records) != 2 {
+		t.Fatalf("records = %v, want one per instance", records)
+	}
+	if r := records[0]; r["image_ref"] != "docker.io/library/nginx:1.27" || r["memory_bytes"] != float64(1<<30) ||
+		r["state"] != "running" || r["ip"] != "10.0.0.5" {
+		t.Errorf("record = %v", r)
+	}
+	if records[1]["name"] != "db" {
+		t.Errorf("second record = %v", records[1])
+	}
+
+	if out, err := run(t, "inspect", "web", "--format", "{{.IP}}"); err != nil || out != "10.0.0.5\n" {
+		t.Errorf("inspect --format '{{.IP}}' = %q, %v", out, err)
+	}
+}
+
+func TestPsCompactByDefault(t *testing.T) {
+	instances := fakeInstances()
+	instances[0].StartTime = timestamppb.New(time.Now().Add(-3 * time.Minute))
+	serveFakeDaemon(t, newFakeInstanceDaemon(instances...))
+
+	out, err := run(t, "ps")
+	if err != nil {
+		t.Fatalf("ps: %v\n%s", err, out)
+	}
+	header, _, _ := strings.Cut(out, "\n")
+	if got := strings.Fields(header); !slices.Equal(got, []string{"NAME", "IMAGE", "STATUS", "IP", "PORTS"}) {
+		t.Errorf("header = %q, want the compact columns", got)
+	}
+	if !strings.Contains(out, "Up 3 minutes") {
+		t.Errorf("a running instance should say how long it has been up:\n%s", out)
+	}
+
+	out, err = run(t, "ps", "--wide")
+	if err != nil {
+		t.Fatalf("ps --wide: %v\n%s", err, out)
+	}
+	for _, col := range []string{"STATE", "VCPU", "MEMORY", "DISK", "NETWORK", "CREATED"} {
+		if !strings.Contains(out, col) {
+			t.Errorf("ps --wide is missing column %s:\n%s", col, out)
+		}
+	}
+
+	// Structured output has every column, whatever a table shows.
+	out, err = run(t, "ps", "--format", "{{.VCPU}} {{.State}}", "-f", "name=web")
+	if err != nil || out != "2 Running\n" {
+		t.Errorf("template output = %q, %v", out, err)
+	}
+}
+
+func TestRunWithCachedImageSaysNothingOfIt(t *testing.T) {
+	d := newFakeInstanceDaemon()
+	d.cached["alpine:3.21"] = true
+	serveFakeDaemon(t, d)
+
+	out, err := run(t, "run", "-d", "--name", "a", "alpine:3.21")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "pulled") || strings.Contains(out, "Resolving") {
+		t.Errorf("an image already on the host was reported on:\n%s", out)
+	}
+	// Nor is its registry asked about it, which may be unreachable, or
+	// limiting the host's pulls.
+	if slices.Contains(d.calls, "pull alpine:3.21") {
+		t.Errorf("calls = %v, want no pull of an image the host holds", d.calls)
+	}
+}
+
+func TestInstanceStatusForAnInstanceThatEnded(t *testing.T) {
+	ago := time.Now().Add(-2 * time.Minute)
+	soon := time.Now().Add(30 * time.Second)
+
+	tests := []struct {
+		instance dicer.Instance
+		want     string
+	}{
+		{dicer.Instance{State: dicer.InstanceStateStopped, ExitCode: dicer.Ptr(0), FinishTime: ago}, "Exited (0) 2 minutes ago"},
+		{
+			dicer.Instance{State: dicer.InstanceStateFailed, StateError: "exit code 1", ExitCode: dicer.Ptr(1), FinishTime: ago},
+			"Exited (1) 2 minutes ago",
+		},
+		{dicer.Instance{State: dicer.InstanceStateFailed, StateError: "the guest reset"}, "Failed: the guest reset"},
+		{dicer.Instance{State: dicer.InstanceStateRestarting, RestartCount: 3, NextRestartTime: soon}, "Restarting (3) in 2"},
+		{dicer.Instance{State: dicer.InstanceStateRestarting, RestartCount: 1}, "Restarting (1)"},
+		{dicer.Instance{State: dicer.InstanceStateStopped}, "Stopped"},
+	}
+	for _, tt := range tests {
+		// The wait before a restart is only compared as far as it does not
+		// depend on how long the test takes.
+		if got := instanceStatus(tt.instance); !strings.HasPrefix(got, tt.want) ||
+			(tt.instance.NextRestartTime.IsZero() && got != tt.want) {
+			t.Errorf("instanceStatus(%v) = %q, want %q", tt.instance, got, tt.want)
+		}
 	}
 }

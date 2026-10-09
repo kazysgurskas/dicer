@@ -167,3 +167,26 @@ func TestInstanceFilters(t *testing.T) {
 		}
 	}
 }
+
+func TestPullFlagRefusesAnUnknownPolicy(t *testing.T) {
+	d := newFakeInstanceDaemon()
+	serveFakeDaemon(t, d)
+
+	out, err := run(t, "run", "-d", "--pull", "sometimes", "nginx:1.27")
+	if err == nil || !strings.Contains(err.Error(), `invalid --pull "sometimes": want missing, always or never`) {
+		t.Fatalf("run = %v, want --pull refused\n%s", err, out)
+	}
+	if d.created != nil {
+		t.Error("an instance was created with an unknown pull policy")
+	}
+}
+
+func TestParseRestartPolicy(t *testing.T) {
+	p, err := parseRestartPolicy("on-failure:5")
+	if err != nil || p.Mode != dicer.RestartModeOnFailure || p.MaxRetries != 5 {
+		t.Errorf("parseRestartPolicy(on-failure:5) = %v, %v", p, err)
+	}
+	if _, err := parseRestartPolicy("on-failure:many"); err == nil {
+		t.Error("parseRestartPolicy accepted a retry limit that is not a number")
+	}
+}

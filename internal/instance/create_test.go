@@ -65,3 +65,37 @@ func TestCreateFollowsThePullPolicy(t *testing.T) {
 		})
 	}
 }
+
+// A definition that could never start is refused when it is created, before
+// its image is pulled.
+func TestCreateRefusesWhatCouldNeverStart(t *testing.T) {
+	missingVolume := Spec{ID: "new-id", Name: "new", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
+		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30,
+		Mounts: []Mount{{Type: MountTypeVolume, Source: "gone", Target: "/data"}}}
+	foreignIP := missingVolume
+	foreignIP.Mounts, foreignIP.StaticIP = nil, "192.168.9.9"
+	missingKernel := foreignIP
+	missingKernel.StaticIP, missingKernel.KernelName = "", "gone"
+
+	for name, spec := range map[string]Spec{
+		"a missing volume":                 missingVolume,
+		"a static IP the network lacks":    foreignIP,
+		"a missing kernel":                 missingKernel,
+		"an invalid definition (no image)": {ID: "new-id", Name: "new", VCPUs: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			images, ok := h.manager.images.(*fakeImages)
+			if !ok {
+				t.Fatalf("images is a %T, want the fake", h.manager.images)
+			}
+
+			if err := h.manager.Create(t.Context(), spec, image.PullPolicyAlways); !errors.Is(err, errdefs.ErrInvalidArgument) {
+				t.Errorf("Create = %v, want an invalid argument error", err)
+			}
+			if images.pulls != 0 {
+				t.Errorf("an image was pulled for a definition that could never start")
+			}
+		})
+	}
+}
