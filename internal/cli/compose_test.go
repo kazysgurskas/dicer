@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/compose"
-	"github.com/konradasb/dicer/internal/errdefs"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -69,7 +70,7 @@ func (d *composeDaemon) CreateInstance(
 	defer d.mu.Unlock()
 
 	if _, ok := d.instances[req.GetName()]; ok {
-		return nil, errdefs.Exists("instance %q already exists", req.GetName())
+		return nil, status.Errorf(codes.AlreadyExists, "instance %q already exists", req.GetName())
 	}
 	d.record("create " + req.GetName())
 	d.created = req
@@ -142,7 +143,7 @@ func (d *composeDaemon) GetNetwork(_ context.Context, req *dicerdv1.GetNetworkRe
 
 	subnet, ok := d.networkNames[req.GetName()]
 	if !ok {
-		return nil, errdefs.NotFound("no network %q", req.GetName())
+		return nil, status.Errorf(codes.NotFound, "no network %q", req.GetName())
 	}
 	return &dicerdv1.Network{Name: req.GetName(), Subnet: subnet}, nil
 }
@@ -157,16 +158,16 @@ func (d *composeDaemon) CreateNetwork(_ context.Context, req *dicerdv1.CreateNet
 	// As the daemon does, a subnet another network has is refused.
 	want, err := netip.ParsePrefix(req.GetSubnet())
 	if err != nil {
-		return nil, errdefs.InvalidArgument("subnet is required")
+		return nil, status.Errorf(codes.InvalidArgument, "subnet is required")
 	}
 	for name, subnet := range d.networkNames {
 		if have, err := netip.ParsePrefix(subnet); err == nil && have.Overlaps(want) {
-			return nil, errdefs.Exists("subnet %s overlaps network %q (%s)", want, name, subnet)
+			return nil, status.Errorf(codes.AlreadyExists, "subnet %s overlaps network %q (%s)", want, name, subnet)
 		}
 	}
 	for _, subnet := range d.hostSubnets {
 		if netip.MustParsePrefix(subnet).Overlaps(want) {
-			return nil, errdefs.Exists("subnet %s overlaps %s, which the host is on", want, subnet)
+			return nil, status.Errorf(codes.AlreadyExists, "subnet %s overlaps %s, which the host is on", want, subnet)
 		}
 	}
 
@@ -192,7 +193,7 @@ func (d *composeDaemon) DeleteNetwork(_ context.Context, req *dicerdv1.DeleteNet
 	defer d.mu.Unlock()
 
 	if _, ok := d.networkNames[req.GetName()]; !ok {
-		return nil, errdefs.NotFound("no network %q", req.GetName())
+		return nil, status.Errorf(codes.NotFound, "no network %q", req.GetName())
 	}
 	d.record("delete network " + req.GetName())
 	delete(d.networkNames, req.GetName())
@@ -204,7 +205,7 @@ func (d *composeDaemon) GetVolume(_ context.Context, req *dicerdv1.GetVolumeRequ
 	defer d.mu.Unlock()
 
 	if !d.volumeNames[req.GetName()] {
-		return nil, errdefs.NotFound("no volume %q", req.GetName())
+		return nil, status.Errorf(codes.NotFound, "no volume %q", req.GetName())
 	}
 	return &dicerdv1.Volume{Name: req.GetName()}, nil
 }
@@ -223,7 +224,7 @@ func (d *composeDaemon) DeleteVolume(_ context.Context, req *dicerdv1.DeleteVolu
 	defer d.mu.Unlock()
 
 	if !d.volumeNames[req.GetName()] {
-		return nil, errdefs.NotFound("no volume %q", req.GetName())
+		return nil, status.Errorf(codes.NotFound, "no volume %q", req.GetName())
 	}
 	d.record("delete volume " + req.GetName())
 	delete(d.volumeNames, req.GetName())

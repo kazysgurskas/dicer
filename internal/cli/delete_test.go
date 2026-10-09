@@ -10,9 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/konradasb/dicer/internal/errdefs"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -44,10 +45,10 @@ func (d *storeDaemon) remove(kind string, set map[string]bool, name string, forc
 	defer d.mu.Unlock()
 
 	if !set[name] {
-		return errdefs.NotFound("no %s %q", kind, name)
+		return status.Errorf(codes.NotFound, "no %s %q", kind, name)
 	}
 	if d.inUse[name] && !force {
-		return errdefs.InvalidState("%s %q is in use", kind, name)
+		return status.Errorf(codes.FailedPrecondition, "%s %q is in use", kind, name)
 	}
 	d.record("delete " + kind + " " + name)
 	delete(set, name)
@@ -108,7 +109,7 @@ func (d *storeDaemon) DeleteImage(_ context.Context, req *dicerdv1.DeleteImageRe
 	err := d.remove("image", d.imageSet, req.GetRef(), req.GetForce())
 	if err != nil && d.imageSet[req.GetRef()] {
 		// The daemon's word for an image in use.
-		return nil, errdefs.InvalidState("image %q is used by instance web", req.GetRef())
+		return nil, status.Errorf(codes.FailedPrecondition, "image %q is used by instance web", req.GetRef())
 	}
 	return &emptypb.Empty{}, err
 }

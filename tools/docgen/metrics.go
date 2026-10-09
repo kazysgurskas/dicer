@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/konradasb/dicer/internal/dns"
-	"github.com/konradasb/dicer/internal/grpcapi"
+	"github.com/konradasb/dicer/internal/grpcserver"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
@@ -95,7 +95,7 @@ func metricDescriptions() []metric.Description {
 		volume.MetricDescriptions(),
 		network.MetricDescriptions(),
 		dns.MetricDescriptions(),
-		grpcapi.MetricDescriptions(),
+		grpcserver.MetricDescriptions(),
 	)
 }
 

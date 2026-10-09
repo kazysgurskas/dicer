@@ -17,12 +17,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
 
 	"github.com/konradasb/dicer"
-	"github.com/konradasb/dicer/internal/errdefs"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -86,7 +87,7 @@ func (d *fakeInstanceDaemon) record(call string) {
 func (d *fakeInstanceDaemon) get(name string) (*dicerdv1.Instance, error) {
 	instance, ok := d.instances[name]
 	if !ok {
-		return nil, errdefs.NotFound("no instance %q", name)
+		return nil, status.Errorf(codes.NotFound, "no instance %q", name)
 	}
 	return instance, nil
 }
@@ -120,7 +121,7 @@ func (d *fakeInstanceDaemon) setState(
 		return nil, err
 	}
 	if !slices.Contains(from, instance.GetState()) {
-		return nil, errdefs.InvalidState("instance %q is %s", name, stateWord(instance.GetState()))
+		return nil, status.Errorf(codes.FailedPrecondition, "instance %q is %s", name, stateWord(instance.GetState()))
 	}
 
 	d.record(call + " " + name)
@@ -198,7 +199,7 @@ func (d *fakeInstanceDaemon) DeleteInstance(
 		return nil, err
 	}
 	if instance.GetState() == stateRunning && !req.GetForce() {
-		return nil, errdefs.InvalidState("instance %q is running", req.GetName())
+		return nil, status.Errorf(codes.FailedPrecondition, "instance %q is running", req.GetName())
 	}
 	d.record("delete " + req.GetName())
 	delete(d.instances, req.GetName())
@@ -266,11 +267,11 @@ func (d *fakeInstanceDaemon) RenameInstance(
 		return nil, err
 	}
 	if instance.GetState() != stateStopped {
-		return nil, errdefs.InvalidState(
+		return nil, status.Errorf(codes.FailedPrecondition,
 			"instance %q is %s", req.GetName(), stateWord(instance.GetState()))
 	}
 	if _, taken := d.instances[req.GetNewName()]; taken {
-		return nil, errdefs.Exists("instance %q already exists", req.GetNewName())
+		return nil, status.Errorf(codes.AlreadyExists, "instance %q already exists", req.GetNewName())
 	}
 
 	d.record("rename " + req.GetName() + " " + req.GetNewName())
@@ -371,7 +372,7 @@ func (d *fakeInstanceDaemon) GetInstanceLogs(
 	d.mu.Unlock()
 
 	if !exists || !ran {
-		return errdefs.NotFound("instance %q has no guest log yet", req.GetName())
+		return status.Errorf(codes.NotFound, "instance %q has no guest log yet", req.GetName())
 	}
 	if err := stream.Send(&dicerdv1.InstanceLogChunk{Data: []byte(console)}); err != nil {
 		return err
@@ -412,7 +413,7 @@ func (d *fakeInstanceDaemon) GetImage(_ context.Context, req *dicerdv1.GetImageR
 	defer d.mu.Unlock()
 
 	if !d.cached[req.GetRef()] {
-		return nil, errdefs.NotFound("no image %q", req.GetRef())
+		return nil, status.Errorf(codes.NotFound, "no image %q", req.GetRef())
 	}
 	return &dicerdv1.Image{Name: req.GetRef(), Digest: "sha256:0123456789abcdef0123", SizeBytes: 64 << 20}, nil
 }

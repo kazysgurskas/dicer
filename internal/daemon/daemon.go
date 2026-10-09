@@ -132,7 +132,7 @@ func (d *daemon) Run(ctx context.Context) error {
 		return err
 	}
 
-	listeners, err := d.listenAPI(ctx)
+	listeners, err := d.listen(ctx)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (d *daemon) Run(ctx context.Context) error {
 const apiDrainTimeout = 10 * time.Second
 
 // stopServers stops every server concurrently with stopServer.
-func stopServers(listeners []apiListener, timeout time.Duration) {
+func stopServers(listeners []listener, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for _, l := range listeners {
 		wg.Go(func() { stopServer(l.server, timeout) })

@@ -208,7 +208,7 @@ who called it, its gRPC status code and how long it took:
 
 ```console
 $ journalctl -u dicerd | grep component=audit
-time=2026-10-06T09:14:02.511Z level=INFO msg="api call" component=audit method=StopInstance resource=web uid=1000 pid=48213 code=OK duration=2.10412875s
+time=2026-10-06T09:14:02.511Z level=INFO msg="call finished" component=audit method=StopInstance resource=web uid=1000 pid=48213 code=OK duration=2.10412875s
 ```
 
 | Attribute | What it is |

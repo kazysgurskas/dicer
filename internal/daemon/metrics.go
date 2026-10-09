@@ -43,7 +43,7 @@ func (d *daemon) newMetrics() *metric.Registry {
 
 // registerMetrics registers each manager's metrics, and the DNS servers' if
 // there are any. It is called once the managers exist. The API server's are
-// registered in listenAPI, which makes it.
+// registered in listen, which makes it.
 func (d *daemon) registerMetrics() {
 	d.metrics.Register(d.networkManager)
 	d.metrics.Register(d.instanceManager)

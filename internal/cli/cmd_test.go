@@ -18,7 +18,6 @@ import (
 
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/remote"
-	"github.com/konradasb/dicer/internal/grpcapi"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -135,7 +134,8 @@ func isolateConfig(t *testing.T) string {
 
 // serveFakeDaemon serves srv on a socket and aims commands at it through
 // $DICER_REMOTE, as a completion, which takes no --remote, needs. It returns
-// the socket's address.
+// the socket's address. srv returns its errors as the statuses a client
+// receives, since nothing converts them on the way.
 func serveFakeDaemon(t *testing.T, srv dicerdv1.DaemonServiceServer) string {
 	t.Helper()
 	isolateConfig(t)
@@ -154,7 +154,7 @@ func serveFakeDaemon(t *testing.T, srv dicerdv1.DaemonServiceServer) string {
 		t.Fatal(err)
 	}
 
-	server := newTestServer()
+	server := grpc.NewServer()
 	dicerdv1.RegisterDaemonServiceServer(server, srv)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)
@@ -181,12 +181,4 @@ func clientOf(t *testing.T, srv dicerdv1.DaemonServiceServer) *dicer.Client {
 // "running".
 func stateWord(s dicerdv1.InstanceState) string {
 	return strings.ToLower(strings.TrimPrefix(s.String(), "INSTANCE_STATE_"))
-}
-
-// newTestServer returns a gRPC server that sends errors as dicerd does.
-func newTestServer() *grpc.Server {
-	return grpc.NewServer(
-		grpc.ChainUnaryInterceptor(grpcapi.UnaryStatusInterceptor),
-		grpc.ChainStreamInterceptor(grpcapi.StreamStatusInterceptor),
-	)
 }

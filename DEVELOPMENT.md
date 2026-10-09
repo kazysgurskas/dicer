@@ -120,7 +120,7 @@ internal/
   daemon/               configuration, wiring, process lifecycle
   cli/                  the command line, dicer compose included
   compose/              compose files: reading them, and the requests they make
-  grpcapi/              the API's handlers, which call the managers
+  grpcserver/           the API: its servers, and the handlers, which call the managers
   instance/             instances and snapshots, and their lifecycle
   health/               health checks: running probes, and judging their results
   filestore/            resource definitions as YAML on disk, and their references

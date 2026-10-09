@@ -21,13 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/konradasb/dicer"
 	"github.com/konradasb/dicer/internal/cli/remote"
 	"github.com/konradasb/dicer/internal/filestore"
-	"github.com/konradasb/dicer/internal/grpcapi"
+	"github.com/konradasb/dicer/internal/grpcserver"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/token"
@@ -60,14 +57,6 @@ func serveDaemon(t *testing.T) (address, value string) {
 		t.Fatal(err)
 	}
 
-	authentication := grpcapi.NewAuthentication(tokenManager, logger)
-	server := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}})),
-		grpc.ChainUnaryInterceptor(authentication.UnaryInterceptor(),
-			grpcapi.UnaryStatusInterceptor, grpcapi.UnaryAuthorizationInterceptor),
-		grpc.ChainStreamInterceptor(authentication.StreamInterceptor(),
-			grpcapi.StreamStatusInterceptor, grpcapi.StreamAuthorizationInterceptor),
-	)
 	networkManager, err := network.NewManager(network.Config{
 		Dir: filepath.Join(t.TempDir(), "allocations"), Store: store, Logger: logger,
 	})
@@ -80,17 +69,19 @@ func serveDaemon(t *testing.T) (address, value string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grpcapi.NewServer(grpcapi.Config{
+	server := grpcserver.NewServer(grpcserver.Config{
 		NetworkManager:   networkManager,
 		KernelManager:    kernelManager,
 		TokenManager:     tokenManager,
 		ListenAddress:    listener.Addr().String(),
 		Fingerprint:      fingerprint,
 		TokenFingerprint: fingerprint,
-	}).Register(server)
+		Logger:           logger,
+	})
+	grpcServer := grpcserver.NewTCPServer(server, &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}})
 
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(server.Stop)
+	go func() { _ = grpcServer.Serve(listener) }()
+	t.Cleanup(grpcServer.Stop)
 
 	return listener.Addr().String(), token.Format(secret, fingerprint)
 }

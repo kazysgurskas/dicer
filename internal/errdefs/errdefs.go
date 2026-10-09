@@ -3,7 +3,7 @@
 
 // Package errdefs defines the classes of error the daemon's code returns,
 // matched with errors.Is. It knows nothing of how an error reaches a client:
-// internal/grpcapi sends each class as a gRPC status code.
+// internal/grpcserver sends each class as a gRPC status code.
 //
 // The constructor of each class keeps the class out of the message:
 // NotFound("no instance %q", name) reads `no instance "web"` and still
