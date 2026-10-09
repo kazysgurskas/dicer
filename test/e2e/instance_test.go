@@ -207,6 +207,33 @@ func TestInstanceStopKeepsWrites(t *testing.T) {
 	}
 }
 
+// TestInstanceImageChangeKeepsTheDisk checks that a stopped instance given
+// another image boots from it, over the overlay disk it already has: what the
+// guest wrote is kept, and so is a directory of the old image it renamed.
+func TestInstanceImageChangeKeepsTheDisk(t *testing.T) {
+	const newImage = "docker.io/library/alpine:3.20"
+	name := instanceName(t)
+
+	env.createInstance(t, name)
+	env.startInstance(t, name)
+	env.exec(t, name, "sh", "-c", "echo kept > /root/marker && mv /etc/apk /root/apk-moved")
+
+	env.dicer(t, "instance", "stop", name)
+	env.waitForState(t, name, "Stopped")
+	env.dicer(t, "instance", "update", name, "--image", newImage)
+	env.startInstance(t, name)
+
+	if out := strings.TrimSpace(env.exec(t, name, "cat", "/etc/alpine-release")); !strings.HasPrefix(out, "3.20.") {
+		t.Errorf("alpine-release = %q, want 3.20.x: the guest did not boot the new image", out)
+	}
+	if out := strings.TrimSpace(env.exec(t, name, "cat", "/root/marker")); out != "kept" {
+		t.Errorf("marker = %q after the image change, want %q", out, "kept")
+	}
+	if out := env.exec(t, name, "sh", "-c", "test -d /root/apk-moved && test ! -e /etc/apk && echo moved"); strings.TrimSpace(out) != "moved" {
+		t.Error("the directory the guest moved out of the old image is not where it moved it")
+	}
+}
+
 // TestInstanceFileMounts checks the path a credential takes from the client
 // into a running guest.
 //

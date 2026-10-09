@@ -92,7 +92,13 @@ func mountOverlayRootfs(log *slog.Logger) error {
 		}
 	}
 
-	const opts = "lowerdir=/lower,upperdir=/overlay/upper,workdir=/overlay/work"
+	// The overlay disk outlives the image under it: dicer update --image
+	// swaps the image and keeps the disk. The kernel allows that only if the
+	// overlay never used the inode index, directory redirects, metadata-only
+	// copy-up or xino, so they are off whatever the kernel's defaults. With
+	// the index on, the kernel refuses to mount the disk over another image.
+	const opts = "lowerdir=/lower,upperdir=/overlay/upper,workdir=/overlay/work," +
+		"index=off,redirect_dir=off,metacopy=off,xino=off"
 	if err := syscall.Mount("overlay", overlayRoot, "overlay", 0, opts); err != nil {
 		return fmt.Errorf("mount overlay: %w", err)
 	}
