@@ -20,14 +20,13 @@ type printableVolume struct {
 }
 
 func (p *printableVolume) Columns() []string {
-	return []string{"ID", "Name", "Size", "Created"}
+	return []string{"Name", "Size", "Created"}
 }
 
 func (p *printableVolume) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Volumes))
 	for _, v := range p.Volumes {
 		rows = append(rows, map[string]any{
-			"ID":      v.ID,
 			"Name":    v.Name,
 			"Size":    humanize.Bytes(v.SizeBytes),
 			"Created": age(v.CreateTime),

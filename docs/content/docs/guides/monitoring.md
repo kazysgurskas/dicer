@@ -115,9 +115,9 @@ redrawn every second:
 
 ```console
 $ dicer stats
-ID                        NAME  CPUPERC  MEMUSAGE           MEMPERC  NETIO                 BLOCKIO
-k3x9m2p4q8r7s6t5u1v0w9x8  db    200.00%  392.9 MiB / 2 GiB  19.19%   491.2 KiB / 11.4 KiB  0 B / 212.6 MiB
-nmd8u47u0r2pn1isdl6f2l16  web   0.00%    158.7 MiB / 1 GiB  15.50%   1.3 KiB / 0 B         0 B / 12.5 MiB
+NAME  CPUPERC  MEMUSAGE           MEMPERC  NETIO                 BLOCKIO
+db    200.00%  392.9 MiB / 2 GiB  19.19%   491.2 KiB / 11.4 KiB  0 B / 212.6 MiB
+web   0.00%    158.7 MiB / 1 GiB  15.50%   1.3 KiB / 0 B         0 B / 12.5 MiB
 ```
 
 The daemon reads these numbers on the host, from each instance's hypervisor

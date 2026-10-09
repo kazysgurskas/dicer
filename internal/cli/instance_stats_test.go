@@ -55,7 +55,6 @@ func TestInstanceStatsRowsShowWhatIsUsedOfTheHost(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"ID":       "id-db",
 		"Name":     "db",
 		"CPUPerc":  "152.50%",
 		"MemUsage": "512 MiB / 2 GiB",

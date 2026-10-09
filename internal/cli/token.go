@@ -20,14 +20,13 @@ type printableToken struct {
 }
 
 func (p *printableToken) Columns() []string {
-	return []string{"ID", "Name", "Scopes", "Created", "Last Used"}
+	return []string{"Name", "Scopes", "Created", "Last Used"}
 }
 
 func (p *printableToken) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Tokens))
 	for _, t := range p.Tokens {
 		rows = append(rows, map[string]any{
-			"ID":        t.ID,
 			"Name":      t.Name,
 			"Scopes":    scopeList(t.Scopes),
 			"Created":   age(t.CreateTime),

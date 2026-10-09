@@ -20,14 +20,13 @@ type printableNetwork struct {
 }
 
 func (p *printableNetwork) Columns() []string {
-	return []string{"ID", "Name", "Subnet", "Gateway", "Bridge", "Nameservers", "MTU", "Isolated", "Internal", "Usage", "Created"}
+	return []string{"Name", "Subnet", "Gateway", "Bridge", "Nameservers", "MTU", "Isolated", "Internal", "Usage", "Created"}
 }
 
 func (p *printableNetwork) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Networks))
 	for _, n := range p.Networks {
 		rows = append(rows, map[string]any{
-			"ID":          n.ID,
 			"Name":        n.Name,
 			"Subnet":      n.Subnet,
 			"Gateway":     n.Gateway,

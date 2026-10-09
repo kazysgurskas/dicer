@@ -18,14 +18,13 @@ type printableKernel struct {
 }
 
 func (p *printableKernel) Columns() []string {
-	return []string{"ID", "Name", "Arch", "SHA256", "Created"}
+	return []string{"Name", "Arch", "SHA256", "Created"}
 }
 
 func (p *printableKernel) Rows() []map[string]any {
 	rows := make([]map[string]any, 0, len(p.Kernels))
 	for _, k := range p.Kernels {
 		rows = append(rows, map[string]any{
-			"ID":      k.ID,
 			"Name":    k.Name,
 			"Arch":    string(k.Architecture),
 			"SHA256":  orDash(k.SHA256),

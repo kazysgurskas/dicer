@@ -155,9 +155,9 @@ On the host, or from any client:
 
 ```console
 $ dicer token list
-ID                         NAME     SCOPES   CREATED       LAST USED
-c8k2v0x9p4m1q7r3t5w6y8z0   ci       *        2 weeks ago   3 minutes ago
-f1h3j5l7n9p2r4t6v8x0z2b4   laptop   *        2 days ago    -
+NAME     SCOPES   CREATED       LAST USED
+ci       *        2 weeks ago   3 minutes ago
+laptop   *        2 days ago    -
 $ dicer token rotate ci        # a new value; the old one stops working at once
 $ dicer token delete laptop    # refused from its next call
 ```

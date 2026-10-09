@@ -23,7 +23,7 @@ type printableInstanceStats struct {
 }
 
 func (p *printableInstanceStats) Columns() []string {
-	return []string{"ID", "Name", "CPUPerc", "MemUsage", "MemPerc", "NetIO", "BlockIO"}
+	return []string{"Name", "CPUPerc", "MemUsage", "MemPerc", "NetIO", "BlockIO"}
 }
 
 func (p *printableInstanceStats) Rows() []map[string]any {
@@ -34,7 +34,6 @@ func (p *printableInstanceStats) Rows() []map[string]any {
 			memPerc = fmt.Sprintf("%.2f%%", float64(s.ResidentMemoryBytes)/float64(s.MemoryBytes)*100)
 		}
 		rows = append(rows, map[string]any{
-			"ID":       s.ID,
 			"Name":     s.Name,
 			"CPUPerc":  fmt.Sprintf("%.2f%%", s.CPUPercent),
 			"MemUsage": humanize.Bytes(s.ResidentMemoryBytes) + " / " + humanize.Bytes(s.MemoryBytes),
