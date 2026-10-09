@@ -31,7 +31,7 @@ func TestAgentWaitsForBootingGuest(t *testing.T) {
 		serveFakeAgent(t, vsockPath)
 	}()
 
-	agent, closeAgent, err := manager.Agent(t.Context(), instance)
+	agent, closeAgent, err := manager.agent(t.Context(), instance)
 	if err != nil {
 		t.Fatalf("Agent: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestAgentStopsWaitingForStoppedInstance(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	_, _, err := manager.Agent(ctx, instance)
+	_, _, err := manager.agent(ctx, instance)
 	if !errors.Is(err, errdefs.ErrInvalidState) {
 		t.Errorf("Agent = %v, want an invalid state error", err)
 	}

@@ -12,7 +12,7 @@ import (
 func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	if _, err := h.manager.CreateSnapshot(t.Context(), h.instance, "kept"); err != nil {
+	if _, err := h.manager.createSnapshot(t.Context(), h.instance, "kept"); err != nil {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
 
@@ -20,8 +20,8 @@ func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ImagesInUse: %v", err)
 	}
-	if _, ok := inUse["sha256:aaaa"]; !ok {
-		t.Errorf("in use = %v, want the running guest's image", inUse)
+	if user := inUse["sha256:aaaa"]; user != `instance "web"` {
+		t.Errorf("in use = %v, want the running guest's image, used by instance web", inUse)
 	}
 
 	// Stopped, the guest no longer needs its image, but its snapshot does.
@@ -31,8 +31,8 @@ func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 	if inUse, err = h.manager.ImagesInUse(); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := inUse["sha256:aaaa"]; !ok {
-		t.Errorf("in use = %v, want the snapshot's image kept", inUse)
+	if user := inUse["sha256:aaaa"]; user != `snapshot "kept"` {
+		t.Errorf("in use = %v, want the snapshot's image kept, used by snapshot kept", inUse)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestImagesInUseKeepsWhatDefinitionsName(t *testing.T) {
 func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Standby: %v", err)
 	}
 

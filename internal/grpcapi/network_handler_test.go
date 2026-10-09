@@ -4,12 +4,9 @@
 package grpcapi
 
 import (
-	"net/netip"
-	"strings"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -70,68 +67,20 @@ func TestInternalNetworkHasNoNameservers(t *testing.T) {
 	}
 }
 
-// A subnet another network or the host is on is refused as taken, which
-// dicer compose up tells apart from a request it got wrong.
+// A subnet another network is on is refused as taken, which dicer compose up
+// tells apart from a request it got wrong.
 func TestCreateNetworkRefusesATakenSubnet(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.hostSubnets = func() ([]netip.Prefix, error) {
-		return []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, nil
-	}
 	if _, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "lan", Subnet: "10.9.0.0/24"}); err != nil {
 		t.Fatalf("CreateNetwork: %v", err)
 	}
 
-	for name, subnet := range map[string]string{"another network's": "10.9.0.0/16", "the host's": "192.168.0.0/16"} {
-		t.Run(name, func(t *testing.T) {
-			_, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "other", Subnet: subnet})
-			wantClass(t, err, errdefs.ErrExists)
-		})
-	}
-}
-
-// TestNetworkCreatedAndDeletedAreRecorded checks a network's creation and
-// deletion are recorded, with its subnet and gateway, and a refused request
-// is not.
-func TestNetworkCreatedAndDeletedAreRecorded(t *testing.T) {
-	s, _ := newTestServer(t)
-	recorded := &fakeRecorder{}
-	s.networkHandler.events = recorded
-
-	n, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "lan", Subnet: "10.9.0.0/24"})
-	if err != nil {
-		t.Fatalf("CreateNetwork: %v", err)
-	}
-	if _, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "lan", Subnet: "10.8.0.0/24"}); err == nil {
-		t.Fatal("CreateNetwork of a name taken succeeded")
-	}
-	if _, err := s.DeleteNetwork(t.Context(), &dicerdv1.DeleteNetworkRequest{Name: "lan"}); err != nil {
-		t.Fatalf("DeleteNetwork: %v", err)
-	}
-
-	want := []event.Action{event.ActionCreated, event.ActionDeleted}
-	if len(recorded.events) != len(want) {
-		t.Fatalf("recorded %+v, want %v", recorded.events, want)
-	}
-	for i, e := range recorded.events {
-		if e.Kind != event.KindNetwork || e.ID != n.GetId() || e.Name != "lan" || e.Action != want[i] {
-			t.Errorf("event %d = %+v, want network lan %s", i, e, want[i])
-		}
-		if e.Attributes["subnet"] != "10.9.0.0/24" || e.Attributes["gateway"] != "10.9.0.1" {
-			t.Errorf("event %d attributes = %v, want its subnet and gateway", i, e.Attributes)
-		}
-		if !strings.Contains(e.Message, "10.9.0.0/24") {
-			t.Errorf("event %d message = %q, want it to name the subnet", i, e.Message)
-		}
-	}
+	_, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{Name: "other", Subnet: "10.9.0.0/16"})
+	wantClass(t, err, errdefs.ErrExists)
 }
 
 func TestDefaultNetworkCannotBeDeleted(t *testing.T) {
 	s, _ := newTestServer(t)
-	if _, err := s.CreateNetwork(t.Context(), &dicerdv1.CreateNetworkRequest{
-		Name: network.DefaultName, Subnet: "10.9.0.0/24",
-	}); err != nil {
-		t.Fatalf("CreateNetwork: %v", err)
-	}
 
 	_, err := s.DeleteNetwork(t.Context(), &dicerdv1.DeleteNetworkRequest{Name: network.DefaultName})
 	wantClass(t, err, errdefs.ErrInvalidArgument)

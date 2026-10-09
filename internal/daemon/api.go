@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/konradasb/dicer/internal/grpcapi"
-	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/version"
 )
 
@@ -86,10 +85,9 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 
 	api := grpcapi.NewServer(grpcapi.Config{
 		Starters:      d.starters,
-		Store:         d.store,
 		ListenAddress: listenAddress,
 		HostAddresses: func() ([]netip.Addr, error) {
-			return d.hostNetwork.Addresses(d.store.Networks())
+			return d.hostNetwork.Addresses(d.networkManager.Networks())
 		},
 		Fingerprint:      fingerprint,
 		TokenFingerprint: tokenFingerprint,
@@ -98,8 +96,8 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		ImageManager:     d.imageManager,
 		KernelManager:    d.kernelManager,
 		VolumeManager:    d.volumeManager,
+		TokenManager:     d.tokenManager,
 		Events:           d.events,
-		HostSubnets:      hostnet.Subnets,
 		DataDir:          d.cfg.DataDir,
 		Version:          version.Version,
 	})
@@ -119,9 +117,9 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 	}
 
 	d.logger.Info("the API is served over TCP, to clients with a token",
-		"listen", listenAddress, "fingerprint", fingerprint, "tokens", len(d.store.Tokens()))
+		"listen", listenAddress, "fingerprint", fingerprint, "tokens", len(d.tokenManager.Tokens()))
 
-	authentication := grpcapi.NewAuthentication(d.store, d.logger)
+	authentication := grpcapi.NewAuthentication(d.tokenManager, d.logger)
 	return append(listeners, apiListener{
 		transport: transportTCP,
 		address:   listenAddress,

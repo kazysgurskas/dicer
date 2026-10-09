@@ -32,11 +32,6 @@ func MetricDescriptions() []metric.Description {
 	return []metric.Description{kernelsMetric, kernelDiskMetric}
 }
 
-// Store lists the kernels defined on this host.
-type Store interface {
-	Kernels() []Kernel
-}
-
 // metrics are the descriptors of what a Manager reads at scrape time.
 type metrics struct {
 	kernels *prometheus.Desc
@@ -59,14 +54,10 @@ func (m *Manager) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements prometheus.Collector: the kernels defined, and what
 // they take on disk, as they are now.
 func (m *Manager) Collect(ch chan<- prometheus.Metric) {
-	if m.store == nil {
-		return
-	}
-
 	kernels := m.store.Kernels()
 	var diskBytes int64
 	for _, k := range kernels {
-		diskBytes += m.DiskBytes(k.ID)
+		diskBytes += m.DiskBytes(k)
 	}
 	ch <- metric.GaugeReading(m.metrics.kernels, float64(len(kernels)))
 	ch <- metric.GaugeReading(m.metrics.disk, float64(diskBytes))

@@ -13,10 +13,19 @@ import (
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
 
+// allocationOf is Allocation, for an instance its caller has looked up.
+func (m *Manager) allocationOf(instance Spec) (network.Allocation, error) {
+	return m.networks.Allocation(instance.NetworkName, instance.ID)
+}
+
 // Allocation returns the allocation an instance holds on its network, or an
 // errdefs.ErrNotFound error if it holds none.
-func (m *Manager) Allocation(instance Spec) (network.Allocation, error) {
-	return m.networks.Allocation(instance.NetworkName, instance.ID)
+func (m *Manager) Allocation(nameOrID string) (network.Allocation, error) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return network.Allocation{}, err
+	}
+	return m.allocationOf(instance)
 }
 
 // networkSetup holds the result of attaching an instance to its network.
@@ -218,7 +227,7 @@ func (m *Manager) networkInUse(nw network.Network, excludeID string) bool {
 		if other.ID == excludeID || other.NetworkName != nw.Name {
 			continue
 		}
-		status, err := m.Status(other)
+		status, err := m.statusOf(other)
 		if err != nil {
 			return true
 		}

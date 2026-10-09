@@ -204,3 +204,7 @@ on disk. With reflinks, that is only what has changed since it was taken.
 A snapshot outlives the instance it was taken of. Deleting the instance
 keeps its snapshots until you delete them too. You can still fork them, but
 there is no longer an instance to restore them into.
+
+A snapshot also keeps the kernel, network and volumes its instance used,
+because restoring or forking it needs them. None of them can be deleted
+while the snapshot exists: delete the snapshot first.

@@ -67,7 +67,7 @@ func TestVMMCrashFailsInstance(t *testing.T) {
 func TestPausedVMMCrashFailsInstance(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Pause(t.Context(), h.instance); err != nil {
+	if err := h.manager.Pause(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func TestStopIsNotACrash(t *testing.T) {
 	h.start(t)
 	vmm := h.starter.vmm()
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestStopKillsVMMThatIgnoresShutdown(t *testing.T) {
 	h.start(t)
 	vmm := h.starter.vmm()
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestForcedDeleteIsNotACrash(t *testing.T) {
 	h.start(t)
 	vmm := h.starter.vmm()
 
-	if err := h.manager.Delete(t.Context(), h.instance, true); err != nil {
+	if err := h.manager.delete(t.Context(), h.instance, true); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
@@ -147,7 +147,7 @@ func TestForcedDeleteIsNotACrash(t *testing.T) {
 func TestOldVMMExitDoesNotTouchNewOne(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	h.start(t)
@@ -164,12 +164,12 @@ func TestOldVMMExitDoesNotTouchNewOne(t *testing.T) {
 func TestRestoredVMMCrashFailsInstance(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "snap")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.stopped(t)
-	if _, err := h.manager.RestoreSnapshot(t.Context(), snapshot); err != nil {
+	if _, err := h.manager.restoreSnapshot(t.Context(), snapshot); err != nil {
 		t.Fatalf("RestoreSnapshot: %v", err)
 	}
 

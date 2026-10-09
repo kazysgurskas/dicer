@@ -28,6 +28,8 @@ import (
 	"github.com/konradasb/dicer/internal/cli/remote"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/grpcapi"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/token"
 )
 
@@ -47,10 +49,8 @@ func serveDaemon(t *testing.T) (address, value string) {
 	}
 
 	cert, fingerprint := newTestCertificate(t)
-	secret := token.NewSecret()
-	err = store.CreateToken(token.Token{
-		ID: "id-laptop", Name: "laptop", SecretSHA256: token.SecretSHA256(secret), Scopes: []token.Scope{token.ScopeAll},
-	})
+	tokenManager := token.NewManager(token.Config{Store: store})
+	_, secret, err := tokenManager.Create("laptop", "", []token.Scope{token.ScopeAll})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func serveDaemon(t *testing.T) (address, value string) {
 		t.Fatal(err)
 	}
 
-	authentication := grpcapi.NewAuthentication(store, logger)
+	authentication := grpcapi.NewAuthentication(tokenManager, logger)
 	server := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}})),
 		grpc.ChainUnaryInterceptor(authentication.UnaryInterceptor(),
@@ -68,8 +68,22 @@ func serveDaemon(t *testing.T) (address, value string) {
 		grpc.ChainStreamInterceptor(authentication.StreamInterceptor(),
 			grpcapi.StreamStatusInterceptor, grpcapi.StreamAuthorizationInterceptor),
 	)
+	networkManager, err := network.NewManager(network.Config{
+		Dir: filepath.Join(t.TempDir(), "allocations"), Store: store, Logger: logger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kernelManager, err := kernel.NewManager(kernel.Config{
+		DataDir: filepath.Join(t.TempDir(), "data"), Store: store, Logger: logger,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	grpcapi.NewServer(grpcapi.Config{
-		Store:            store,
+		NetworkManager:   networkManager,
+		KernelManager:    kernelManager,
+		TokenManager:     tokenManager,
 		ListenAddress:    listener.Addr().String(),
 		Fingerprint:      fingerprint,
 		TokenFingerprint: fingerprint,

@@ -30,7 +30,7 @@ func (h *instanceHandler) GetInstanceStats(
 	// Names are resolved once, so a rename does not lose an instance.
 	var wanted map[string]bool
 	for _, name := range req.GetNames() {
-		instance, err := h.store.Instance(name)
+		instance, err := h.instanceManager.Instance(name)
 		if err != nil {
 			return err
 		}

@@ -23,19 +23,20 @@ import (
 	"github.com/konradasb/dicer/internal/image"
 )
 
-// Start boots a defined instance, or resumes one on standby where it was. It
-// cancels any pending restart, resets the restart count and clears
-// StoppedByUser.
-func (m *Manager) Start(ctx context.Context, instance Spec) (err error) {
+// start is Start, for an instance its caller has looked up.
+func (m *Manager) start(ctx context.Context, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationStart, started, err) }()
 
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 	defer m.syncWaker(ctx, instance.ID)
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}
@@ -59,6 +60,17 @@ func (m *Manager) Start(ctx context.Context, instance Spec) (err error) {
 		return err
 	}
 	return nil
+}
+
+// Start boots a defined instance, or resumes one on standby where it was. It
+// cancels any pending restart, resets the restart count and clears
+// StoppedByUser.
+func (m *Manager) Start(ctx context.Context, nameOrID string) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.start(ctx, instance)
 }
 
 // boot starts the VMM of an instance admission has moved to Starting and
@@ -290,7 +302,7 @@ func (m *Manager) volumeDisk(name string) (string, error) {
 		return "", fmt.Errorf("get volume %q: %w", name, err)
 	}
 
-	path := m.volumes.Path(volume.ID)
+	path := m.volumes.Path(volume)
 	if _, err := os.Stat(path); err != nil {
 		return "", fmt.Errorf("volume %q disk: %w", volume.Name, err)
 	}

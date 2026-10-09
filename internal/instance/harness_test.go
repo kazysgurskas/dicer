@@ -19,6 +19,7 @@ import (
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
+	"github.com/konradasb/dicer/internal/volume"
 )
 
 // testHypervisorVersion is the version the fake hypervisor reports.
@@ -67,7 +68,8 @@ func seedInstance(t *testing.T, store *fakeStore, name string) Spec {
 
 	instance := Spec{
 		ID: "id-" + name, Name: name,
-		ImageRef: "alpine:latest", KernelName: "k", NetworkName: "default", VCPUs: 1,
+		ImageRef: "alpine:latest", KernelName: "k", NetworkName: "default",
+		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 20,
 	}
 	store.instances[name] = instance
 
@@ -95,6 +97,7 @@ func newHarness(t *testing.T) *harness {
 	manager, store, hostNetwork := newTestManager(t)
 	instance := seedInstance(t, store, "web")
 	store.kernels["k"] = kernel.Kernel{Name: "k"}
+	store.volumes["data"] = volume.Volume{ID: "volume-data", Name: "data", SizeBytes: 1 << 30}
 
 	hv := newFakeHypervisor()
 	starter := &fakeStarter{version: testHypervisorVersion, hv: hv}
@@ -144,6 +147,7 @@ func newHarness(t *testing.T) *harness {
 // tests that only need the recorded state.
 func (h *harness) running(t *testing.T) {
 	t.Helper()
+	h.define()
 
 	pid := os.Getpid()
 	err := h.manager.writeStatus(Status{
@@ -179,7 +183,7 @@ func (h *harness) status(t *testing.T) Status {
 	lock.Lock()
 	defer lock.Unlock()
 
-	status, err := h.manager.Status(h.instance)
+	status, err := h.manager.statusOf(h.instance)
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
@@ -206,8 +210,9 @@ func (h *harness) waitForState(t *testing.T, want State) Status {
 // start starts the harness instance, checking that its VMM is supervised.
 func (h *harness) start(t *testing.T) {
 	t.Helper()
+	h.define()
 
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if h.manager.vmm(h.instance.ID) != h.starter.vmm() {
@@ -231,6 +236,13 @@ func (h *harness) setRestart(t *testing.T, p RestartPolicy) {
 	t.Helper()
 
 	h.instance.Restart = p
+	h.define()
+}
+
+// define stores h.instance as the instance's definition, as a test has
+// changed it. The manager reads the definition again under the instance's
+// lock, so a change a test makes counts only once it is stored.
+func (h *harness) define() {
 	h.store.instances[h.instance.Name] = h.instance
 }
 

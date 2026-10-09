@@ -4,9 +4,11 @@
 package grpcapi
 
 import (
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
@@ -155,4 +157,64 @@ func TestInstanceHypervisorTypeDefaultsToCloudHypervisor(t *testing.T) {
 	if got != dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR {
 		t.Errorf("hypervisor type of an instance with none = %v, want Cloud Hypervisor", got)
 	}
+}
+
+func TestMountsFromProtoCleansTargets(t *testing.T) {
+	got, err := mountsFromProto([]*dicerdv1.Mount{
+		{Type: dicerdv1.MountType_MOUNT_TYPE_VOLUME, Source: "v0", Target: "/data/"},
+		{Type: dicerdv1.MountType_MOUNT_TYPE_FILE, Content: []byte("s3cret"), Mode: 0o600, Target: "/etc//app/secret", ReadOnly: true},
+		{Type: dicerdv1.MountType_MOUNT_TYPE_TMPFS},
+	})
+	if err != nil {
+		t.Fatalf("mountsFromProto: %v", err)
+	}
+	want := []instance.Mount{
+		{Type: instance.MountTypeVolume, Source: "v0", Target: "/data"},
+		{Type: instance.MountTypeFile, Content: []byte("s3cret"), Mode: 0o600, Target: "/etc/app/secret", ReadOnly: true},
+		{Type: instance.MountTypeTmpfs},
+	}
+	if !slices.EqualFunc(got, want, instance.Mount.Equal) {
+		t.Errorf("mounts = %+v, want %+v", got, want)
+	}
+
+	_, err = mountsFromProto([]*dicerdv1.Mount{{Type: dicerdv1.MountType(99), Target: "/data"}})
+	wantClass(t, err, errdefs.ErrInvalidArgument)
+}
+
+func TestPortMappingsFromProtoCanonicalHostIP(t *testing.T) {
+	got, err := portMappingsFromProto([]*dicerdv1.PortMapping{
+		{HostIp: "0.0.0.0", HostPort: 8080, GuestPort: 80},
+		{HostIp: "::ffff:10.0.0.1", HostPort: 8081, GuestPort: 80},
+	})
+	if err != nil {
+		t.Fatalf("portMappingsFromProto: %v", err)
+	}
+	if got[0].HostIP != "" || got[1].HostIP != "10.0.0.1" {
+		t.Errorf("host IPs %q and %q, want every address and 10.0.0.1", got[0].HostIP, got[1].HostIP)
+	}
+}
+
+func TestPortMappingsFromProto(t *testing.T) {
+	t.Run("defaults the protocol to tcp", func(t *testing.T) {
+		got, err := portMappingsFromProto([]*dicerdv1.PortMapping{{HostPort: 8080, GuestPort: 80}})
+		if err != nil {
+			t.Fatalf("portMappingsFromProto: %v", err)
+		}
+		want := network.PortMapping{HostPort: 8080, GuestPort: 80, Protocol: network.ProtocolTCP}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("got %+v, want [%+v]", got, want)
+		}
+	})
+
+	t.Run("rejects a port out of range", func(t *testing.T) {
+		_, err := portMappingsFromProto([]*dicerdv1.PortMapping{{HostPort: 65536 + 80, GuestPort: 80}})
+		wantClass(t, err, errdefs.ErrInvalidArgument)
+	})
+
+	t.Run("empty input yields no mappings", func(t *testing.T) {
+		got, err := portMappingsFromProto(nil)
+		if err != nil || got != nil {
+			t.Errorf("portMappingsFromProto(nil) = %v, %v; want nil, nil", got, err)
+		}
+	})
 }

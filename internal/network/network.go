@@ -1,8 +1,9 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package network assigns guest addresses on host-local networks and names
-// their interfaces. It is portable; internal/hostnet configures the host.
+// Package network defines host-local networks, assigns their guests'
+// addresses and names their interfaces. It is portable; internal/hostnet
+// configures the host.
 package network
 
 import (

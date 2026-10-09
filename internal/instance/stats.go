@@ -129,7 +129,7 @@ func (m *Manager) Stats() []Stats {
 func (m *Manager) readStats(
 	proc procfs.FS, devices procfs.NetDev, instance Spec, pid int,
 ) (Stats, error) {
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return Stats{}, err
 	}

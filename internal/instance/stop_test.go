@@ -17,11 +17,11 @@ func TestStopFailedInstance(t *testing.T) {
 
 	manager.fail(instance.ID, errors.New("boot failed"))
 
-	if err := manager.Stop(t.Context(), instance); err != nil {
+	if err := manager.stop(t.Context(), instance); err != nil {
 		t.Fatalf("Stop() of a failed instance = %v, want nil", err)
 	}
 
-	status, err := manager.Status(instance)
+	status, err := manager.statusOf(instance)
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestStopOutlivesItsRequest(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := manager.Stop(ctx, instance); err != nil {
+	if err := manager.stop(ctx, instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if n := hostNetwork.cancelledTeardowns.Load(); n > 0 {

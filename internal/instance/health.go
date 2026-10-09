@@ -24,14 +24,23 @@ import (
 // failures, an unhealthy instance is stopped as failed, and the policy then
 // restarts it or gives up. Under the policy no, it is only reported.
 
-// Health returns an instance's check and its findings, or false if it is not
-// being monitored.
-func (m *Manager) Health(instance Spec) (health.Check, health.Health, bool) {
+// healthOf is Health, for an instance its caller has looked up.
+func (m *Manager) healthOf(instance Spec) (health.Check, health.Health, bool) {
 	s := m.supervision(instance.ID)
 	if s == nil || s.health == nil {
 		return health.Check{}, health.Health{}, false
 	}
 	return s.health.Check(), s.health.Health(), true
+}
+
+// Health returns an instance's check and its findings, or false if it is not
+// being monitored.
+func (m *Manager) Health(nameOrID string) (health.Check, health.Health, bool) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return health.Check{}, health.Health{}, false
+	}
+	return m.healthOf(instance)
 }
 
 // monitor probes an instance's health until ctx is done or the Manager
@@ -64,7 +73,7 @@ func (m *Manager) monitor(ctx context.Context, instance Spec, vmm *process.Proce
 // failure.
 func (m *Manager) probeOnce(ctx context.Context, instance Spec, vmm *process.Process, vsockPath string, h *health.Monitor) bool {
 	// A paused guest cannot answer, and has not failed for it.
-	if status, err := m.Status(instance); err != nil || status.State != StateRunning {
+	if status, err := m.statusOf(instance); err != nil || status.State != StateRunning {
 		return false
 	}
 
@@ -116,7 +125,7 @@ func (m *Manager) handleUnhealthy(ctx context.Context, instance Spec, vmm *proce
 	if current, err := m.store.Instance(instance.ID); err == nil {
 		instance = current
 	}
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil || status.State != StateRunning {
 		return
 	}

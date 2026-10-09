@@ -26,7 +26,7 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 	manager.volumes = volumes
 
 	store.volumes["data"] = volume.Volume{ID: "vol-1", Name: "data"}
-	disk := volumes.Path("vol-1")
+	disk := volumes.Path(volume.Volume{ID: "vol-1"})
 	if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestResolveMountsMixed(t *testing.T) {
 
 	for _, name := range []string{"a", "b"} {
 		store.volumes[name] = volume.Volume{ID: "vol-" + name, Name: name}
-		disk := volumes.Path("vol-" + name)
+		disk := volumes.Path(volume.Volume{ID: "vol-" + name})
 		if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -119,11 +119,11 @@ func TestResolveMountsMixed(t *testing.T) {
 // must not boot a VM for an instance that no longer exists.
 func TestStartOfDeletedInstanceIsRefused(t *testing.T) {
 	h := newHarness(t)
-	if err := h.manager.Delete(t.Context(), h.instance, false); err != nil {
+	if err := h.manager.delete(t.Context(), h.instance, false); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	if err := h.manager.Start(t.Context(), h.instance); !errors.Is(err, errdefs.ErrNotFound) {
+	if err := h.manager.start(t.Context(), h.instance); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Fatalf("Start = %v, want a refusal for an instance that no longer exists", err)
 	}
 	if n := h.starter.vmmCount(); n != 0 {

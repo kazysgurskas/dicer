@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
@@ -26,13 +25,6 @@ func wantClass(t *testing.T, err, class error) {
 		t.Errorf("error %v is not in class %v", err, class)
 	}
 }
-
-// fakeRecorder keeps the events recorded.
-type fakeRecorder struct {
-	events []event.Event
-}
-
-func (f *fakeRecorder) Record(e event.Event) { f.events = append(f.events, e) }
 
 // testCapacity is a 4-CPU, 8GiB host with the daemon's default admission:
 // 16 vCPUs and 7GiB.
@@ -55,13 +47,24 @@ func newTestServer(t *testing.T) (*Server, *filestore.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// What an instance a test seeds names, as the API fills it in.
+	if err := store.CreateKernel(kernel.Kernel{ID: "kernel-default", Name: kernel.DefaultName}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateNetwork(network.Network{
+		ID: "network-default", Name: network.DefaultName, Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer0",
+	}); err != nil {
+		t.Fatal(err)
+	}
 
-	networkManager, err := network.NewManager(network.Config{Dir: filepath.Join(dataDir, "allocations"), Logger: logger})
+	networkManager, err := network.NewManager(network.Config{
+		Dir: filepath.Join(dataDir, "allocations"), Store: store, Logger: logger,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	kernelManager, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Logger: logger})
+	kernelManager, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Store: store, Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,10 +77,9 @@ func newTestServer(t *testing.T) (*Server, *filestore.Store) {
 	})
 
 	return NewServer(Config{
-		Store:           store,
 		NetworkManager:  networkManager,
 		InstanceManager: instanceManager,
-		VolumeManager:   volume.NewManager(volume.Config{DataDir: dataDir, Logger: logger}),
+		VolumeManager:   volume.NewManager(volume.Config{DataDir: dataDir, Store: store, Logger: logger}),
 		KernelManager:   kernelManager,
 		DataDir:         dataDir,
 	}), store

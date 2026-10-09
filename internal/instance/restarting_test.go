@@ -157,7 +157,7 @@ func restartingHarness(t *testing.T) *harness {
 func TestStopCancelsPendingRestart(t *testing.T) {
 	h := restartingHarness(t)
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestStartDuringRestartStartsNow(t *testing.T) {
 func TestDeleteCancelsPendingRestart(t *testing.T) {
 	h := restartingHarness(t)
 
-	if err := h.manager.Delete(t.Context(), h.instance, false); err != nil {
+	if err := h.manager.delete(t.Context(), h.instance, false); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if len(h.manager.restarts) != 0 {

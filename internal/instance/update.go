@@ -38,11 +38,17 @@ func (m *Manager) Update(ctx context.Context, updated Spec) error {
 	if err != nil {
 		return err
 	}
-	status, err := m.Status(current)
+	status, err := m.statusOf(current)
 	if err != nil {
 		return err
 	}
+	if err := updated.Validate(); err != nil {
+		return err
+	}
 	if err := m.checkCanUpdate(current, updated, status.State); err != nil {
+		return err
+	}
+	if err := m.checkCanStart(updated); err != nil {
 		return err
 	}
 

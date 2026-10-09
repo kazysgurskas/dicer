@@ -32,7 +32,7 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 	resizable(t, h)
 
 	want := Resources{VCPUs: 2, MemoryBytes: 2 << 30}
-	if err := h.manager.Resize(t.Context(), h.instance, want); err != nil {
+	if err := h.manager.resize(t.Context(), h.instance, want); err != nil {
 		t.Fatalf("Resize: %v", err)
 	}
 
@@ -60,12 +60,12 @@ func TestResizeChangesARunningInstanceAndItsDefinition(t *testing.T) {
 func TestResizeShrinksToo(t *testing.T) {
 	h := newHarness(t)
 	resizable(t, h)
-	if err := h.manager.Resize(t.Context(), h.instance, Resources{VCPUs: 4, MemoryBytes: 4 << 30}); err != nil {
+	if err := h.manager.resize(t.Context(), h.instance, Resources{VCPUs: 4, MemoryBytes: 4 << 30}); err != nil {
 		t.Fatalf("growing: %v", err)
 	}
 
 	want := Resources{VCPUs: 1, MemoryBytes: 1 << 30}
-	if err := h.manager.Resize(t.Context(), h.instance, want); err != nil {
+	if err := h.manager.resize(t.Context(), h.instance, want); err != nil {
 		t.Fatalf("shrinking: %v", err)
 	}
 	if held := h.status(t).HeldResources(); held != want {
@@ -132,8 +132,9 @@ func TestResizeRefusals(t *testing.T) {
 			if tt.prepare != nil {
 				tt.prepare(h)
 			}
+			h.define()
 
-			err := h.manager.Resize(t.Context(), h.instance, tt.want)
+			err := h.manager.resize(t.Context(), h.instance, tt.want)
 			if !errors.Is(err, tt.err) {
 				t.Fatalf("Resize = %v, want %v", err, tt.err)
 			}
@@ -156,7 +157,7 @@ func TestFailedResizeKeepsTheLargerReservation(t *testing.T) {
 	h.hv.resizeErr = errors.New("the guest did not plug the memory in time")
 
 	want := Resources{VCPUs: 1, MemoryBytes: 2 << 30}
-	if err := h.manager.Resize(t.Context(), h.instance, want); err == nil {
+	if err := h.manager.resize(t.Context(), h.instance, want); err == nil {
 		t.Fatal("Resize succeeded")
 	}
 
@@ -193,7 +194,7 @@ func TestStartLeavesRoomForTheMaximums(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := h.manager.Start(t.Context(), h.instance); err != nil {
+			if err := h.manager.start(t.Context(), h.instance); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 
@@ -214,7 +215,7 @@ func TestRefusedResizeChangesNothing(t *testing.T) {
 	resizable(t, h)
 	h.hv.resizeErr = errdefs.InvalidArgument("memory can be resized only in steps of 2 MiB")
 
-	err := h.manager.Resize(t.Context(), h.instance, Resources{VCPUs: 1, MemoryBytes: 1<<30 + 1<<20})
+	err := h.manager.resize(t.Context(), h.instance, Resources{VCPUs: 1, MemoryBytes: 1<<30 + 1<<20})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Fatalf("Resize = %v, want the hypervisor's refusal", err)
 	}

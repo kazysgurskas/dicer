@@ -82,10 +82,8 @@ type Snapshot struct {
 	SizeBytes int64 `yaml:"-" json:"-"`
 }
 
-// CreateSnapshot freezes an instance to disk as a snapshot called name, or,
-// if name is empty, after the instance and the time. See writeSnapshot for
-// what it holds.
-func (m *Manager) CreateSnapshot(
+// createSnapshot is CreateSnapshot, for an instance its caller has looked up.
+func (m *Manager) createSnapshot(
 	ctx context.Context, instance Spec, name string,
 ) (_ Snapshot, err error) {
 	started := time.Now()
@@ -129,6 +127,17 @@ func (m *Manager) CreateSnapshot(
 	return snapshot, nil
 }
 
+// CreateSnapshot freezes an instance to disk as a snapshot called name, or,
+// if name is empty, after the instance and the time. See writeSnapshot for
+// what it holds.
+func (m *Manager) CreateSnapshot(ctx context.Context, nameOrID, name string) (Snapshot, error) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return m.createSnapshot(ctx, instance, name)
+}
+
 // writeSnapshot freezes an instance into dir. It returns the snapshot that
 // dir then holds, without an ID, name or time, and how long the guest was
 // paused. Of a running or paused instance it writes a memory snapshot, and
@@ -142,8 +151,11 @@ func (m *Manager) writeSnapshot(
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return Snapshot{}, 0, err
+	}
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return Snapshot{}, 0, err
 	}
@@ -157,7 +169,7 @@ func (m *Manager) writeSnapshot(
 			return Snapshot{}, 0, errdefs.InvalidState("instance %q can write to a volume, which a snapshot does not hold; "+
 				"stop it first, or mount its volumes read-only", instance.Name)
 		}
-		allocation, err := m.Allocation(instance)
+		allocation, err := m.allocationOf(instance)
 		if err != nil {
 			return Snapshot{}, 0, err
 		}
@@ -316,8 +328,8 @@ func (m *Manager) Snapshot(nameOrID string) (Snapshot, error) {
 	return snapshot, nil
 }
 
-// DeleteSnapshot removes a snapshot and its files.
-func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot Snapshot) (err error) {
+// deleteSnapshot is DeleteSnapshot, for a snapshot its caller has looked up.
+func (m *Manager) deleteSnapshot(ctx context.Context, snapshot Snapshot) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationDeleteSnapshot, started, err) }()
 
@@ -337,13 +349,17 @@ func (m *Manager) DeleteSnapshot(ctx context.Context, snapshot Snapshot) (err er
 	return nil
 }
 
-// RestoreSnapshot puts the instance snapshot was taken from back as it was
-// then, discarding whatever it has written to its disk since, and returns
-// the instance. The instance must be stopped: one on standby is refused,
-// since its frozen guest would be lost. A memory snapshot resumes its guest
-// where it was; a disk snapshot leaves it stopped, to boot from the disk at
-// its next start.
-func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spec, err error) {
+// DeleteSnapshot removes a snapshot and its files.
+func (m *Manager) DeleteSnapshot(ctx context.Context, nameOrID string) error {
+	snapshot, err := m.store.Snapshot(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.deleteSnapshot(ctx, snapshot)
+}
+
+// restoreSnapshot is RestoreSnapshot, for a snapshot its caller has looked up.
+func (m *Manager) restoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spec, err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationRestoreSnapshot, started, err) }()
 
@@ -360,7 +376,7 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spe
 		return Spec{}, err
 	}
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return Spec{}, err
 	}
@@ -394,6 +410,20 @@ func (m *Manager) RestoreSnapshot(ctx context.Context, snapshot Snapshot) (_ Spe
 	return instance, nil
 }
 
+// RestoreSnapshot puts the instance snapshot was taken from back as it was
+// then, discarding whatever it has written to its disk since, and returns
+// the instance. The instance must be stopped: one on standby is refused,
+// since its frozen guest would be lost. A memory snapshot resumes its guest
+// where it was; a disk snapshot leaves it stopped, to boot from the disk at
+// its next start.
+func (m *Manager) RestoreSnapshot(ctx context.Context, nameOrID string) (Spec, error) {
+	snapshot, err := m.store.Snapshot(nameOrID)
+	if err != nil {
+		return Spec{}, err
+	}
+	return m.restoreSnapshot(ctx, snapshot)
+}
+
 // restoreDisk rolls instance's overlay disk back to a disk snapshot's.
 func (m *Manager) restoreDisk(ctx context.Context, instance Spec, snapshot Snapshot) error {
 	// Copy replaces the disk only once it has all of the snapshot's.
@@ -418,7 +448,7 @@ func (m *Manager) restoreMemory(ctx context.Context, instance Spec, snapshot Sna
 		return errdefs.InvalidState("instance %q's mounts have changed since snapshot %q was taken, "+
 			"and its guest expects them as they were; change them back to restore it", instance.Name, snapshot.Name)
 	}
-	allocation, err := m.Allocation(instance)
+	allocation, err := m.allocationOf(instance)
 	if err != nil && !errors.Is(err, errdefs.ErrNotFound) {
 		return err
 	}

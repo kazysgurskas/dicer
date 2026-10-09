@@ -45,11 +45,11 @@ func (h *harness) waitForHealth(t *testing.T, want health.Status) health.Health 
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if _, got, ok := h.manager.Health(h.instance); ok && got.Status == want {
+		if _, got, ok := h.manager.healthOf(h.instance); ok && got.Status == want {
 			return got
 		}
 		if time.Now().After(deadline) {
-			_, got, ok := h.manager.Health(h.instance)
+			_, got, ok := h.manager.healthOf(h.instance)
 			t.Fatalf("health = %+v (monitored: %v), want %s", got, ok, want)
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -65,7 +65,7 @@ func TestHealthyInstanceIsReportedHealthy(t *testing.T) {
 		t.Errorf("health = %+v, want the last probe's output and time", got)
 	}
 
-	check, _, _ := h.manager.Health(h.instance)
+	check, _, _ := h.manager.healthOf(h.instance)
 	if check.String() != "exec true" {
 		t.Errorf("check = %s, want the instance's", check)
 	}
@@ -142,7 +142,7 @@ func TestUnhealthyInstanceFailsOnceRestartsAreUsedUp(t *testing.T) {
 	if n := h.starter.vmmCount(); n != 2 {
 		t.Errorf("launched %d VMMs, want 2: the first start and its one restart", n)
 	}
-	if _, _, ok := h.manager.Health(h.instance); ok {
+	if _, _, ok := h.manager.healthOf(h.instance); ok {
 		t.Error("the failed instance is still being probed")
 	}
 }
@@ -154,10 +154,10 @@ func TestStopEndsHealthChecks(t *testing.T) {
 	h.start(t)
 	h.waitForHealth(t, health.StatusHealthy)
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if _, _, ok := h.manager.Health(h.instance); ok {
+	if _, _, ok := h.manager.healthOf(h.instance); ok {
 		t.Error("a stopped instance is still monitored")
 	}
 
@@ -197,7 +197,7 @@ func TestCloseStopsHealthChecks(t *testing.T) {
 func TestPausedInstanceIsNotProbed(t *testing.T) {
 	h, probe := monitored(t, RestartPolicy{Mode: RestartModeAlways}, false)
 	h.start(t)
-	if err := h.manager.Pause(t.Context(), h.instance); err != nil {
+	if err := h.manager.Pause(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
 	// A probe already on its way when the guest was paused finishes.
@@ -223,7 +223,7 @@ func TestOutdatedAgentIsNotUnhealthy(t *testing.T) {
 	for probe.count() < 5 {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if _, got, _ := h.manager.Health(h.instance); got.Status != health.StatusStarting {
+	if _, got, _ := h.manager.healthOf(h.instance); got.Status != health.StatusStarting {
 		t.Errorf("health = %s, want starting", got.Status)
 	}
 	if status := h.status(t); status.State != StateRunning {
@@ -257,7 +257,7 @@ func TestHealthCheckComesFromTheImage(t *testing.T) {
 			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
 
-			check, _, ok := h.manager.Health(h.instance)
+			check, _, ok := h.manager.healthOf(h.instance)
 			if ok != tt.monitored {
 				t.Fatalf("monitored = %v, want %v", ok, tt.monitored)
 			}

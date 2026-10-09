@@ -16,7 +16,6 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/token"
 )
 
@@ -31,14 +30,14 @@ const lastUseResolution = time.Minute
 // Authentication lets through only calls made with a token the daemon
 // knows, as its TCP listener requires. It is safe for concurrent use.
 type Authentication struct {
-	store  *filestore.Store
-	logger *slog.Logger
+	tokenManager *token.Manager
+	logger       *slog.Logger
 }
 
 // NewAuthentication returns an Authentication that checks tokens against
-// definitions, and logs the calls it refuses to logger.
-func NewAuthentication(store *filestore.Store, logger *slog.Logger) *Authentication {
-	return &Authentication{store: store, logger: logger.With("component", "authentication")}
+// those tokenManager knows, and logs the calls it refuses to logger.
+func NewAuthentication(tokenManager *token.Manager, logger *slog.Logger) *Authentication {
+	return &Authentication{tokenManager: tokenManager, logger: logger.With("component", "authentication")}
 }
 
 // UnaryInterceptor authenticates unary calls.
@@ -120,7 +119,7 @@ func (a *Authentication) presentedToken(ctx context.Context) (token.Token, error
 		return token.Token{}, errdefs.Unauthenticated("%v", err)
 	}
 
-	t, err := a.store.TokenBySecretSHA256(token.SecretSHA256(secret))
+	t, err := a.tokenManager.TokenBySecret(secret)
 	if errors.Is(err, errdefs.ErrNotFound) {
 		return token.Token{}, errdefs.Unauthenticated("unknown token")
 	}
@@ -136,7 +135,7 @@ func (a *Authentication) recordUse(ctx context.Context, t token.Token) {
 		return
 	}
 
-	err := a.store.RecordTokenUse(t.ID, now.Truncate(lastUseResolution))
+	err := a.tokenManager.RecordUse(t.ID, now.Truncate(lastUseResolution))
 	if err != nil && !errors.Is(err, errdefs.ErrNotFound) {
 		a.logger.WarnContext(ctx, "cannot record a token's use", "token", t.Name, "error", err)
 	}

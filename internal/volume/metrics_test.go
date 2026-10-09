@@ -10,25 +10,17 @@ import (
 	"github.com/konradasb/dicer/internal/metric/metrictest"
 )
 
-// fakeStore is a Store of the volumes it holds.
-type fakeStore []Volume
-
-func (s fakeStore) Volumes() []Volume { return s }
-
 func TestMetricsMatchTheirDescriptions(t *testing.T) {
-	m := newTestManager(t)
-	m.store = fakeStore{}
+	m, _, _ := newTestManager(t)
 
 	metrictest.CheckDescriptions(t, m, MetricDescriptions())
 }
 
 func TestVolumesAreServedWithTheirSize(t *testing.T) {
-	m := newTestManager(t)
-	volume, err := m.Create(t.Context(), "data", 2048)
-	if err != nil {
+	m, _, _ := newTestManager(t)
+	if _, err := m.Create(t.Context(), "data", 2048); err != nil {
 		t.Fatal(err)
 	}
-	m.store = fakeStore{*volume}
 
 	body := metrictest.Scrape(t, m)
 	for _, want := range []string{"dicer_volumes 1", "dicer_volume_size_bytes 2048", "dicer_volume_disk_bytes 0"} {

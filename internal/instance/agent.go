@@ -29,13 +29,9 @@ const guestSyncTimeout = 10 * time.Second
 // agent, which starts a moment after the guest does.
 const agentReadyTimeout = 30 * time.Second
 
-// Agent connects to a running instance's guest agent over vsock. If the guest
-// is still booting, Agent waits up to agentReadyTimeout for its agent to
-// answer. It returns an ErrUnavailable error if the agent does not answer in
-// time, and an ErrInvalidState one if the instance is not running or stops.
-// The returned function closes the connection.
-func (m *Manager) Agent(ctx context.Context, instance Spec) (diceragentv1.AgentServiceClient, func(), error) {
-	status, err := m.Status(instance)
+// agent is Agent, for an instance its caller has looked up.
+func (m *Manager) agent(ctx context.Context, instance Spec) (diceragentv1.AgentServiceClient, func(), error) {
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,6 +49,19 @@ func (m *Manager) Agent(ctx context.Context, instance Spec) (diceragentv1.AgentS
 	}
 
 	return diceragentv1.NewAgentServiceClient(conn), func() { _ = conn.Close() }, nil
+}
+
+// Agent connects to a running instance's guest agent over vsock. If the guest
+// is still booting, Agent waits up to agentReadyTimeout for its agent to
+// answer. It returns an ErrUnavailable error if the agent does not answer in
+// time, and an ErrInvalidState one if the instance is not running or stops.
+// The returned function closes the connection.
+func (m *Manager) Agent(ctx context.Context, nameOrID string) (diceragentv1.AgentServiceClient, func(), error) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return m.agent(ctx, instance)
 }
 
 // waitForAgent waits until conn reaches the instance's guest agent. It gives
@@ -82,7 +91,7 @@ func (m *Manager) waitForAgent(ctx context.Context, instance Spec, conn *grpc.Cl
 				"see 'dicer logs %s' for how the guest booted", instance.Name, agentReadyTimeout, instance.Name)
 		}
 
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil {
 			return err
 		}

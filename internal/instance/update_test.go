@@ -15,10 +15,10 @@ import (
 func TestUpdateReleasesTheAddressOfAMovedInstance(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if _, err := h.manager.Allocation(h.instance); err != nil {
+	if _, err := h.manager.allocationOf(h.instance); err != nil {
 		t.Fatalf("a stopped instance keeps its address: %v", err)
 	}
 
@@ -28,7 +28,7 @@ func TestUpdateReleasesTheAddressOfAMovedInstance(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	if _, err := h.manager.Allocation(h.instance); !errors.Is(err, errdefs.ErrNotFound) {
+	if _, err := h.manager.allocationOf(h.instance); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("Address = %v, want the old address released for the new static IP", err)
 	}
 }
@@ -76,8 +76,8 @@ func TestUpdateRefusesToShrinkTheOverlayDisk(t *testing.T) {
 		want       error
 	}{
 		{name: "larger", diskBytes: 64 << 20, hasOverlay: true},
-		{name: "smaller", diskBytes: 1 << 20, hasOverlay: true, want: errdefs.ErrInvalidArgument},
-		{name: "smaller before the first start", diskBytes: 1 << 20},
+		{name: "smaller", diskBytes: 512 << 10, hasOverlay: true, want: errdefs.ErrInvalidArgument},
+		{name: "smaller before the first start", diskBytes: 512 << 10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

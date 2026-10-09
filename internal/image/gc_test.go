@@ -31,7 +31,7 @@ func TestGCPolicyExpiredImages(t *testing.T) {
 		usedAgo("fresh", time.Hour),
 		usedAgo("old-but-in-use", 30*24*time.Hour),
 	}
-	inUse := map[string]struct{}{"old-but-in-use": {}}
+	inUse := InUse{"old-but-in-use": `instance "web"`}
 
 	got := GCPolicy{MaxUnusedAge: 7 * 24 * time.Hour}.expiredImages(images, inUse, gcNow)
 	if want := []string{"old", "week"}; !slices.Equal(digests(got), want) {
@@ -51,7 +51,7 @@ func TestCollectableImages(t *testing.T) {
 		usedAgo("just-pulled", time.Minute),
 		usedAgo("c", time.Hour),
 	}
-	inUse := map[string]struct{}{"in-use": {}}
+	inUse := InUse{"in-use": `instance "web"`}
 
 	// Least recently used first; nothing in use, nor used within the grace
 	// period.
@@ -114,7 +114,7 @@ func TestCollectGarbageRemovesImagesUnusedTooLong(t *testing.T) {
 	})
 
 	result, err := m.CollectGarbage(GCPolicy{MaxUnusedAge: 7 * 24 * time.Hour},
-		map[string]struct{}{"sha256:kept": {}}, gcNow)
+		InUse{"sha256:kept": `instance "web"`}, gcNow)
 	if err != nil {
 		t.Fatalf("CollectGarbage: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestCollectGarbageRecordsUseOfImagesInUse(t *testing.T) {
 	m, _ := gcImages(t, map[string]time.Duration{"busy": 30 * 24 * time.Hour})
 
 	if _, err := m.CollectGarbage(GCPolicy{MaxUnusedAge: time.Hour},
-		map[string]struct{}{"sha256:busy": {}}, gcNow); err != nil {
+		InUse{"sha256:busy": `instance "web"`}, gcNow); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestCollectGarbageBringsTheStoreUnderMaxSize(t *testing.T) {
 	// Each image's disk is 15 bytes: four of them and the cache are 70.
 
 	result, err := m.CollectGarbage(GCPolicy{MaxSize: 45},
-		map[string]struct{}{"sha256:busy": {}}, gcNow)
+		InUse{"sha256:busy": `instance "web"`}, gcNow)
 	if err != nil {
 		t.Fatalf("CollectGarbage: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestCollectGarbageNeverRemovesImagesInUse(t *testing.T) {
 	fakeRegistry.cacheSize = 1 << 30
 
 	result, err := m.CollectGarbage(GCPolicy{MaxUnusedAge: time.Hour, MaxSize: 1},
-		map[string]struct{}{"sha256:a": {}, "sha256:b": {}}, gcNow)
+		InUse{"sha256:a": `instance "web"`, "sha256:b": `instance "web"`}, gcNow)
 	if err != nil {
 		t.Fatal(err)
 	}

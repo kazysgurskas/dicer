@@ -11,9 +11,8 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 )
 
-// Rename changes a Stopped or Failed instance's name and returns the renamed
-// instance. Its persistent directory moves; everything keyed by ID stays.
-func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ Spec, err error) {
+// rename is Rename, for an instance its caller has looked up.
+func (m *Manager) rename(ctx context.Context, instance Spec, newName string) (_ Spec, err error) {
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -23,7 +22,7 @@ func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ 
 		return Spec{}, err
 	}
 
-	status, err := m.Status(current)
+	status, err := m.statusOf(current)
 	if err != nil {
 		return Spec{}, err
 	}
@@ -48,6 +47,16 @@ func (m *Manager) Rename(ctx context.Context, instance Spec, newName string) (_ 
 	m.logger.InfoContext(ctx, "renamed instance", "instance", newName, "previous_name", current.Name)
 
 	return renamed, nil
+}
+
+// Rename changes a Stopped or Failed instance's name and returns the renamed
+// instance. Its persistent directory moves; everything keyed by ID stays.
+func (m *Manager) Rename(ctx context.Context, nameOrID, newName string) (Spec, error) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return Spec{}, err
+	}
+	return m.rename(ctx, instance, newName)
 }
 
 // renameable reports whether an instance in the state can be renamed.

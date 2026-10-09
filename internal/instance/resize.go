@@ -20,24 +20,19 @@ import (
 // give up memory.
 const resizeMemoryTimeout = time.Minute
 
-// Resize gives a running instance want's vCPUs and memory without
-// restarting it, within its maximums, and records them in its definition so
-// that it keeps them when it next starts. Growing needs room on the host
-// (ErrResourceExhausted otherwise).
-//
-// The larger of what the instance held and want is reserved first. A size
-// the hypervisor refuses changes nothing. If the hypervisor or the guest
-// fails a resize it took, the instance keeps holding the larger until it
-// next starts, with want.
-func (m *Manager) Resize(ctx context.Context, instance Spec, want Resources) (err error) {
+// resize is Resize, for an instance its caller has looked up.
+func (m *Manager) resize(ctx context.Context, instance Spec, want Resources) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationResize, started, err) }()
 
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}
@@ -108,6 +103,23 @@ func (m *Manager) Resize(ctx context.Context, instance Spec, want Resources) (er
 	m.logger.InfoContext(ctx, "resized instance",
 		"instance", instance.Name, "vcpus", want.VCPUs, "memory_bytes", want.MemoryBytes)
 	return nil
+}
+
+// Resize gives a running instance want's vCPUs and memory without
+// restarting it, within its maximums, and records them in its definition so
+// that it keeps them when it next starts. Growing needs room on the host
+// (ErrResourceExhausted otherwise).
+//
+// The larger of what the instance held and want is reserved first. A size
+// the hypervisor refuses changes nothing. If the hypervisor or the guest
+// fails a resize it took, the instance keeps holding the larger until it
+// next starts, with want.
+func (m *Manager) Resize(ctx context.Context, nameOrID string, want Resources) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.resize(ctx, instance, want)
 }
 
 // resizeVM gives the guest want's memory, then its vCPUs, leaving alone

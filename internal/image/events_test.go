@@ -64,11 +64,11 @@ func TestRemovalsAreRecorded(t *testing.T) {
 	setLastUsed(t, m, "sha256:c", gcNow.Add(-30*24*time.Hour))
 	*recorded = nil
 
-	if err := m.Delete("docker.io/library/a:1"); err != nil {
+	if err := m.Delete("docker.io/library/a:1", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.CollectGarbage(GCPolicy{MaxUnusedAge: 24 * time.Hour},
-		map[string]struct{}{"sha256:b": {}}, gcNow); err != nil {
+		InUse{"sha256:b": `instance "web"`}, gcNow); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Prune(nil); err != nil {

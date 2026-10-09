@@ -44,7 +44,7 @@ func (m *Manager) syncWaker(ctx context.Context, instanceID string) {
 	want := false
 	instance, err := m.store.Instance(instanceID)
 	if err == nil && instance.StandbyAfter > 0 && m.onStandby(instance) {
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		want = err == nil && !status.State.IsActive()
 	}
 
@@ -147,7 +147,7 @@ func (m *Manager) serveWakeConnection(ctx context.Context, l wakeListener, conn 
 		return
 	}
 
-	allocation, err := m.Allocation(l.instance)
+	allocation, err := m.allocationOf(l.instance)
 	if err != nil {
 		m.logger.WarnContext(ctx, "cannot find a woken instance's address", "instance", l.instance.Name, "error", err)
 		_ = conn.Close()
@@ -183,7 +183,7 @@ func (m *Manager) wake(ctx context.Context, instanceID string, wokenByPort uint1
 	if err != nil {
 		return err
 	}
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}

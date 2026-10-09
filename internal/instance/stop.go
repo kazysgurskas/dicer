@@ -11,24 +11,23 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 )
 
-// Stop shuts down an instance and releases its host resources, keeping its
-// definition, disk and address. An instance on standby is stopped by
-// discarding what it has frozen, so that it boots afresh. It cancels any
-// pending restart and sets StoppedByUser. Stopping a stopped instance is not
-// an error.
-func (m *Manager) Stop(ctx context.Context, instance Spec) (err error) {
+// stop is Stop, for an instance its caller has looked up.
+func (m *Manager) stop(ctx context.Context, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationStop, started, err) }()
 
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 	defer m.syncWaker(ctx, instance.ID)
 
 	m.cancelRestart(instance.ID)
 	m.setStoppedByUser(ctx, instance, true)
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}
@@ -70,4 +69,17 @@ func (m *Manager) Stop(ctx context.Context, instance Spec) (err error) {
 	m.scheduleRemoval(ctx, instance)
 
 	return nil
+}
+
+// Stop shuts down an instance and releases its host resources, keeping its
+// definition, disk and address. An instance on standby is stopped by
+// discarding what it has frozen, so that it boots afresh. It cancels any
+// pending restart and sets StoppedByUser. Stopping a stopped instance is not
+// an error.
+func (m *Manager) Stop(ctx context.Context, nameOrID string) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.stop(ctx, instance)
 }

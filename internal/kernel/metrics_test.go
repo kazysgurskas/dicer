@@ -10,22 +10,15 @@ import (
 	"github.com/konradasb/dicer/internal/metric/metrictest"
 )
 
-// fakeStore is a Store of the kernels it holds.
-type fakeStore []Kernel
-
-func (s fakeStore) Kernels() []Kernel { return s }
-
 func TestMetricsMatchTheirDescriptions(t *testing.T) {
-	m := newTestManager(t)
-	m.store = fakeStore{}
+	m, _, _ := newTestManager(t)
 
 	metrictest.CheckDescriptions(t, m, MetricDescriptions())
 }
 
 func TestKernelsAreServedWithTheirDisk(t *testing.T) {
-	m := newTestManager(t)
-	k := importKernel(t, m, "k1", "test", "vmlinux")
-	m.store = fakeStore{k}
+	m, _, _ := newTestManager(t)
+	importKernel(t, m, "test", "vmlinux")
 
 	body := metrictest.Scrape(t, m)
 	for _, want := range []string{"dicer_kernels 1", "dicer_kernel_disk_bytes 7"} {

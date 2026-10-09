@@ -63,7 +63,7 @@ func (m *Manager) answerableInstances(network string, matches func(Spec) bool) [
 
 	var out []answerableInstance
 	for _, instance := range instances {
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil || (!status.State.IsActive() && status.State != StateStarting) {
 			continue
 		}

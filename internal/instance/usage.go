@@ -23,13 +23,13 @@ func (m *Manager) Usage() Usage {
 	instances := m.store.Instances()
 
 	for _, instance := range instances {
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil {
 			status = Status{State: StateFailed}
 		}
 
 		usage.ByState[status.State]++
-		if _, health, ok := m.Health(instance); ok {
+		if _, health, ok := m.healthOf(instance); ok {
 			usage.ByHealth[health.Status]++
 		}
 

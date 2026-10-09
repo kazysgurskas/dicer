@@ -27,7 +27,11 @@ const standbyFile = "standby.json"
 // that it holds no CPU or memory. Start resumes it where it was; Stop
 // discards what was frozen. Its disk stays where it is, and its address, host
 // ports and writable volumes stay its own.
-func (m *Manager) Standby(ctx context.Context, instance Spec) error {
+func (m *Manager) Standby(ctx context.Context, nameOrID string) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
 	return m.standby(ctx, instance, 0)
 }
 
@@ -40,9 +44,12 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 	defer m.syncWaker(ctx, instance.ID)
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}
@@ -60,7 +67,7 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 			instance.Name, status.State.Lowercase())
 	}
 
-	allocation, err := m.Allocation(instance)
+	allocation, err := m.allocationOf(instance)
 	if err != nil {
 		return err
 	}
@@ -180,7 +187,7 @@ func (m *Manager) resumeStandby(ctx context.Context, instance Spec, wokenByPort 
 		m.logger.WarnContext(ctx, "cannot remove a resumed instance's standby", "instance", instance.Name, "error", err)
 	}
 
-	allocation, _ := m.Allocation(instance)
+	allocation, _ := m.allocationOf(instance)
 	attrs := map[string]string{"ip": allocation.IP}
 	why := ""
 	if wokenByPort != 0 {

@@ -10,14 +10,9 @@ import (
 	"github.com/konradasb/dicer/internal/metric/metrictest"
 )
 
-// fakeStore is a Store of the networks it holds.
-type fakeStore []Network
-
-func (s *fakeStore) Networks() []Network { return *s }
-
 func TestMetricsMatchTheirDescriptions(t *testing.T) {
 	m := newTestManager(t)
-	m.store = &fakeStore{testNetwork()}
+	m.store = newFakeStore(testNetwork())
 
 	metrictest.CheckDescriptions(t, m, MetricDescriptions())
 }
@@ -29,7 +24,7 @@ func TestAddressPoolsAreReadPerScrape(t *testing.T) {
 	// A /24 has 256 addresses, of which the network, broadcast and gateway
 	// addresses are not assignable: 253 can be handed out.
 	nw := Network{ID: "n-1", Name: "default", Subnet: "172.20.0.0/24", Gateway: "172.20.0.1", Bridge: "dicer0"}
-	m.store = &fakeStore{nw}
+	m.store = newFakeStore(nw)
 
 	for _, id := range []string{"i-1", "i-2"} {
 		if _, err := m.Allocate(nw, id, ""); err != nil {
@@ -59,7 +54,7 @@ func TestAddressPoolsAreReadPerScrape(t *testing.T) {
 // than fail or invent a series.
 func TestNoNetworksServeNoAddressPools(t *testing.T) {
 	m := newTestManager(t)
-	m.store = &fakeStore{}
+	m.store = newFakeStore()
 
 	if body := metrictest.Scrape(t, m); strings.Contains(body, "dicer_network_addresses") {
 		t.Errorf("scrape invented a series with no networks defined:\n%s", body)

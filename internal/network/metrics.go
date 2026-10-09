@@ -35,11 +35,6 @@ func MetricDescriptions() []metric.Description {
 	return []metric.Description{addressesAllocatedMetric, addressesAvailableMetric}
 }
 
-// Store lists the networks defined on this host.
-type Store interface {
-	Networks() []Network
-}
-
 // metrics are the descriptors of what a Manager reads at scrape time.
 type metrics struct {
 	allocated *prometheus.Desc
@@ -62,10 +57,6 @@ func (m *Manager) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements prometheus.Collector: each defined network's address
 // pool, as it is now. A network whose allocations cannot be read is left out.
 func (m *Manager) Collect(ch chan<- prometheus.Metric) {
-	if m.store == nil {
-		return
-	}
-
 	for _, network := range m.store.Networks() {
 		allocations, err := m.List(network.Name)
 		if err != nil {

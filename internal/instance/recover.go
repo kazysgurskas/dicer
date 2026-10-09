@@ -79,7 +79,7 @@ func (m *Manager) recoverInstance(ctx context.Context, instance Spec) recovery {
 	defer lock.Unlock()
 	defer m.syncWaker(ctx, instance.ID)
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		m.logger.WarnContext(ctx, "cannot read instance status, skipping",
 			"instance", instance.Name, "error", err)
@@ -150,7 +150,7 @@ func (m *Manager) restoreAdoptedNetworks(ctx context.Context, instances []Spec) 
 		if restored[instance.NetworkName] {
 			continue
 		}
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil || !status.State.IsActive() {
 			continue
 		}
@@ -201,12 +201,12 @@ func (m *Manager) StartOnBoot(ctx context.Context) {
 			continue
 		}
 
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil || (status.State != StateStopped && status.State != StateFailed) {
 			continue
 		}
 
-		if err := m.Start(ctx, instance); err != nil {
+		if err := m.start(ctx, instance); err != nil {
 			m.logger.ErrorContext(ctx, "start on boot failed",
 				"instance", instance.Name, "error", err)
 			continue

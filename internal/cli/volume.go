@@ -131,9 +131,9 @@ func newVolumeShowCommand() *cobra.Command {
 func newVolumeDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete (NAME... | --all)",
-		Short: "Delete one or more volumes no instance uses, or all of them",
+		Short: "Delete one or more volumes no instance or snapshot uses, or all of them",
 		Long: "Deletes the volumes named, or with --all every volume, asking first on a\n" +
-			"terminal. A volume an instance is defined to mount is refused.",
+			"terminal. A volume an instance or a snapshot mounts is refused.",
 		Args:              namesOrAll("volume name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listVolumes),

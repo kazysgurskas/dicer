@@ -14,7 +14,7 @@ import (
 func TestRename(t *testing.T) {
 	h := newHarness(t)
 
-	renamed, err := h.manager.Rename(t.Context(), h.instance, "web-2")
+	renamed, err := h.manager.rename(t.Context(), h.instance, "web-2")
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRename(t *testing.T) {
 func TestRenameRecordsAnEvent(t *testing.T) {
 	h := newHarness(t)
 
-	if _, err := h.manager.Rename(t.Context(), h.instance, "web-2"); err != nil {
+	if _, err := h.manager.rename(t.Context(), h.instance, "web-2"); err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestRenameAllowsAFailedInstance(t *testing.T) {
 	h.exit(t, 1)
 	h.waitForState(t, StateFailed)
 
-	if _, err := h.manager.Rename(t.Context(), h.instance, "web-2"); err != nil {
+	if _, err := h.manager.rename(t.Context(), h.instance, "web-2"); err != nil {
 		t.Fatalf("Rename of a failed instance: %v", err)
 	}
 	if _, err := h.store.Instance("web-2"); err != nil {
@@ -86,7 +86,7 @@ func TestRenameRefusesARunningInstance(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
 
-	_, err := h.manager.Rename(t.Context(), h.instance, "web-2")
+	_, err := h.manager.rename(t.Context(), h.instance, "web-2")
 	if !errors.Is(err, errdefs.ErrInvalidState) {
 		t.Errorf("Rename of a running instance = %v, want an invalid state", err)
 	}
@@ -100,7 +100,7 @@ func TestRenameRefusesANameInUse(t *testing.T) {
 	h := newHarness(t)
 	seedInstance(t, h.store, "taken")
 
-	if _, err := h.manager.Rename(t.Context(), h.instance, "taken"); !errors.Is(err, errdefs.ErrExists) {
+	if _, err := h.manager.rename(t.Context(), h.instance, "taken"); !errors.Is(err, errdefs.ErrExists) {
 		t.Errorf("Rename onto a taken name = %v, want an already-exists error", err)
 	}
 }
@@ -110,7 +110,7 @@ func TestRenameRefusesANameInUse(t *testing.T) {
 func TestRenameToTheSameNameDoesNothing(t *testing.T) {
 	h := newHarness(t)
 
-	renamed, err := h.manager.Rename(t.Context(), h.instance, h.instance.Name)
+	renamed, err := h.manager.rename(t.Context(), h.instance, h.instance.Name)
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}

@@ -6,17 +6,31 @@ package instance
 import (
 	"context"
 	"fmt"
+	"net"
 
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/image/reference"
+	"github.com/konradasb/dicer/internal/network"
 )
 
 // Create records a new instance's definition, first pulling its image as
-// pull says. It boots nothing: see Start. Nothing is recorded if the image
-// cannot be had.
+// pull says. It refuses an invalid definition, a name already taken, and one
+// that could never start, before pulling anything. It boots nothing: see
+// Start. Nothing is recorded if the image cannot be had.
 func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPolicy) error {
+	if err := instance.Validate(); err != nil {
+		return err
+	}
+	if _, err := m.store.Instance(instance.Name); err == nil {
+		return errdefs.Exists("instance %q already exists", instance.Name)
+	}
+	if err := m.checkCanStart(instance); err != nil {
+		return err
+	}
+
 	// Before the definition, so that one whose image cannot be had is never
 	// seen, even for as long as a pull takes. The error names the image.
 	if _, err := m.images.Ensure(ctx, instance.ImageRef, pull); err != nil {
@@ -32,4 +46,38 @@ func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPoli
 			instance.Restart),
 		map[string]string{"image": instance.ImageRef})
 	return nil
+}
+
+// checkCanStart refuses a definition that could never start on this host: a
+// missing kernel, network or volume, a static IP its network cannot assign,
+// or more resources than the host allows.
+func (m *Manager) checkCanStart(instance Spec) error {
+	if _, err := m.store.Kernel(instance.KernelName); err != nil {
+		return errdefs.InvalidArgument("%v", err)
+	}
+	n, err := m.store.Network(instance.NetworkName)
+	if err != nil {
+		return errdefs.InvalidArgument("%v", err)
+	}
+	if instance.StaticIP != "" {
+		subnet, err := network.ParseSubnet(n.Subnet)
+		if err != nil {
+			return err
+		}
+		ip := net.ParseIP(instance.StaticIP)
+		if ip == nil || !network.Assignable(subnet, ip) || ip.Equal(net.ParseIP(n.Gateway)) {
+			return errdefs.InvalidArgument(
+				"static IP %q is not an address network %q can assign: its subnet is %s, and its gateway %s",
+				instance.StaticIP, n.Name, n.Subnet, n.Gateway)
+		}
+	}
+	for _, mount := range instance.Mounts {
+		if mount.Type != MountTypeVolume {
+			continue
+		}
+		if _, err := m.store.Volume(mount.Source); err != nil {
+			return errdefs.InvalidArgument("%v", err)
+		}
+	}
+	return m.CheckResources(instance.MaxResources())
 }

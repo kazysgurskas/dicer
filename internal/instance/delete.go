@@ -12,19 +12,20 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 )
 
-// Delete removes an instance and everything it owns: its VM, network
-// resources, address, status and directory. Volumes and snapshots are kept. An
-// active instance is refused unless force is set.
-func (m *Manager) Delete(ctx context.Context, instance Spec, force bool) (err error) {
+// delete is Delete, for an instance its caller has looked up.
+func (m *Manager) delete(ctx context.Context, instance Spec, force bool) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationDelete, started, err) }()
 
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 	defer m.syncWaker(ctx, instance.ID)
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}
@@ -57,4 +58,15 @@ func (m *Manager) Delete(ctx context.Context, instance Spec, force bool) (err er
 		"Deleted instance: removed its definition and disks; released its address on network "+instance.NetworkName, nil)
 	m.logger.InfoContext(ctx, "deleted instance", "instance", instance.Name)
 	return nil
+}
+
+// Delete removes an instance and everything it owns: its VM, network
+// resources, address, status and directory. Volumes and snapshots are kept. An
+// active instance is refused unless force is set.
+func (m *Manager) Delete(ctx context.Context, nameOrID string, force bool) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.delete(ctx, instance, force)
 }

@@ -146,9 +146,9 @@ func newKernelShowCommand() *cobra.Command {
 func newKernelDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete (NAME... | --all)",
-		Short: "Delete one or more kernels no instance uses, or all of them",
+		Short: "Delete one or more kernels no instance or snapshot uses, or all of them",
 		Long: "Deletes the kernels named, or with --all every kernel, asking first on a\n" +
-			"terminal. A kernel an instance is defined to boot is refused, and so is the\n" +
+			"terminal. A kernel an instance or a snapshot uses is refused, and so is the\n" +
 			"default kernel, which --all leaves alone.",
 		Args:              namesOrAll("kernel name"),
 		Aliases:           []string{"rm", "remove"},

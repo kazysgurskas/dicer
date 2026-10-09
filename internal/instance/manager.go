@@ -83,7 +83,7 @@ type Kernels interface {
 
 // Volumes locates the disk backing a volume.
 type Volumes interface {
-	Path(id string) string
+	Path(v volume.Volume) string
 }
 
 // Initrds provides the initramfs guests boot from.
@@ -273,9 +273,31 @@ func NewManager(cfg Config) *Manager {
 	}
 }
 
+// Instance returns an instance's definition by name or ID.
+func (m *Manager) Instance(nameOrID string) (Spec, error) {
+	return m.store.Instance(nameOrID)
+}
+
+// Instances returns every instance's definition, sorted by name.
+func (m *Manager) Instances() []Spec {
+	return m.store.Instances()
+}
+
 // lock returns the mutex that serialises operations on one instance.
 func (m *Manager) lock(id string) *sync.Mutex {
 	return mutexIn(&m.locks, id)
+}
+
+// rereadDefinition replaces *instance with its definition as it is now. An
+// operation calls it once it holds the instance's lock, so that it acts on
+// that definition, not on one its caller read before taking the lock.
+func (m *Manager) rereadDefinition(instance *Spec) error {
+	current, err := m.store.Instance(instance.ID)
+	if err != nil {
+		return err
+	}
+	*instance = current
+	return nil
 }
 
 // networkLock returns the mutex that serialises changes to one network's

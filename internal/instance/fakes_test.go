@@ -723,8 +723,8 @@ func (f fakeInitrds) Prepare(context.Context) (string, error) { return f.path, n
 // fakeVolumes locates volume disks under a directory, as volume.Manager does.
 type fakeVolumes struct{ dir string }
 
-func (f fakeVolumes) Path(id string) string {
-	return filepath.Join(f.dir, id, "disk.raw")
+func (f fakeVolumes) Path(v volume.Volume) string {
+	return filepath.Join(f.dir, v.ID, "disk.raw")
 }
 
 // fakeProbe answers health check probes as a test says, and counts them.

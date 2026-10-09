@@ -35,24 +35,24 @@ func TestLifecycleIsRecorded(t *testing.T) {
 	h := newHarness(t)
 	ctx := t.Context()
 
-	created := Spec{ID: "new-id", Name: "new", ImageRef: "alpine"}
+	created := Spec{ID: "new-id", Name: "new", ImageRef: "alpine", KernelName: "k", NetworkName: "default", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30}
 	if err := h.manager.Create(ctx, created, image.PullPolicyMissing); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	h.start(t)
-	if err := h.manager.Pause(ctx, h.instance); err != nil {
+	if err := h.manager.Pause(ctx, h.instance.Name); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.manager.Resume(ctx, h.instance); err != nil {
+	if err := h.manager.Resume(ctx, h.instance.Name); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.manager.Stop(ctx, h.instance); err != nil {
+	if err := h.manager.stop(ctx, h.instance); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.manager.Update(ctx, h.instance); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.manager.Delete(ctx, h.instance, false); err != nil {
+	if err := h.manager.delete(ctx, h.instance, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +131,7 @@ func TestFailedStartIsRecorded(t *testing.T) {
 	h := newHarness(t)
 	h.starter.startErr = errors.New("no hypervisor today")
 
-	if err := h.manager.Start(t.Context(), h.instance); err == nil {
+	if err := h.manager.start(t.Context(), h.instance); err == nil {
 		t.Fatal("Start succeeded")
 	}
 	died, ok := h.events.last(event.ActionDied)
@@ -163,11 +163,11 @@ func TestSnapshotsAreRecorded(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
 
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "before")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "before")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.manager.DeleteSnapshot(t.Context(), snapshot); err != nil {
+	if err := h.manager.deleteSnapshot(t.Context(), snapshot); err != nil {
 		t.Fatal(err)
 	}
 

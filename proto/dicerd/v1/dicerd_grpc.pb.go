@@ -224,8 +224,8 @@ type DaemonServiceClient interface {
 	ListNetworks(ctx context.Context, in *ListNetworksRequest, opts ...grpc.CallOption) (*ListNetworksResponse, error)
 	// GetNetwork returns one network.
 	GetNetwork(ctx context.Context, in *GetNetworkRequest, opts ...grpc.CallOption) (*Network, error)
-	// DeleteNetwork removes a network that no instance references. The
-	// default network cannot be deleted.
+	// DeleteNetwork removes a network that no instance or snapshot
+	// references. The default network cannot be deleted.
 	DeleteNetwork(ctx context.Context, in *DeleteNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ListNetworkAllocations reports which addresses are assigned on a network.
 	// Allocation itself is a side effect of starting an instance and has no
@@ -237,7 +237,7 @@ type DaemonServiceClient interface {
 	ListVolumes(ctx context.Context, in *ListVolumesRequest, opts ...grpc.CallOption) (*ListVolumesResponse, error)
 	// GetVolume returns one volume.
 	GetVolume(ctx context.Context, in *GetVolumeRequest, opts ...grpc.CallOption) (*Volume, error)
-	// DeleteVolume removes a volume that no instance references.
+	// DeleteVolume removes a volume that no instance or snapshot references.
 	DeleteVolume(ctx context.Context, in *DeleteVolumeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// PullImage fetches an OCI image and converts it to a bootable root
 	// filesystem, reporting progress as it goes. The last message carries the
@@ -264,8 +264,8 @@ type DaemonServiceClient interface {
 	ListKernels(ctx context.Context, in *ListKernelsRequest, opts ...grpc.CallOption) (*ListKernelsResponse, error)
 	// GetKernel returns one kernel.
 	GetKernel(ctx context.Context, in *GetKernelRequest, opts ...grpc.CallOption) (*Kernel, error)
-	// DeleteKernel removes a kernel that no instance references. The default
-	// kernel cannot be deleted.
+	// DeleteKernel removes a kernel that no instance or snapshot references.
+	// The default kernel cannot be deleted.
 	DeleteKernel(ctx context.Context, in *DeleteKernelRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// CreateToken makes a token for the daemon's TCP listener. It returns the
 	// token's value, which is never returned again: the daemon keeps only the
@@ -1017,8 +1017,8 @@ type DaemonServiceServer interface {
 	ListNetworks(context.Context, *ListNetworksRequest) (*ListNetworksResponse, error)
 	// GetNetwork returns one network.
 	GetNetwork(context.Context, *GetNetworkRequest) (*Network, error)
-	// DeleteNetwork removes a network that no instance references. The
-	// default network cannot be deleted.
+	// DeleteNetwork removes a network that no instance or snapshot
+	// references. The default network cannot be deleted.
 	DeleteNetwork(context.Context, *DeleteNetworkRequest) (*emptypb.Empty, error)
 	// ListNetworkAllocations reports which addresses are assigned on a network.
 	// Allocation itself is a side effect of starting an instance and has no
@@ -1030,7 +1030,7 @@ type DaemonServiceServer interface {
 	ListVolumes(context.Context, *ListVolumesRequest) (*ListVolumesResponse, error)
 	// GetVolume returns one volume.
 	GetVolume(context.Context, *GetVolumeRequest) (*Volume, error)
-	// DeleteVolume removes a volume that no instance references.
+	// DeleteVolume removes a volume that no instance or snapshot references.
 	DeleteVolume(context.Context, *DeleteVolumeRequest) (*emptypb.Empty, error)
 	// PullImage fetches an OCI image and converts it to a bootable root
 	// filesystem, reporting progress as it goes. The last message carries the
@@ -1057,8 +1057,8 @@ type DaemonServiceServer interface {
 	ListKernels(context.Context, *ListKernelsRequest) (*ListKernelsResponse, error)
 	// GetKernel returns one kernel.
 	GetKernel(context.Context, *GetKernelRequest) (*Kernel, error)
-	// DeleteKernel removes a kernel that no instance references. The default
-	// kernel cannot be deleted.
+	// DeleteKernel removes a kernel that no instance or snapshot references.
+	// The default kernel cannot be deleted.
 	DeleteKernel(context.Context, *DeleteKernelRequest) (*emptypb.Empty, error)
 	// CreateToken makes a token for the daemon's TCP listener. It returns the
 	// token's value, which is never returned again: the daemon keeps only the

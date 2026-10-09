@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,8 +25,9 @@ import (
 // allocationTableExt ends the name of a network's allocation table file.
 const allocationTableExt = ".yaml"
 
-// Manager assigns addresses from a subnet and persists the allocations, so an
-// instance keeps its address across restarts. Allocations are released on
+// Manager creates and deletes networks, whose definitions a Store keeps,
+// and assigns their addresses. It persists the allocations, so an instance
+// keeps its address across restarts. Allocations are released on
 // delete and reconciled at daemon start.
 //
 // The allocation tables are read from disk once, when the Manager is made,
@@ -33,10 +35,12 @@ const allocationTableExt = ".yaml"
 // servers do for every query -- reads no file. The Manager must be the only
 // writer of its directory. It is safe for concurrent use.
 type Manager struct {
-	dir     string
-	store   Store
-	logger  *slog.Logger
-	metrics metrics
+	dir         string
+	store       Store
+	hostSubnets func() ([]netip.Prefix, error)
+	events      Recorder
+	logger      *slog.Logger
+	metrics     metrics
 
 	// writeMu serialises the changes to the allocation tables. Each is a
 	// read-modify-write of a network's file, made under writeMu alone, so
@@ -85,9 +89,14 @@ func newAllocationTable(allocations []Allocation) *allocationTable {
 type Config struct {
 	// Dir is the directory the allocation tables are kept in.
 	Dir string
-	// Store lists the networks whose address pools are served as metrics.
-	// Nil serves none.
+	// Store keeps the network definitions. Creating, deleting and listing
+	// networks need it, and allocating addresses does not.
 	Store Store
+	// HostSubnets returns the subnets of the host's interfaces, which a new
+	// network may not overlap. Nil skips the check.
+	HostSubnets func() ([]netip.Prefix, error)
+	// Events records what happens to networks. Nil records nothing.
+	Events Recorder
 	// Logger is where the Manager logs. Nil is slog.Default().
 	Logger *slog.Logger
 }
@@ -96,6 +105,9 @@ type Config struct {
 // with those already there read. One that cannot be read fails the calls
 // about its network, not NewManager.
 func NewManager(cfg Config) (*Manager, error) {
+	if cfg.Events == nil {
+		cfg.Events = discardRecorder{}
+	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -111,6 +123,8 @@ func NewManager(cfg Config) (*Manager, error) {
 	m := &Manager{
 		dir:                   cfg.Dir,
 		store:                 cfg.Store,
+		hostSubnets:           cfg.HostSubnets,
+		events:                cfg.Events,
 		logger:                cfg.Logger.With("component", "network"),
 		metrics:               newMetrics(),
 		allocationTables:      make(map[string]*allocationTable),
@@ -189,9 +203,20 @@ func (m *Manager) saveAllocationTable(network string, allocations []Allocation) 
 	return nil
 }
 
-// List returns every allocation on a network. The slice is the caller's.
-func (m *Manager) List(network string) ([]Allocation, error) {
-	t, err := m.allocationTableOf(network)
+// List returns every allocation on a network, by name or ID. The slice is
+// the caller's. A Manager without a Store, which only allocates addresses,
+// takes the network's name alone.
+func (m *Manager) List(nameOrID string) ([]Allocation, error) {
+	name := nameOrID
+	if m.store != nil {
+		n, err := m.store.Network(nameOrID)
+		if err != nil {
+			return nil, err
+		}
+		name = n.Name
+	}
+
+	t, err := m.allocationTableOf(name)
 	if err != nil {
 		return nil, err
 	}

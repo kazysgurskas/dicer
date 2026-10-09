@@ -50,7 +50,7 @@ func (m *Manager) standbyIdle(ctx context.Context, tracker *idleTracker, sample 
 		}
 		// A paused instance is not idle but stopped by a user, and its
 		// pause would count against it once it is resumed.
-		if status, err := m.Status(instance); err != nil || status.State != StateRunning {
+		if status, err := m.statusOf(instance); err != nil || status.State != StateRunning {
 			continue
 		}
 

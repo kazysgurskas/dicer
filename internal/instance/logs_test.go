@@ -42,7 +42,7 @@ func TestStreamLogs(t *testing.T) {
 	writeGuestLog(t, manager, instance, "booting\nready\n")
 
 	var out bytes.Buffer
-	if err := manager.StreamLogs(t.Context(), instance, LogOptions{}, &out); err != nil {
+	if err := manager.streamLogs(t.Context(), instance, LogOptions{}, &out); err != nil {
 		t.Fatalf("StreamLogs: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestStreamLogsTail(t *testing.T) {
 
 	for _, tt := range tests {
 		var out bytes.Buffer
-		if err := manager.StreamLogs(t.Context(), instance, LogOptions{TailLines: tt.tail}, &out); err != nil {
+		if err := manager.streamLogs(t.Context(), instance, LogOptions{TailLines: tt.tail}, &out); err != nil {
 			t.Fatalf("StreamLogs(tail=%d): %v", tt.tail, err)
 		}
 
@@ -103,7 +103,7 @@ func TestStreamLogsTailSpansChunks(t *testing.T) {
 	writeGuestLog(t, manager, instance, sb.String())
 
 	var out bytes.Buffer
-	if err := manager.StreamLogs(t.Context(), instance, LogOptions{TailLines: 2}, &out); err != nil {
+	if err := manager.streamLogs(t.Context(), instance, LogOptions{TailLines: 2}, &out); err != nil {
 		t.Fatalf("StreamLogs: %v", err)
 	}
 
@@ -134,7 +134,7 @@ func TestStreamLogsFollowStopsWithInstance(t *testing.T) {
 		done = make(chan error, 1)
 	)
 	go func() {
-		done <- manager.StreamLogs(t.Context(), instance, LogOptions{Follow: true}, &lockedWriter{mu: &mu, w: &out})
+		done <- manager.streamLogs(t.Context(), instance, LogOptions{Follow: true}, &lockedWriter{mu: &mu, w: &out})
 	}()
 
 	// Output written while it runs is followed.
@@ -179,7 +179,7 @@ func TestStreamLogsFollowsAStartingInstance(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- manager.StreamLogs(t.Context(), instance, LogOptions{Follow: true}, &bytes.Buffer{})
+		done <- manager.streamLogs(t.Context(), instance, LogOptions{Follow: true}, &bytes.Buffer{})
 	}()
 
 	select {
@@ -209,18 +209,18 @@ func TestHypervisorLogIsKeptWithTheInstance(t *testing.T) {
 	}{
 		{"failed start", func(t *testing.T, h *harness) string {
 			h.starter.startErr = errors.New("kvm: permission denied")
-			if err := h.manager.Start(t.Context(), h.instance); err == nil {
+			if err := h.manager.start(t.Context(), h.instance); err == nil {
 				t.Fatal("the start succeeded, want it to fail")
 			}
 			return "kvm: permission denied"
 		}},
 		{"failed resume from standby", func(t *testing.T, h *harness) string {
 			h.start(t)
-			if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+			if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 				t.Fatalf("Standby: %v", err)
 			}
 			h.starter.restoreErr = errors.New("kvm: permission denied")
-			if err := h.manager.Start(t.Context(), h.instance); err == nil {
+			if err := h.manager.start(t.Context(), h.instance); err == nil {
 				t.Fatal("the resume succeeded, want it to fail")
 			}
 			return "kvm: permission denied"
@@ -228,7 +228,7 @@ func TestHypervisorLogIsKeptWithTheInstance(t *testing.T) {
 		{"stop", func(t *testing.T, h *harness) string {
 			h.start(t)
 			writeHypervisorLog(t, h, "virtio-net: queue stalled\n")
-			if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+			if err := h.manager.stop(t.Context(), h.instance); err != nil {
 				t.Fatalf("Stop: %v", err)
 			}
 			return "virtio-net: queue stalled"
@@ -241,7 +241,7 @@ func TestHypervisorLogIsKeptWithTheInstance(t *testing.T) {
 
 			var out bytes.Buffer
 			opts := LogOptions{Source: LogSourceHypervisor}
-			if err := h.manager.StreamLogs(t.Context(), h.instance, opts, &out); err != nil {
+			if err := h.manager.streamLogs(t.Context(), h.instance, opts, &out); err != nil {
 				t.Fatalf("StreamLogs: %v", err)
 			}
 			if !strings.Contains(out.String(), want) {
@@ -271,7 +271,7 @@ func TestStreamLogsMissing(t *testing.T) {
 	manager, store, _ := newTestManager(t)
 	instance := seedInstance(t, store, "web")
 
-	err := manager.StreamLogs(t.Context(), instance, LogOptions{}, &bytes.Buffer{})
+	err := manager.streamLogs(t.Context(), instance, LogOptions{}, &bytes.Buffer{})
 	if !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("StreamLogs with no log = %v, want ErrNotFound", err)
 	}
@@ -281,7 +281,7 @@ func TestStreamLogsUnknownSource(t *testing.T) {
 	manager, store, _ := newTestManager(t)
 	instance := seedInstance(t, store, "web")
 
-	err := manager.StreamLogs(t.Context(), instance, LogOptions{Source: "syslog"}, &bytes.Buffer{})
+	err := manager.streamLogs(t.Context(), instance, LogOptions{Source: "syslog"}, &bytes.Buffer{})
 	if !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("StreamLogs of an unknown source = %v, want ErrInvalidArgument", err)
 	}

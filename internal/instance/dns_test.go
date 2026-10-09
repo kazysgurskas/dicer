@@ -89,7 +89,7 @@ func TestStartGivesTheGuestTheNetworksDNSServer(t *testing.T) {
 	}
 
 	// The last instance off the network stops its server with its bridge.
-	if err := h.manager.Stop(context.Background(), h.instance); err != nil {
+	if err := h.manager.stop(context.Background(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if dnsServers.serving["default"] || !slices.Contains(dnsServers.stopped, "default") {

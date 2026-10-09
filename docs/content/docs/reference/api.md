@@ -78,12 +78,12 @@ was, and whose message says it for a person:
 | `CreateNetwork` | [`CreateNetworkRequest`](#createnetworkrequest) | [`Network`](#network) | CreateNetwork defines a host-local network. Its bridge is brought up when the first instance on it starts. The daemon creates the network named "default" itself, which an instance joins when it names none. |
 | `ListNetworks` | [`ListNetworksRequest`](#listnetworksrequest) | [`ListNetworksResponse`](#listnetworksresponse) | ListNetworks returns every network. |
 | `GetNetwork` | [`GetNetworkRequest`](#getnetworkrequest) | [`Network`](#network) | GetNetwork returns one network. |
-| `DeleteNetwork` | [`DeleteNetworkRequest`](#deletenetworkrequest) | `google.protobuf.Empty` | DeleteNetwork removes a network that no instance references. The default network cannot be deleted. |
+| `DeleteNetwork` | [`DeleteNetworkRequest`](#deletenetworkrequest) | `google.protobuf.Empty` | DeleteNetwork removes a network that no instance or snapshot references. The default network cannot be deleted. |
 | `ListNetworkAllocations` | [`ListNetworkAllocationsRequest`](#listnetworkallocationsrequest) | [`ListNetworkAllocationsResponse`](#listnetworkallocationsresponse) | ListNetworkAllocations reports which addresses are assigned on a network. Allocation itself is a side effect of starting an instance and has no separate RPC. |
 | `CreateVolume` | [`CreateVolumeRequest`](#createvolumerequest) | [`Volume`](#volume) | CreateVolume provisions a persistent block volume. |
 | `ListVolumes` | [`ListVolumesRequest`](#listvolumesrequest) | [`ListVolumesResponse`](#listvolumesresponse) | ListVolumes returns every volume. |
 | `GetVolume` | [`GetVolumeRequest`](#getvolumerequest) | [`Volume`](#volume) | GetVolume returns one volume. |
-| `DeleteVolume` | [`DeleteVolumeRequest`](#deletevolumerequest) | `google.protobuf.Empty` | DeleteVolume removes a volume that no instance references. |
+| `DeleteVolume` | [`DeleteVolumeRequest`](#deletevolumerequest) | `google.protobuf.Empty` | DeleteVolume removes a volume that no instance or snapshot references. |
 | `PullImage` | [`PullImageRequest`](#pullimagerequest) | stream [`PullImageProgress`](#pullimageprogress) | PullImage fetches an OCI image and converts it to a bootable root filesystem, reporting progress as it goes. The last message carries the image, which is ready to boot. |
 | `ListImages` | [`ListImagesRequest`](#listimagesrequest) | [`ListImagesResponse`](#listimagesresponse) | ListImages returns every pulled image. |
 | `GetImage` | [`GetImageRequest`](#getimagerequest) | [`Image`](#image) | GetImage returns one pulled image. |
@@ -92,7 +92,7 @@ was, and whose message says it for a person:
 | `ImportKernel` | stream [`ImportKernelRequest`](#importkernelrequest) | [`Kernel`](#kernel) | ImportKernel puts a guest kernel the client sends on the host, and returns once it is there. The first message must be an ImportKernelStart, and the rest carry the kernel in chunks, at most 512 MiB. The kernel is verified against the start's sha256 if that is set. Nothing is recorded if it does not match, or if the kernel is empty. The daemon carries the kernel named "default" itself, which an instance boots when it names none. |
 | `ListKernels` | [`ListKernelsRequest`](#listkernelsrequest) | [`ListKernelsResponse`](#listkernelsresponse) | ListKernels returns every kernel, the default one among them. |
 | `GetKernel` | [`GetKernelRequest`](#getkernelrequest) | [`Kernel`](#kernel) | GetKernel returns one kernel. |
-| `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance references. The default kernel cannot be deleted. |
+| `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance or snapshot references. The default kernel cannot be deleted. |
 | `CreateToken` | [`CreateTokenRequest`](#createtokenrequest) | [`IssuedToken`](#issuedtoken) | CreateToken makes a token for the daemon's TCP listener. It returns the token's value, which is never returned again: the daemon keeps only the SHA-256 of its secret. It fails with FAILED_PRECONDITION if the daemon is not served over TCP. |
 | `ListTokens` | [`ListTokensRequest`](#listtokensrequest) | [`ListTokensResponse`](#listtokensresponse) | ListTokens returns every token, without their values. |
 | `GetToken` | [`GetTokenRequest`](#gettokenrequest) | [`Token`](#token) | GetToken returns one token, without its value. |

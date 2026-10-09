@@ -34,7 +34,7 @@ func (h *instanceHandler) CopyToInstance(
 		return errdefs.InvalidArgument("path is required")
 	}
 
-	agent, closeAgent, err := h.agent(stream.Context(), start.GetName())
+	agent, closeAgent, err := h.instanceManager.Agent(stream.Context(), start.GetName())
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (h *instanceHandler) CopyFromInstance(
 		return errdefs.InvalidArgument("path is required")
 	}
 
-	agent, closeAgent, err := h.agent(stream.Context(), req.GetName())
+	agent, closeAgent, err := h.instanceManager.Agent(stream.Context(), req.GetName())
 	if err != nil {
 		return err
 	}

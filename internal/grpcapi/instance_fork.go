@@ -19,7 +19,7 @@ import (
 func (h *instanceHandler) ForkInstance(
 	ctx context.Context, req *dicerdv1.ForkInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	source, err := h.store.Instance(req.GetName())
+	source, err := h.instanceManager.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -27,15 +27,11 @@ func (h *instanceHandler) ForkInstance(
 	if err != nil {
 		return nil, err
 	}
-	if err := h.checkCanStart(fork); err != nil {
+
+	if err := h.instanceManager.ForkInstance(ctx, source.ID, fork); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.ForkInstance(ctx, source, fork); err != nil {
-		return nil, err
-	}
-
-	return h.view(fork)
+	return h.viewNamed(fork.ID)
 }
 
 // forkRequest is what a request to fork an instance or a snapshot says of

@@ -21,9 +21,8 @@ import (
 // An instance's status is read from and written to its runtime directory
 // directly, with no cache.
 
-// Status returns an instance's status. An instance with no status file is
-// Stopped.
-func (m *Manager) Status(instance Spec) (Status, error) {
+// statusOf is Status, for an instance its caller has looked up.
+func (m *Manager) statusOf(instance Spec) (Status, error) {
 	status, err := m.readStatus(instance.ID)
 	if err != nil {
 		return Status{}, err
@@ -34,6 +33,16 @@ func (m *Manager) Status(instance Spec) (Status, error) {
 		status.State = StateStandby
 	}
 	return status, nil
+}
+
+// Status returns an instance's status. An instance with no status file is
+// Stopped.
+func (m *Manager) Status(nameOrID string) (Status, error) {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return Status{}, err
+	}
+	return m.statusOf(instance)
 }
 
 // readStatus returns the status of an instance by ID.

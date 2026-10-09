@@ -28,7 +28,8 @@ func newTokenHandler(t *testing.T) (*tokenHandler, *filestore.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &tokenHandler{store: store, servesTCP: true, fingerprint: testFingerprint}, store
+	tokenManager := token.NewManager(token.Config{Store: store})
+	return &tokenHandler{tokenManager: tokenManager, servesTCP: true, fingerprint: testFingerprint}, store
 }
 
 // TestCreateTokenKeepsOnlyTheSecretsSHA256 checks that the value returned is

@@ -18,11 +18,6 @@ func (h *instanceHandler) GetInstanceLogs(
 	req *dicerdv1.GetInstanceLogsRequest,
 	stream grpc.ServerStreamingServer[dicerdv1.InstanceLogChunk],
 ) error {
-	spec, err := h.store.Instance(req.GetName())
-	if err != nil {
-		return err
-	}
-
 	source, err := logSources.fromProto(req.GetSource())
 	if err != nil {
 		return err
@@ -37,7 +32,7 @@ func (h *instanceHandler) GetInstanceLogs(
 		Follow:    req.GetFollow(),
 	}
 
-	return h.instanceManager.StreamLogs(stream.Context(), spec, options, logChunkWriter{stream: stream})
+	return h.instanceManager.StreamLogs(stream.Context(), req.GetName(), options, logChunkWriter{stream: stream})
 }
 
 // logChunkWriter is the io.Writer StreamLogs writes a log into, sending each

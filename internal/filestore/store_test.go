@@ -11,11 +11,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/token"
 )
@@ -28,8 +30,21 @@ func newTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 
 	return s
+}
+
+// addDefaults defines the kernel and network testInstance names.
+func addDefaults(t testing.TB, s *Store) {
+	t.Helper()
+
+	if err := s.CreateKernel(kernel.Kernel{ID: "kernel-default", Name: "default"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateNetwork(testNetwork("default")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testNetwork(name string) network.Network {
@@ -112,13 +127,10 @@ func TestDefinitionsSurviveReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
-	if err := s.CreateNetwork(testNetwork("default")); err != nil {
-		t.Fatalf("CreateNetwork: %v", err)
-	}
-
 	reopened, err := New(cfg)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
@@ -166,6 +178,7 @@ func TestMalformedDefinitionIsSkippedNotFatal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 	if err := s.CreateInstance(testInstance("good")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
@@ -200,6 +213,7 @@ func TestMisplacedDefinitionIsSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 	if err := s.CreateInstance(testInstance("web")); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
@@ -280,6 +294,7 @@ func BenchmarkMatchingInstances(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			addDefaults(b, s)
 			for i := range size {
 				if err := s.CreateInstance(testInstance("instance-" + strconv.Itoa(i))); err != nil {
 					b.Fatal(err)
@@ -301,6 +316,7 @@ func TestStagedSnapshotIsMovedIntoPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 
 	staged, err := s.StageSnapshot()
 	if err != nil {
@@ -342,7 +358,7 @@ func TestCreateSnapshotOfATakenNameFails(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StageSnapshot: %v", err)
 		}
-		err = s.CreateSnapshot(instance.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap"}, staged)
+		err = s.CreateSnapshot(instance.Snapshot{ID: "id-" + strconv.Itoa(i), Name: "snap", Instance: testInstance("web")}, staged)
 		if !errors.Is(err, want) {
 			t.Errorf("CreateSnapshot %d = %v, want %v", i, err, want)
 		}
@@ -358,6 +374,7 @@ func TestStagingLeftByACrashIsRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	addDefaults(t, s)
 	staged, err := s.StageSnapshot()
 	if err != nil {
 		t.Fatalf("StageSnapshot: %v", err)
@@ -419,5 +436,37 @@ func TestRecordTokenUseKeepsARotation(t *testing.T) {
 	}
 	if err := s.RecordTokenUse("gone", used); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("RecordTokenUse of a missing token = %v, want ErrNotFound", err)
+	}
+}
+
+// Writes are serialised, so of many creates of one name at once exactly one
+// succeeds, and the others find it taken.
+func TestConcurrentCreatesOfOneNameKeepOne(t *testing.T) {
+	s := newTestStore(t)
+
+	const attempts = 16
+	errs := make(chan error, attempts)
+	var wg sync.WaitGroup
+	for i := range attempts {
+		wg.Go(func() {
+			v := testInstance("web")
+			v.ID = "id-" + strconv.Itoa(i)
+			errs <- s.CreateInstance(v)
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	created := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			created++
+		case !errors.Is(err, errdefs.ErrExists):
+			t.Errorf("CreateInstance = %v, want nil or an exists error", err)
+		}
+	}
+	if created != 1 {
+		t.Errorf("%d creates succeeded, want 1", created)
 	}
 }

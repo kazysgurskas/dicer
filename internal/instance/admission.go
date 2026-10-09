@@ -109,7 +109,7 @@ func (m *Manager) allocated(excludeID string) (Resources, error) {
 			continue
 		}
 
-		status, err := m.Status(instance)
+		status, err := m.statusOf(instance)
 		if err != nil {
 			return Resources{}, err
 		}
@@ -133,7 +133,7 @@ func (m *Manager) checkPorts(instance Spec) error {
 			continue
 		}
 
-		status, err := m.Status(other)
+		status, err := m.statusOf(other)
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (m *Manager) checkVolumes(instance Spec) error {
 			continue
 		}
 
-		status, err := m.Status(other)
+		status, err := m.statusOf(other)
 		if err != nil {
 			return err
 		}

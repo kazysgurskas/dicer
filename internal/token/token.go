@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package token makes and reads the tokens a client presents to a daemon's
-// TCP listener.
+// TCP listener, and manages the daemon's record of them.
 //
 // A token is Prefix and a secret, usually followed by an underscore and the
 // daemon's fingerprint:

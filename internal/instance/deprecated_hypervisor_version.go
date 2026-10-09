@@ -45,7 +45,7 @@ func (m *Manager) WarnDeprecatedHypervisorVersions(ctx context.Context) {
 // is running or frozen on, or "" if it has no guest or its version cannot be
 // read.
 func (m *Manager) guestHypervisorVersion(instance Spec) string {
-	if status, err := m.Status(instance); err == nil && status.State.IsActive() {
+	if status, err := m.statusOf(instance); err == nil && status.State.IsActive() {
 		return status.HypervisorVersion
 	}
 	if !m.onStandby(instance) {

@@ -48,9 +48,8 @@ type LogOptions struct {
 	Follow bool
 }
 
-// StreamLogs writes an instance's log to w. With opts.Follow it keeps writing
-// until the instance stops or ctx is done.
-func (m *Manager) StreamLogs(ctx context.Context, instance Spec, opts LogOptions, w io.Writer) error {
+// streamLogs is StreamLogs, for an instance its caller has looked up.
+func (m *Manager) streamLogs(ctx context.Context, instance Spec, opts LogOptions, w io.Writer) error {
 	path, err := m.logPath(instance, opts.Source)
 	if err != nil {
 		return err
@@ -91,7 +90,7 @@ func (m *Manager) StreamLogs(ctx context.Context, instance Spec, opts LogOptions
 
 		// Once the instance has stopped, read once more for its last output.
 		// One still starting has not: its boot is what there is to follow.
-		if status, err := m.Status(instance); err == nil && !status.State.HoldsResources() {
+		if status, err := m.statusOf(instance); err == nil && !status.State.HoldsResources() {
 			ended = true
 			continue
 		}
@@ -102,6 +101,16 @@ func (m *Manager) StreamLogs(ctx context.Context, instance Spec, opts LogOptions
 		case <-time.After(logPollInterval):
 		}
 	}
+}
+
+// StreamLogs writes an instance's log to w. With opts.Follow it keeps writing
+// until the instance stops or ctx is done.
+func (m *Manager) StreamLogs(ctx context.Context, nameOrID string, opts LogOptions, w io.Writer) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.streamLogs(ctx, instance, opts, w)
 }
 
 // logPath returns the file a log source is written to.

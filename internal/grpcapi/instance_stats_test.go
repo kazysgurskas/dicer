@@ -39,7 +39,7 @@ func newInstanceStatsServer(t *testing.T) *Server {
 	t.Helper()
 
 	s, store := newTestServer(t)
-	if err := store.CreateInstance(instance.Spec{ID: "i-1", Name: "web"}); err != nil {
+	if err := store.CreateInstance(instance.Spec{ID: "i-1", Name: "web", KernelName: "default", NetworkName: "default"}); err != nil {
 		t.Fatal(err)
 	}
 	s.statsInterval = time.Millisecond

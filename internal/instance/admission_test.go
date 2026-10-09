@@ -51,11 +51,12 @@ func holding(t *testing.T, manager *Manager, instance Spec, state State, r Resou
 func TestStartRefusedWhenTheHostIsFull(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
+	h.define()
 
 	// 6 of the 7GiB are held: 2 more do not fit.
 	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
-	err := h.manager.Start(t.Context(), h.instance)
+	err := h.manager.start(t.Context(), h.instance)
 	if !errors.Is(err, errdefs.ErrResourceExhausted) {
 		t.Fatalf("Start = %v, want ErrResourceExhausted", err)
 	}
@@ -73,10 +74,11 @@ func TestStartRefusedWhenTheHostIsFull(t *testing.T) {
 func TestStartAdmittedWhenItFits(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
+	h.define()
 
 	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
@@ -103,9 +105,10 @@ func TestWhatHoldsResources(t *testing.T) {
 		t.Run(string(tt.state), func(t *testing.T) {
 			h, other := admitHarness(t)
 			h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
+			h.define()
 			holding(t, h.manager, other, tt.state, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
-			err := h.manager.Start(t.Context(), h.instance)
+			err := h.manager.start(t.Context(), h.instance)
 			if refused := errors.Is(err, errdefs.ErrResourceExhausted); refused != tt.holds {
 				t.Errorf("another instance %s: Start = %v, want refused %v", tt.state, err, tt.holds)
 			}
@@ -120,10 +123,10 @@ func TestRestoreAdmittedOnTheSnapshotsMemory(t *testing.T) {
 	h.instance.MemoryBytes = 1 << 30
 	h.start(t)
 
-	if _, err := h.manager.CreateSnapshot(t.Context(), h.instance, "big"); err != nil {
+	if _, err := h.manager.createSnapshot(t.Context(), h.instance, "big"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +137,7 @@ func TestRestoreAdmittedOnTheSnapshotsMemory(t *testing.T) {
 	h.store.snapshots["big"] = snapshot
 	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
-	_, err := h.manager.RestoreSnapshot(t.Context(), snapshot)
+	_, err := h.manager.restoreSnapshot(t.Context(), snapshot)
 	if !errors.Is(err, errdefs.ErrResourceExhausted) {
 		t.Errorf("RestoreSnapshot = %v, want ErrResourceExhausted", err)
 	}
@@ -144,6 +147,7 @@ func TestRestoreAdmittedOnTheSnapshotsMemory(t *testing.T) {
 func TestConcurrentStartsCannotBothTakeTheLastRoom(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 1<<30
+	h.define()
 	other.VCPUs, other.MemoryBytes = 1, 1<<30
 
 	store, _ := h.manager.store.(*fakeStore)
@@ -206,9 +210,10 @@ func TestCheckResources(t *testing.T) {
 func TestRefusalExplainsItself(t *testing.T) {
 	h, other := admitHarness(t)
 	h.instance.VCPUs, h.instance.MemoryBytes = 1, 2<<30
+	h.define()
 	holding(t, h.manager, other, StateRunning, Resources{VCPUs: 1, MemoryBytes: 6 << 30})
 
-	err := h.manager.Start(t.Context(), h.instance)
+	err := h.manager.start(t.Context(), h.instance)
 
 	want := `instance "web" needs 1 vCPU, 2 GiB, but 1 vCPU, 6 GiB of the 16 vCPU, 7 GiB ` +
 		`this host allows is committed`

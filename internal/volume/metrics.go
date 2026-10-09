@@ -41,11 +41,6 @@ func MetricDescriptions() []metric.Description {
 	return []metric.Description{volumesMetric, volumeSizeMetric, volumeDiskMetric}
 }
 
-// Store lists the volumes defined on this host.
-type Store interface {
-	Volumes() []Volume
-}
-
 // metrics are the descriptors of what a Manager reads at scrape time.
 type metrics struct {
 	volumes *prometheus.Desc
@@ -71,15 +66,11 @@ func (m *Manager) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements prometheus.Collector: the volumes defined, their size
 // and the disk they take up, as they are now.
 func (m *Manager) Collect(ch chan<- prometheus.Metric) {
-	if m.store == nil {
-		return
-	}
-
 	volumes := m.store.Volumes()
 	var sizeBytes, diskBytes int64
 	for _, v := range volumes {
 		sizeBytes += v.SizeBytes
-		diskBytes += m.DiskBytes(v.ID)
+		diskBytes += m.DiskBytes(v)
 	}
 	ch <- metric.GaugeReading(m.metrics.volumes, float64(len(volumes)))
 	ch <- metric.GaugeReading(m.metrics.size, float64(sizeBytes))

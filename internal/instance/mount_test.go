@@ -5,6 +5,7 @@ package instance
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
@@ -50,6 +51,7 @@ func TestValidateMountsRejectsInvalidMounts(t *testing.T) {
 			{Type: MountTypeVolume, Source: "v", Target: "/a"},
 			{Type: MountTypeVolume, Source: "v", Target: "/b"},
 		},
+		"more volumes than a guest has disks": tooManyVolumes(),
 	}
 
 	for name, mounts := range tests {
@@ -78,4 +80,13 @@ func TestMountEqualComparesContents(t *testing.T) {
 	if a.Equal(Mount{Type: MountTypeFile, Target: "/a", Content: []byte("two")}) {
 		t.Error("mounts with other contents are equal")
 	}
+}
+
+// tooManyVolumes returns one more volume mount than a guest can have.
+func tooManyVolumes() []Mount {
+	mounts := make([]Mount, MaxVolumeMounts+1)
+	for i := range mounts {
+		mounts[i] = Mount{Type: MountTypeVolume, Source: fmt.Sprintf("v%d", i), Target: fmt.Sprintf("/v%d", i)}
+	}
+	return mounts
 }

@@ -28,13 +28,13 @@ func TestOperationsAreRecordedWithTheirOutcome(t *testing.T) {
 
 	// Stopping an already-stopped instance succeeds, and is still an
 	// operation that happened.
-	if err := manager.Stop(context.Background(), instance); err != nil {
+	if err := manager.stop(context.Background(), instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
 	// Pausing one that is not running fails before it touches the host,
 	// which is exactly the kind of failure the counter should catch.
-	if err := manager.Pause(context.Background(), instance); err == nil {
+	if err := manager.Pause(context.Background(), instance.Name); err == nil {
 		t.Fatal("Pause on a stopped instance should fail")
 	}
 
@@ -75,7 +75,7 @@ func TestUsageIsReadPerScrape(t *testing.T) {
 		}
 	}
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatal(err)
 	}
 	if body := metrictest.Scrape(t, h.manager); !strings.Contains(body, `dicer_instances{state="stopped"} 1`) {
@@ -112,7 +112,7 @@ func TestStatsAreServedPerInstance(t *testing.T) {
 	}
 
 	// A stopped instance has no series rather than a stale one.
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatal(err)
 	}
 	if body := metrictest.Scrape(t, h.manager); strings.Contains(body, "dicer_instance_cpu_seconds_total{") {

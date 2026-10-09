@@ -18,7 +18,7 @@ import (
 // its first start.
 func TestCreateInstanceTooBigForTheHost(t *testing.T) {
 	s, store := newTestServer(t)
-	seedKernelAndNetwork(t, store)
+	seedKernel(t, store)
 
 	for _, tc := range []struct {
 		name   string
@@ -39,17 +39,11 @@ func TestCreateInstanceTooBigForTheHost(t *testing.T) {
 	}
 }
 
-// seedKernelAndNetwork defines the kernel k and the network default, which
-// an instance needs to be created.
-func seedKernelAndNetwork(t *testing.T, store *filestore.Store) {
+// seedKernel defines the kernel k, which the tests' instances boot.
+func seedKernel(t *testing.T, store *filestore.Store) {
 	t.Helper()
 
 	if err := store.CreateKernel(kernel.Kernel{ID: "k-1", Name: "k"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.CreateNetwork(network.Network{
-		ID: "n-1", Name: "default", Subnet: "10.0.0.0/24", Gateway: "10.0.0.1", Bridge: "dicer-default",
-	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -58,7 +52,7 @@ func seedKernelAndNetwork(t *testing.T, store *filestore.Store) {
 // is created.
 func TestCreateInstanceWithAMaximumTooBigForTheHost(t *testing.T) {
 	s, store := newTestServer(t)
-	seedKernelAndNetwork(t, store)
+	seedKernel(t, store)
 
 	_, err := s.CreateInstance(t.Context(), &dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
@@ -69,7 +63,7 @@ func TestCreateInstanceWithAMaximumTooBigForTheHost(t *testing.T) {
 
 func TestResizeInstanceRefusals(t *testing.T) {
 	s, store := newTestServer(t)
-	seedKernelAndNetwork(t, store)
+	seedKernel(t, store)
 	if err := store.CreateInstance(instance.Spec{
 		ID: "i-1", Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
 		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30, MaxVCPUs: 4, MaxMemoryBytes: 4 << 30,
@@ -101,7 +95,7 @@ func TestResizeInstanceRefusals(t *testing.T) {
 // refused.
 func TestInstanceRateLimits(t *testing.T) {
 	s, store := newTestServer(t)
-	seedKernelAndNetwork(t, store)
+	seedKernel(t, store)
 
 	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
@@ -123,7 +117,7 @@ func TestInstanceRateLimits(t *testing.T) {
 		t.Errorf("updated instance = %+v, want only the IOPS limit removed", spec)
 	}
 
-	_, err = s.newInstance(&dicerdv1.CreateInstanceRequest{
+	_, err = s.CreateInstance(t.Context(), &dicerdv1.CreateInstanceRequest{
 		Name: "web2", ImageRef: "alpine", KernelName: "k", NetworkName: "default",
 		Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30, UploadBytesPerSecond: -1,
 	})
@@ -133,10 +127,7 @@ func TestInstanceRateLimits(t *testing.T) {
 // An instance that names no kernel or network gets the default ones.
 func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
 	s, store := newTestServer(t)
-	seedKernelAndNetwork(t, store)
-	if err := store.CreateKernel(kernel.Kernel{ID: "k-2", Name: kernel.DefaultName}); err != nil {
-		t.Fatal(err)
-	}
+	seedKernel(t, store)
 
 	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
 		Name: "web", ImageRef: "alpine", Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30,

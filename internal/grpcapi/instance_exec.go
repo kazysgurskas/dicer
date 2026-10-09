@@ -29,7 +29,7 @@ func (h *instanceHandler) ExecInstance(stream execClientStream) error {
 		return errdefs.InvalidArgument("first message must be an ExecInstanceStart")
 	}
 
-	agent, closeAgent, err := h.agent(ctx, start.GetName())
+	agent, closeAgent, err := h.instanceManager.Agent(ctx, start.GetName())
 	if err != nil {
 		return err
 	}

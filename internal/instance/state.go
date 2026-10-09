@@ -17,7 +17,7 @@ func (m *Manager) transition(instance Spec, to State) error {
 
 // transitionWith is transition that also applies update in the same write.
 func (m *Manager) transitionWith(instance Spec, to State, update func(*Status)) error {
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}

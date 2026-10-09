@@ -23,17 +23,17 @@ import (
 func TestForkOfMemorySnapshotRunsAsItself(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "snap")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fork := forkOf(snapshot.Instance, "copy")
-	if err := h.manager.ForkSnapshot(t.Context(), snapshot, fork); err != nil {
+	if err := h.manager.forkSnapshot(t.Context(), snapshot, fork); err != nil {
 		t.Fatalf("ForkSnapshot: %v", err)
 	}
 
-	status, err := h.manager.Status(fork)
+	status, err := h.manager.statusOf(fork)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestForkOfMemorySnapshotRunsAsItself(t *testing.T) {
 	}
 	assertSameFile(t, h.manager.overlayDiskPath(fork), h.manager.snapshotOverlayDiskPath(snapshot))
 
-	allocation, err := h.manager.Allocation(fork)
+	allocation, err := h.manager.allocationOf(fork)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,17 +77,17 @@ func TestForkOfMemorySnapshotRunsAsItself(t *testing.T) {
 
 func TestForkOfDiskSnapshotIsStopped(t *testing.T) {
 	h := newHarness(t)
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "cold")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "cold")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fork := forkOf(snapshot.Instance, "copy")
-	if err := h.manager.ForkSnapshot(t.Context(), snapshot, fork); err != nil {
+	if err := h.manager.forkSnapshot(t.Context(), snapshot, fork); err != nil {
 		t.Fatalf("ForkSnapshot: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != StateStopped {
+	if status, _ := h.manager.statusOf(fork); status.State != StateStopped {
 		t.Errorf("fork is %s, want %s", status.State, StateStopped)
 	}
 	if h.starter.vmmCount() != 0 {
@@ -110,13 +110,13 @@ func TestFailedForkLeavesNoInstance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.running(t)
-			snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "snap")
+			snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
 			if err != nil {
 				t.Fatal(err)
 			}
 			h.agent.identityErr = tt.identityErr
 
-			err = h.manager.ForkSnapshot(t.Context(), snapshot, forkOf(snapshot.Instance, "copy"))
+			err = h.manager.forkSnapshot(t.Context(), snapshot, forkOf(snapshot.Instance, "copy"))
 			if err == nil || (tt.want != nil && !errors.Is(err, tt.want)) {
 				t.Errorf("ForkSnapshot = %v, want a failure (%v)", err, tt.want)
 			}
@@ -132,13 +132,13 @@ func TestFailedForkLeavesNoInstance(t *testing.T) {
 func TestRestoreSetsTheGuestsClock(t *testing.T) {
 	h := newHarness(t)
 	h.running(t)
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "snap")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.stopped(t)
 
-	if _, err := h.manager.RestoreSnapshot(t.Context(), snapshot); err != nil {
+	if _, err := h.manager.restoreSnapshot(t.Context(), snapshot); err != nil {
 		t.Fatalf("RestoreSnapshot: %v", err)
 	}
 
@@ -158,11 +158,11 @@ func TestForkOfRunningInstanceRunsBesideIt(t *testing.T) {
 	h.running(t)
 
 	fork := forkOf(h.instance, "copy")
-	if err := h.manager.ForkInstance(t.Context(), h.instance, fork); err != nil {
+	if err := h.manager.forkInstance(t.Context(), h.instance, fork); err != nil {
 		t.Fatalf("ForkInstance: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != StateRunning {
+	if status, _ := h.manager.statusOf(fork); status.State != StateRunning {
 		t.Errorf("fork is %s, want %s", status.State, StateRunning)
 	}
 	if status := h.status(t); status.State != StateRunning {
@@ -190,11 +190,11 @@ func TestForkOfStoppedInstanceIsStopped(t *testing.T) {
 	h := newHarness(t)
 
 	fork := forkOf(h.instance, "copy")
-	if err := h.manager.ForkInstance(t.Context(), h.instance, fork); err != nil {
+	if err := h.manager.forkInstance(t.Context(), h.instance, fork); err != nil {
 		t.Fatalf("ForkInstance: %v", err)
 	}
 
-	if status, _ := h.manager.Status(fork); status.State != StateStopped {
+	if status, _ := h.manager.statusOf(fork); status.State != StateStopped {
 		t.Errorf("fork is %s, want %s", status.State, StateStopped)
 	}
 	if h.starter.vmmCount() != 0 {
@@ -210,7 +210,7 @@ func TestRefusedForkOfInstanceDefinesNothing(t *testing.T) {
 	h.instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 	h.running(t)
 
-	err := h.manager.ForkInstance(t.Context(), h.instance, forkOf(h.instance, "copy"))
+	err := h.manager.forkInstance(t.Context(), h.instance, forkOf(h.instance, "copy"))
 	if !errors.Is(err, errdefs.ErrInvalidState) {
 		t.Errorf("ForkInstance of an instance that can write to a volume = %v, want ErrInvalidState", err)
 	}

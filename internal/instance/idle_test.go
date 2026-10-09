@@ -79,7 +79,7 @@ func TestIdleInstanceIsPutOnStandby(t *testing.T) {
 			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
 			if tt.paused {
-				if err := h.manager.Pause(t.Context(), h.instance); err != nil {
+				if err := h.manager.Pause(t.Context(), h.instance.Name); err != nil {
 					t.Fatal(err)
 				}
 			}

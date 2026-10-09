@@ -19,8 +19,8 @@ func TestGetResources(t *testing.T) {
 	s, store := newTestServer(t)
 
 	for _, instance := range []instance.Spec{
-		{ID: "i-1", Name: "web", VCPUs: 2, MemoryBytes: 1 << 30, DiskBytes: 10 << 30},
-		{ID: "i-2", Name: "db", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 20 << 30},
+		{ID: "i-1", Name: "web", KernelName: "default", NetworkName: "default", VCPUs: 2, MemoryBytes: 1 << 30, DiskBytes: 10 << 30},
+		{ID: "i-2", Name: "db", KernelName: "default", NetworkName: "default", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 20 << 30},
 	} {
 		if err := store.CreateInstance(instance); err != nil {
 			t.Fatal(err)

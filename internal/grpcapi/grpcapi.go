@@ -14,21 +14,19 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
+	"github.com/konradasb/dicer/internal/token"
 	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // Config holds the dependencies for creating a Server.
 type Config struct {
-	Store           *filestore.Store
 	NetworkManager  *network.Manager
 	InstanceManager *instance.Manager
 
@@ -36,9 +34,9 @@ type Config struct {
 	ImageManager  *image.Manager
 	KernelManager *kernel.Manager
 	VolumeManager *volume.Manager
+	TokenManager  *token.Manager
 
-	// Events is the event log GetEvents reads and the handlers record to.
-	// Nil records nothing.
+	// Events is the event log GetEvents reads.
 	Events *event.Log
 
 	// ListenAddress is the address the TCP listener is bound to, such as
@@ -59,34 +57,11 @@ type Config struct {
 	// clients verify for themselves.
 	TokenFingerprint string
 
-	// HostSubnets returns the subnets of the host's interfaces, which a new
-	// network may not overlap. Nil skips the check.
-	HostSubnets func() ([]netip.Prefix, error)
-
 	// DataDir is the data directory, whose disk GetResources reports on.
 	DataDir string
 
 	// Version is the daemon's version, as GetHostInfo reports it.
 	Version string
-}
-
-// recorder records what happens to the resources the API changes.
-type recorder interface {
-	Record(e event.Event)
-}
-
-// discardRecorder is the recorder used when no event log is configured.
-type discardRecorder struct{}
-
-func (discardRecorder) Record(event.Event) {}
-
-// recorderOf returns log as a recorder, or one that discards if log is nil.
-func recorderOf(log *event.Log) recorder {
-	if log == nil {
-		return discardRecorder{}
-	}
-
-	return log
 }
 
 // Server implements dicerdv1.DaemonServiceServer through its embedded
@@ -110,40 +85,28 @@ type Server struct {
 func NewServer(cfg Config) *Server {
 	return &Server{
 		instanceHandler: instanceHandler{
-			store:           cfg.Store,
 			instanceManager: cfg.InstanceManager,
 
 			statsInterval: instanceStatsInterval,
 		},
-		snapshotHandler: snapshotHandler{store: cfg.Store, instanceManager: cfg.InstanceManager},
+		snapshotHandler: snapshotHandler{instanceManager: cfg.InstanceManager},
 		networkHandler: networkHandler{
-			store:          cfg.Store,
-			networkManager: cfg.NetworkManager,
-			hostSubnets:    cfg.HostSubnets,
-			events:         recorderOf(cfg.Events),
+			networkManager:  cfg.NetworkManager,
+			instanceManager: cfg.InstanceManager,
 		},
-		volumeHandler: volumeHandler{
-			store:         cfg.Store,
-			volumeManager: cfg.VolumeManager,
-			events:        recorderOf(cfg.Events),
-		},
-		kernelHandler: kernelHandler{
-			store:         cfg.Store,
-			kernelManager: cfg.KernelManager,
-			events:        recorderOf(cfg.Events),
-		},
+		volumeHandler: volumeHandler{volumeManager: cfg.VolumeManager},
+		kernelHandler: kernelHandler{kernelManager: cfg.KernelManager},
 		tokenHandler: tokenHandler{
-			store:       cfg.Store,
-			servesTCP:   cfg.ListenAddress != "",
-			fingerprint: cfg.TokenFingerprint,
+			tokenManager: cfg.TokenManager,
+			servesTCP:    cfg.ListenAddress != "",
+			fingerprint:  cfg.TokenFingerprint,
 		},
 		imageHandler: imageHandler{
-			store:           cfg.Store,
 			instanceManager: cfg.InstanceManager,
 			imageManager:    cfg.ImageManager,
 		},
 		resourceHandler: resourceHandler{
-			store:           cfg.Store,
+			volumeManager:   cfg.VolumeManager,
 			instanceManager: cfg.InstanceManager,
 			dataDir:         cfg.DataDir,
 		},
@@ -162,15 +125,4 @@ func NewServer(cfg Config) *Server {
 // Register registers the server's services with a gRPC server.
 func (s *Server) Register(gs *grpc.Server) {
 	dicerdv1.RegisterDaemonServiceServer(gs, s)
-}
-
-// refuseInUse returns an ErrInvalidState error naming the first instance
-// for which inUse is true, or nil. what reads like `kernel "k" is in use`.
-func refuseInUse(store *filestore.Store, what string, inUse func(instance.Spec) bool) error {
-	for _, instance := range store.Instances() {
-		if inUse(instance) {
-			return errdefs.InvalidState("%s by instance %q", what, instance.Name)
-		}
-	}
-	return nil
 }

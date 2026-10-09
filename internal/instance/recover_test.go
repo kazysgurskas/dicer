@@ -61,7 +61,7 @@ func TestRecoverAdoptsLiveInstance(t *testing.T) {
 
 	manager.Recover(ctx)
 
-	status, err := manager.Status(instance)
+	status, err := manager.statusOf(instance)
 	if err != nil {
 		t.Fatalf("get runtime: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestRecoverKillsVMMOfInterruptedStop(t *testing.T) {
 		t.Error("the VMM of an interrupted stop is still running")
 	}
 
-	status, err := manager.Status(instance)
+	status, err := manager.statusOf(instance)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestRecoverCleansUpDeadInstance(t *testing.T) {
 
 	manager.Recover(ctx)
 
-	status, err := manager.Status(instance)
+	status, err := manager.statusOf(instance)
 	if err != nil {
 		t.Fatalf("get runtime: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestRecoverCleansUpInterruptedStart(t *testing.T) {
 
 	manager.Recover(ctx)
 
-	status, err := manager.Status(instance)
+	status, err := manager.statusOf(instance)
 	if err != nil {
 		t.Fatalf("get runtime: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestStartOnBootOnlyStartsInstancesThatAskToBeRunning(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get instance: %v", err)
 		}
-		status, err := manager.Status(instance)
+		status, err := manager.statusOf(instance)
 		if err != nil {
 			t.Fatalf("get runtime: %v", err)
 		}

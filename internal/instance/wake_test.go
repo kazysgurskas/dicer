@@ -44,7 +44,7 @@ func newWakeHarness(t *testing.T, standbyAfter time.Duration) *wakeHarness {
 	}
 
 	h.start(t)
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatal(err)
 	}
 	return h
@@ -63,7 +63,7 @@ func TestConnectionWakesInstanceOnStandby(t *testing.T) {
 	if status := h.status(t); status.State != StateRunning {
 		t.Errorf("state = %s, want %s", status.State, StateRunning)
 	}
-	allocation, err := h.manager.Allocation(h.instance)
+	allocation, err := h.manager.allocationOf(h.instance)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestStopEndsListening(t *testing.T) {
 		t.Fatal("the daemon does not listen to wake an instance on standby")
 	}
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatal(err)
 	}
 	if h.listening() {
@@ -219,7 +219,7 @@ func freePort(t *testing.T) int {
 func TestStartResumesInstanceTheDaemonListensFor(t *testing.T) {
 	h := newWakeHarness(t, 15*time.Minute)
 
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if status := h.status(t); status.State != StateRunning {

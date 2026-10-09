@@ -123,6 +123,10 @@ func validateMounts(mounts []Mount) error {
 			volumes[m.Source] = struct{}{}
 		}
 	}
+	if len(volumes) > MaxVolumeMounts {
+		return errdefs.InvalidArgument(
+			"%d volumes given: an instance can mount at most %d", len(volumes), MaxVolumeMounts)
+	}
 
 	return nil
 }

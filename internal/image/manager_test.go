@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -329,6 +330,20 @@ func TestManager_List(t *testing.T) {
 	}
 }
 
+// An image in use is not deleted, and the refusal names what uses it.
+func TestDeleteRefusesAnImageInUse(t *testing.T) {
+	m, fakeRegistry := newManagerWithFakes(t)
+	image := pullTestImage(t, m, fakeRegistry, "docker.io/library/nginx:1.27", "sha256:aaa")
+
+	err := m.Delete("docker.io/library/nginx:1.27", InUse{image.Digest: `instance "web"`})
+	if !errors.Is(err, errdefs.ErrInvalidState) || !strings.Contains(err.Error(), `instance "web"`) {
+		t.Errorf("Delete = %v, want an invalid state error naming instance web", err)
+	}
+	if _, err := m.Image("docker.io/library/nginx:1.27"); err != nil {
+		t.Errorf("the image in use is gone: %v", err)
+	}
+}
+
 func TestManager_Delete(t *testing.T) {
 	testDir := t.TempDir()
 
@@ -354,7 +369,7 @@ func TestManager_Delete(t *testing.T) {
 	}
 
 	// Delete image
-	err = manager.Delete("alpine:latest")
+	err = manager.Delete("alpine:latest", nil)
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
@@ -384,7 +399,7 @@ func TestManager_Delete_NotFound(t *testing.T) {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 
-	if err := manager.Delete("alpine:latest"); !errors.Is(err, errdefs.ErrNotFound) {
+	if err := manager.Delete("alpine:latest", nil); !errors.Is(err, errdefs.ErrNotFound) {
 		t.Errorf("Delete() of an absent image = %v, want ErrNotFound", err)
 	}
 }
@@ -675,7 +690,7 @@ func TestManager_Delete_PartialCleanup(t *testing.T) {
 	}
 
 	// Delete should still succeed
-	err = manager.Delete("alpine:latest")
+	err = manager.Delete("alpine:latest", nil)
 	if err != nil {
 		t.Fatalf("Delete() should succeed even with missing files: %v", err)
 	}
@@ -726,7 +741,7 @@ func TestManager_DeleteAfterTagMoved(t *testing.T) {
 	// The tag now points somewhere else upstream. Deleting it must still
 	// remove the image this host pulled under it.
 	digest = after
-	if err := manager.Delete("alpine:latest"); err != nil {
+	if err := manager.Delete("alpine:latest", nil); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if _, ok := manager.index.get(image.Digest); ok {

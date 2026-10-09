@@ -167,10 +167,10 @@ func newNetworkShowCommand() *cobra.Command {
 func newNetworkDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete (NAME... | --all)",
-		Short: "Delete one or more networks no instance uses, or all of them",
+		Short: "Delete one or more networks no instance or snapshot uses, or all of them",
 		Long: "Deletes the networks named, or with --all every network, asking first on a\n" +
-			"terminal. A network an instance is defined on is refused, and so is the\n" +
-			"default network, which --all leaves alone.",
+			"terminal. A network an instance or a snapshot uses is refused, and so is\n" +
+			"the default network, which --all leaves alone.",
 		Args:              namesOrAll("network name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, withoutDefault(listNetworks)),

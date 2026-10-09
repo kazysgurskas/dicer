@@ -25,7 +25,7 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 	h.start(t)
 	vmm := h.starter.vmm()
 
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Standby: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 		t.Error("no standby event was recorded")
 	}
 
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 func TestStandbyOutlivesTheRuntimeStatus(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,7 +106,7 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 			volumes := fakeVolumes{dir: t.TempDir()}
 			h.manager.volumes = volumes
 			h.store.volumes["data"] = volume.Volume{ID: "vol-data", Name: "data"}
-			disk := volumes.Path("vol-data")
+			disk := volumes.Path(volume.Volume{ID: "vol-data"})
 			if err := os.MkdirAll(filepath.Dir(disk), 0o750); err != nil {
 				t.Fatal(err)
 			}
@@ -116,7 +116,7 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 			tt.share(&h.instance)
 			h.store.instances[h.instance.Name] = h.instance
 			h.start(t)
-			if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+			if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 				t.Fatal(err)
 			}
 
@@ -124,7 +124,7 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 			tt.share(&other)
 			h.store.instances[other.Name] = other
 
-			if err := h.manager.Start(t.Context(), other); !errors.Is(err, errdefs.ErrInvalidState) {
+			if err := h.manager.start(t.Context(), other); !errors.Is(err, errdefs.ErrInvalidState) {
 				t.Errorf("Start of an instance sharing the %s = %v, want ErrInvalidState", tt.name, err)
 			}
 		})
@@ -136,18 +136,18 @@ func TestStandbyKeepsItsPortsAndVolumes(t *testing.T) {
 func TestStopDiscardsStandby(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if status := h.status(t); status.State != StateStopped {
 		t.Errorf("state = %s, want %s", status.State, StateStopped)
 	}
 
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if len(h.starter.restoredFrom) != 0 {
@@ -159,7 +159,7 @@ func TestStandbyRejections(t *testing.T) {
 	t.Run("stopped instance", func(t *testing.T) {
 		h := newHarness(t)
 
-		if err := h.manager.Standby(t.Context(), h.instance); !errors.Is(err, errdefs.ErrInvalidState) {
+		if err := h.manager.Standby(t.Context(), h.instance.Name); !errors.Is(err, errdefs.ErrInvalidState) {
 			t.Errorf("Standby of a stopped instance = %v, want ErrInvalidState", err)
 		}
 	})
@@ -169,7 +169,7 @@ func TestStandbyRejections(t *testing.T) {
 		h.start(t)
 		h.hv.capabilities = hypervisor.Capabilities{SupportsPause: true}
 
-		if err := h.manager.Standby(t.Context(), h.instance); !errors.Is(err, errors.ErrUnsupported) {
+		if err := h.manager.Standby(t.Context(), h.instance.Name); !errors.Is(err, errors.ErrUnsupported) {
 			t.Errorf("Standby = %v, want ErrUnsupported", err)
 		}
 	})
@@ -177,7 +177,7 @@ func TestStandbyRejections(t *testing.T) {
 	t.Run("instance on standby changed", func(t *testing.T) {
 		h := newHarness(t)
 		h.start(t)
-		if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+		if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 			t.Fatal(err)
 		}
 
@@ -196,7 +196,7 @@ func TestFailedStandbyKeepsTheGuestRunning(t *testing.T) {
 	h.start(t)
 	h.hv.snapshotErr = errors.New("out of disk")
 
-	if err := h.manager.Standby(t.Context(), h.instance); err == nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err == nil {
 		t.Fatal("Standby succeeded despite the hypervisor failing")
 	}
 
@@ -219,7 +219,7 @@ func TestStandbyWaitsForMemoryWithTheGuestRunning(t *testing.T) {
 	h.start(t)
 	h.hv.restoringSnapshots = 1
 
-	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Standby: %v", err)
 	}
 

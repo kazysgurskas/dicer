@@ -13,12 +13,12 @@ import (
 	"github.com/konradasb/dicer/internal/image/reference"
 )
 
-// Prune removes every image whose digest is not in keep, and the layers in
-// the layer cache only they needed.
-func (m *Manager) Prune(keep map[string]struct{}) (PruneResult, error) {
+// Prune removes every image not in use, and the layers in the layer cache
+// only they needed.
+func (m *Manager) Prune(inUse InUse) (PruneResult, error) {
 	var unused []*Image
 	for _, image := range m.index.list() {
-		if _, ok := keep[image.Digest]; !ok {
+		if _, ok := inUse[image.Digest]; !ok {
 			unused = append(unused, image)
 		}
 	}

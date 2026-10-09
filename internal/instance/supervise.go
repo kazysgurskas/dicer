@@ -196,7 +196,7 @@ func (m *Manager) handleExit(ctx context.Context, instance Spec, vmm *process.Pr
 		instance = current
 	}
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		m.logger.WarnContext(ctx, "cannot read instance status", "instance", instance.Name, "error", err)
 	}
@@ -283,7 +283,7 @@ func (m *Manager) scheduleRemoval(ctx context.Context, instance Spec) {
 	ctx = context.WithoutCancel(ctx)
 
 	m.watchers.Go(func() {
-		if err := m.Delete(ctx, instance, false); err != nil {
+		if err := m.delete(ctx, instance, false); err != nil {
 			m.logger.ErrorContext(ctx, "cannot delete the instance that asked to be deleted when it stopped",
 				"instance", instance.Name, "error", err)
 		}
@@ -350,7 +350,7 @@ func (m *Manager) restart(ctx context.Context, instanceID string, pending *pendi
 	if err != nil {
 		return
 	}
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil || status.State != StateRestarting {
 		return
 	}

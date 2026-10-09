@@ -66,7 +66,7 @@ func TestRemoveOnExitDeletesAStoppedInstance(t *testing.T) {
 	h.setRemoveOnExit(t)
 	h.start(t)
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	h.waitForRemoval(t)

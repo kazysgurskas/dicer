@@ -72,7 +72,7 @@ func TestBootWarnsOfDeprecatedHypervisorVersion(t *testing.T) {
 
 	h.instance.HypervisorVersion = testHypervisorVersion
 	h.store.instances[h.instance.Name] = h.instance
-	if err := h.manager.Start(t.Context(), h.instance); err != nil {
+	if err := h.manager.start(t.Context(), h.instance); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 

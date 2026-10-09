@@ -5,14 +5,9 @@ package grpcapi
 
 import (
 	"context"
-	"fmt"
-	"net/netip"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/event"
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
@@ -20,10 +15,8 @@ import (
 
 // networkHandler handles network-related RPCs.
 type networkHandler struct {
-	store          *filestore.Store
-	networkManager *network.Manager
-	hostSubnets    func() ([]netip.Prefix, error)
-	events         recorder
+	networkManager  *network.Manager
+	instanceManager *instance.Manager
 }
 
 // CreateNetwork records a network, refusing a subnet another network or
@@ -31,7 +24,7 @@ type networkHandler struct {
 func (h *networkHandler) CreateNetwork(
 	_ context.Context, req *dicerdv1.CreateNetworkRequest,
 ) (*dicerdv1.Network, error) {
-	n, err := network.New(network.Spec{
+	n, err := h.networkManager.Create(network.Spec{
 		Name:        req.GetName(),
 		Subnet:      req.GetSubnet(),
 		Gateway:     req.GetGateway(),
@@ -43,40 +36,14 @@ func (h *networkHandler) CreateNetwork(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.store.Network(n.Name); err == nil {
-		return nil, errdefs.Exists("network %q already exists", n.Name)
-	}
-
-	var hostSubnets []netip.Prefix
-	if h.hostSubnets != nil {
-		if hostSubnets, err = h.hostSubnets(); err != nil {
-			return nil, fmt.Errorf("list the host's subnets: %w", err)
-		}
-	}
-	if err := network.CheckSubnetOverlap(n, h.store.Networks(), hostSubnets); err != nil {
-		return nil, err
-	}
-
-	if err := h.store.CreateNetwork(n); err != nil {
-		return nil, err
-	}
-	message := fmt.Sprintf("Created network with subnet %s, gateway %s", n.Subnet, n.Gateway)
-	if n.Isolated {
-		message += "; isolated: its instances cannot reach each other"
-	}
-	if n.Internal {
-		message += "; internal: its instances cannot reach the host or beyond it"
-	}
-	h.record(n, event.ActionCreated, message)
-
 	return networkToProto(n, 0), nil
 }
 
-// ListNetworks lists the networks with their address usage, sorted by name.
+// ListNetworks lists the networks, sorted by name, with their address usage.
 func (h *networkHandler) ListNetworks(
 	_ context.Context, _ *dicerdv1.ListNetworksRequest,
 ) (*dicerdv1.ListNetworksResponse, error) {
-	networks := h.store.Networks()
+	networks := h.networkManager.Networks()
 
 	resp := &dicerdv1.ListNetworksResponse{
 		Networks: make([]*dicerdv1.Network, 0, len(networks)),
@@ -96,77 +63,38 @@ func (h *networkHandler) ListNetworks(
 func (h *networkHandler) GetNetwork(
 	_ context.Context, req *dicerdv1.GetNetworkRequest,
 ) (*dicerdv1.Network, error) {
-	n, err := h.store.Network(req.GetName())
+	n, err := h.networkManager.Network(req.GetName())
 	if err != nil {
 		return nil, err
 	}
-
 	allocations, err := h.networkManager.List(n.Name)
 	if err != nil {
 		return nil, err
 	}
-
 	return networkToProto(n, len(allocations)), nil
 }
 
 // DeleteNetwork removes a network and its allocations, refusing the default
-// network and one an instance is on.
+// network and one an instance or snapshot is on.
 func (h *networkHandler) DeleteNetwork(
 	_ context.Context, req *dicerdv1.DeleteNetworkRequest,
 ) (*emptypb.Empty, error) {
-	n, err := h.store.Network(req.GetName())
-	if err != nil {
+	if err := h.networkManager.Delete(req.GetName()); err != nil {
 		return nil, err
 	}
-	if n.Name == network.DefaultName {
-		return nil, errdefs.InvalidArgument("the default network cannot be deleted")
-	}
-
-	inUse := func(instance instance.Spec) bool { return instance.NetworkName == n.Name }
-	if err := refuseInUse(h.store, fmt.Sprintf("network %q is in use", n.Name), inUse); err != nil {
-		return nil, err
-	}
-
-	if err := h.store.DeleteNetwork(n.Name); err != nil {
-		return nil, err
-	}
-	h.record(n, event.ActionDeleted, "Deleted network with subnet "+n.Subnet)
-
-	if err := h.networkManager.Forget(n.Name); err != nil {
-		return nil, fmt.Errorf("discard allocations: %w", err)
-	}
-
 	return &emptypb.Empty{}, nil
-}
-
-// record records that action happened to n, with its subnet and gateway
-// among the attributes.
-func (h *networkHandler) record(n network.Network, action event.Action, message string) {
-	h.events.Record(event.Event{
-		Kind:       event.KindNetwork,
-		ID:         n.ID,
-		Name:       n.Name,
-		Action:     action,
-		Message:    message,
-		Attributes: map[string]string{"subnet": n.Subnet, "gateway": n.Gateway},
-	})
 }
 
 // ListNetworkAllocations lists the addresses a network has allocated.
 func (h *networkHandler) ListNetworkAllocations(
 	_ context.Context, req *dicerdv1.ListNetworkAllocationsRequest,
 ) (*dicerdv1.ListNetworkAllocationsResponse, error) {
-	n, err := h.store.Network(req.GetName())
+	allocations, err := h.networkManager.List(req.GetName())
 	if err != nil {
 		return nil, err
 	}
 
-	allocations, err := h.networkManager.List(n.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	instances := h.store.Instances()
+	instances := h.instanceManager.Instances()
 	nameByID := make(map[string]string, len(instances))
 	for _, instance := range instances {
 		nameByID[instance.ID] = instance.Name

@@ -41,7 +41,7 @@ func TestStopShutsTheGuestDownGracefully(t *testing.T) {
 	h, asked, forced := gracefulHarness(t, true)
 	h.start(t)
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
@@ -61,7 +61,7 @@ func TestStopEndsAGuestThatIgnoresTheShutdown(t *testing.T) {
 	h.start(t)
 
 	started := time.Now()
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestStopEndsAGuestThatCannotBeAsked(t *testing.T) {
 	h.manager.stopGracePeriod = time.Hour
 	h.start(t)
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if forced.Load() != 1 {
@@ -94,7 +94,7 @@ func TestForcedDeleteIsNotGraceful(t *testing.T) {
 	h, asked, _ := gracefulHarness(t, true)
 	h.start(t)
 
-	if err := h.manager.Delete(t.Context(), h.instance, true); err != nil {
+	if err := h.manager.delete(t.Context(), h.instance, true); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if asked.Load() != 0 {
@@ -107,11 +107,11 @@ func TestPausedGuestIsNotAskedToShutDown(t *testing.T) {
 	h, asked, forced := gracefulHarness(t, true)
 	h.manager.stopGracePeriod = time.Hour
 	h.start(t)
-	if err := h.manager.Pause(t.Context(), h.instance); err != nil {
+	if err := h.manager.Pause(t.Context(), h.instance.Name); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if asked.Load() != 0 || forced.Load() != 1 {

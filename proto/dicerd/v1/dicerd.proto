@@ -158,8 +158,8 @@ service DaemonService {
   rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse);
   // GetNetwork returns one network.
   rpc GetNetwork(GetNetworkRequest) returns (Network);
-  // DeleteNetwork removes a network that no instance references. The
-  // default network cannot be deleted.
+  // DeleteNetwork removes a network that no instance or snapshot
+  // references. The default network cannot be deleted.
   rpc DeleteNetwork(DeleteNetworkRequest) returns (google.protobuf.Empty);
   // ListNetworkAllocations reports which addresses are assigned on a network.
   // Allocation itself is a side effect of starting an instance and has no
@@ -172,7 +172,7 @@ service DaemonService {
   rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
   // GetVolume returns one volume.
   rpc GetVolume(GetVolumeRequest) returns (Volume);
-  // DeleteVolume removes a volume that no instance references.
+  // DeleteVolume removes a volume that no instance or snapshot references.
   rpc DeleteVolume(DeleteVolumeRequest) returns (google.protobuf.Empty);
 
   // PullImage fetches an OCI image and converts it to a bootable root
@@ -201,8 +201,8 @@ service DaemonService {
   rpc ListKernels(ListKernelsRequest) returns (ListKernelsResponse);
   // GetKernel returns one kernel.
   rpc GetKernel(GetKernelRequest) returns (Kernel);
-  // DeleteKernel removes a kernel that no instance references. The default
-  // kernel cannot be deleted.
+  // DeleteKernel removes a kernel that no instance or snapshot references.
+  // The default kernel cannot be deleted.
   rpc DeleteKernel(DeleteKernelRequest) returns (google.protobuf.Empty);
 
   // CreateToken makes a token for the daemon's TCP listener. It returns the

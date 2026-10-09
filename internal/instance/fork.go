@@ -16,27 +16,41 @@ import (
 	"github.com/konradasb/dicer/internal/humanize"
 )
 
+// forkSnapshot is ForkSnapshot, for a snapshot its caller has looked up.
+func (m *Manager) forkSnapshot(ctx context.Context, snapshot Snapshot, instance Spec) (err error) {
+	started := time.Now()
+	defer func() { m.observeOperation(operationForkSnapshot, started, err) }()
+
+	if err := m.checkCanStart(instance); err != nil {
+		return err
+	}
+
+	from := fmt.Sprintf("%s snapshot %q of instance %s", snapshot.Kind, snapshot.Name, snapshot.Instance.Name)
+	return m.fork(ctx, m.frozenSnapshot(snapshot), instance, from, map[string]string{"snapshot": snapshot.Name})
+}
+
 // ForkSnapshot creates instance as a copy of the one snapshot was taken of,
 // under an identity of its own: the caller defines it from
 // snapshot.Instance with its own ID, name and address. From a memory
 // snapshot the copy runs, resumed where the snapshot's guest was and then
 // given that identity; from a disk snapshot it is stopped, to boot from the
 // snapshot's disk. A fork that fails leaves no instance behind.
-func (m *Manager) ForkSnapshot(ctx context.Context, snapshot Snapshot, instance Spec) (err error) {
-	started := time.Now()
-	defer func() { m.observeOperation(operationForkSnapshot, started, err) }()
-
-	from := fmt.Sprintf("%s snapshot %q of instance %s", snapshot.Kind, snapshot.Name, snapshot.Instance.Name)
-	return m.fork(ctx, m.frozenSnapshot(snapshot), instance, from, map[string]string{"snapshot": snapshot.Name})
+func (m *Manager) ForkSnapshot(ctx context.Context, nameOrID string, instance Spec) error {
+	snapshot, err := m.store.Snapshot(nameOrID)
+	if err != nil {
+		return err
+	}
+	return m.forkSnapshot(ctx, snapshot, instance)
 }
 
-// ForkInstance creates instance as a copy of source. It is ForkSnapshot of a
-// snapshot of source taken now, except that the snapshot is not kept. The
-// caller defines instance from source. See writeSnapshot for the states
-// source can be forked in.
-func (m *Manager) ForkInstance(ctx context.Context, source, instance Spec) (err error) {
+// forkInstance is ForkInstance, for a source its caller has looked up.
+func (m *Manager) forkInstance(ctx context.Context, source, instance Spec) (err error) {
 	started := time.Now()
 	defer func() { m.observeOperation(operationForkInstance, started, err) }()
+
+	if err := m.checkCanStart(instance); err != nil {
+		return err
+	}
 
 	staged, err := m.store.StageSnapshot()
 	if err != nil {
@@ -59,6 +73,18 @@ func (m *Manager) ForkInstance(ctx context.Context, source, instance Spec) (err 
 	return m.fork(ctx, frozen, instance, "instance "+source.Name, map[string]string{"source_instance": source.Name})
 }
 
+// ForkInstance creates instance as a copy of source. It is ForkSnapshot of a
+// snapshot of source taken now, except that the snapshot is not kept. The
+// caller defines instance from source. See writeSnapshot for the states
+// source can be forked in.
+func (m *Manager) ForkInstance(ctx context.Context, sourceNameOrID string, instance Spec) error {
+	source, err := m.store.Instance(sourceNameOrID)
+	if err != nil {
+		return err
+	}
+	return m.forkInstance(ctx, source, instance)
+}
+
 // fork creates instance from a frozen guest, as ForkSnapshot describes. from
 // says what the instance is a copy of in its events, and attrs are added to
 // their attributes.
@@ -77,7 +103,7 @@ func (m *Manager) fork(
 		if err == nil {
 			return
 		}
-		if err := m.Delete(context.WithoutCancel(ctx), instance, true); err != nil {
+		if err := m.delete(context.WithoutCancel(ctx), instance, true); err != nil {
 			m.logger.ErrorContext(ctx, "cannot delete a fork that failed", "instance", instance.Name, "error", err)
 		}
 	}()
@@ -98,7 +124,7 @@ func (m *Manager) fork(
 		return err
 	}
 
-	allocation, err := m.Allocation(instance)
+	allocation, err := m.allocationOf(instance)
 	if err != nil {
 		return err
 	}

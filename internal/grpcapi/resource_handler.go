@@ -6,17 +6,17 @@ package grpcapi
 import (
 	"context"
 
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hostinfo"
 	"github.com/konradasb/dicer/internal/instance"
+	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // resourceHandler reports how much of the host is in use. CPU and memory are
 // what admission sees; disk is informational.
 type resourceHandler struct {
-	store           *filestore.Store
 	instanceManager *instance.Manager
+	volumeManager   *volume.Manager
 	dataDir         string
 }
 
@@ -75,10 +75,10 @@ func (h *resourceHandler) diskUsage() (*dicerdv1.DiskUsage, error) {
 	}
 
 	var provisioned int64
-	for _, instance := range h.store.Instances() {
+	for _, instance := range h.instanceManager.Instances() {
 		provisioned += instance.DiskBytes
 	}
-	for _, v := range h.store.Volumes() {
+	for _, v := range h.volumeManager.Volumes() {
 		provisioned += v.SizeBytes
 	}
 

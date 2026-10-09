@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/instance"
@@ -24,7 +23,6 @@ import (
 
 // instanceHandler handles instance-related RPCs.
 type instanceHandler struct {
-	store           *filestore.Store
 	instanceManager *instance.Manager
 
 	// statsInterval is how often GetInstanceStats reads stats.
@@ -51,16 +49,16 @@ func (h *instanceHandler) CreateInstance(
 	}
 
 	if req.GetStart() {
-		if err := h.instanceManager.Start(ctx, instance); err != nil {
+		if err := h.instanceManager.Start(ctx, instance.ID); err != nil {
 			return nil, fmt.Errorf("instance %q was created, but did not start: %w", instance.Name, err)
 		}
 	}
 
-	return h.view(instance)
+	return h.viewNamed(instance.ID)
 }
 
-// newInstance validates a create request and returns the instance it
-// defines. A kernel or network left out is the default one.
+// newInstance returns the instance a create request defines. A kernel or
+// network left out is the default one.
 func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (instance.Spec, error) {
 	req.KernelName = cmp.Or(req.GetKernelName(), kernel.DefaultName)
 	req.NetworkName = cmp.Or(req.GetNetworkName(), network.DefaultName)
@@ -125,21 +123,11 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 		UpdatedAt:              now,
 	}
 
-	if err := spec.Validate(); err != nil {
-		return instance.Spec{}, err
-	}
 	imageRef, err := reference.Parse(spec.ImageRef)
 	if err != nil {
 		return instance.Spec{}, errdefs.InvalidArgument("invalid image %q: %v", spec.ImageRef, err)
 	}
 	spec.ImageRef = imageRef.String()
-
-	if _, err := h.store.Instance(spec.Name); err == nil {
-		return instance.Spec{}, errdefs.Exists("instance %q already exists", spec.Name)
-	}
-	if err := h.checkCanStart(spec); err != nil {
-		return instance.Spec{}, err
-	}
 
 	return spec, nil
 }
@@ -149,7 +137,7 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 func (h *instanceHandler) UpdateInstance(
 	ctx context.Context, req *dicerdv1.UpdateInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
+	instance, err := h.instanceManager.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -182,13 +170,6 @@ func (h *instanceHandler) UpdateInstance(
 		}
 	}
 
-	if err := instance.Validate(); err != nil {
-		return nil, err
-	}
-	if err := h.checkCanStart(instance); err != nil {
-		return nil, err
-	}
-
 	instance.UpdatedAt = time.Now()
 	if err := h.instanceManager.Update(ctx, instance); err != nil {
 		return nil, err
@@ -197,8 +178,8 @@ func (h *instanceHandler) UpdateInstance(
 	return h.view(instance)
 }
 
-// applyReferences applies the image, kernel and network an update names,
-// checking that each is valid or exists.
+// applyReferences applies the image, kernel and network an update names.
+// The instance manager checks that the kernel and network exist.
 func (h *instanceHandler) applyReferences(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) error {
 	if v := req.ImageRef; v != nil {
 		ref, err := reference.Parse(*v)
@@ -207,18 +188,8 @@ func (h *instanceHandler) applyReferences(instance *instance.Spec, req *dicerdv1
 		}
 		instance.ImageRef = ref.String()
 	}
-	if v := req.KernelName; v != nil {
-		if _, err := h.store.Kernel(*v); err != nil {
-			return errdefs.InvalidArgument("%v", err)
-		}
-		instance.KernelName = *v
-	}
-	if v := req.NetworkName; v != nil {
-		if _, err := h.store.Network(*v); err != nil {
-			return errdefs.InvalidArgument("%v", err)
-		}
-		instance.NetworkName = *v
-	}
+	setIf(&instance.KernelName, req.KernelName)
+	setIf(&instance.NetworkName, req.NetworkName)
 	return nil
 }
 
@@ -286,48 +257,30 @@ func applyLists(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) er
 func (h *instanceHandler) StartInstance(
 	ctx context.Context, req *dicerdv1.StartInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Start(ctx, req.GetName()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Start(ctx, instance); err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // StopInstance shuts an instance down.
 func (h *instanceHandler) StopInstance(
 	ctx context.Context, req *dicerdv1.StopInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Stop(ctx, req.GetName()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Stop(ctx, instance); err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // PauseInstance pauses a running instance.
 func (h *instanceHandler) PauseInstance(
 	ctx context.Context, req *dicerdv1.PauseInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Pause(ctx, req.GetName()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Pause(ctx, instance); err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // StandbyInstance freezes a running or paused instance to disk. See
@@ -335,27 +288,21 @@ func (h *instanceHandler) PauseInstance(
 func (h *instanceHandler) StandbyInstance(
 	ctx context.Context, req *dicerdv1.StandbyInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Standby(ctx, req.GetName()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Standby(ctx, instance); err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // ResizeInstance changes a running instance's vCPUs and memory. See
-// instance.Manager.Resize.
+// instance.Manager.Resize. What the request leaves out stays as it is.
 func (h *instanceHandler) ResizeInstance(
 	ctx context.Context, req *dicerdv1.ResizeInstanceRequest,
 ) (*dicerdv1.Instance, error) {
 	if req.Vcpus == nil && req.MemoryBytes == nil {
 		return nil, errdefs.InvalidArgument("a resize needs vcpus, memory_bytes or both")
 	}
-	instance, err := h.store.Instance(req.GetName())
+	instance, err := h.instanceManager.Instance(req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -372,44 +319,30 @@ func (h *instanceHandler) ResizeInstance(
 		return nil, errdefs.InvalidArgument("an instance needs more than 0 bytes of memory")
 	}
 
-	if err := h.instanceManager.Resize(ctx, instance, want); err != nil {
+	if err := h.instanceManager.Resize(ctx, instance.ID, want); err != nil {
 		return nil, err
 	}
-
-	instance.VCPUs, instance.MemoryBytes = want.VCPUs, want.MemoryBytes
-	return h.view(instance)
+	return h.viewNamed(instance.ID)
 }
 
 // ResumeInstance resumes a paused instance.
 func (h *instanceHandler) ResumeInstance(
 	ctx context.Context, req *dicerdv1.ResumeInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Resume(ctx, req.GetName()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Resume(ctx, instance); err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // RenameInstance changes a stopped instance's name.
 func (h *instanceHandler) RenameInstance(
 	ctx context.Context, req *dicerdv1.RenameInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
+	renamed, err := h.instanceManager.Rename(ctx, req.GetName(), req.GetNewName())
 	if err != nil {
 		return nil, err
 	}
-
-	renamed, err := h.instanceManager.Rename(ctx, instance, req.GetNewName())
-	if err != nil {
-		return nil, err
-	}
-
 	return h.view(renamed)
 }
 
@@ -418,15 +351,9 @@ func (h *instanceHandler) RenameInstance(
 func (h *instanceHandler) DeleteInstance(
 	ctx context.Context, req *dicerdv1.DeleteInstanceRequest,
 ) (*emptypb.Empty, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
+	if err := h.instanceManager.Delete(ctx, req.GetName(), req.GetForce()); err != nil {
 		return nil, err
 	}
-
-	if err := h.instanceManager.Delete(ctx, instance, req.GetForce()); err != nil {
-		return nil, err
-	}
-
 	return &emptypb.Empty{}, nil
 }
 
@@ -434,19 +361,14 @@ func (h *instanceHandler) DeleteInstance(
 func (h *instanceHandler) GetInstance(
 	_ context.Context, req *dicerdv1.GetInstanceRequest,
 ) (*dicerdv1.Instance, error) {
-	instance, err := h.store.Instance(req.GetName())
-	if err != nil {
-		return nil, err
-	}
-
-	return h.view(instance)
+	return h.viewNamed(req.GetName())
 }
 
 // ListInstances lists every instance with its status, sorted by name.
 func (h *instanceHandler) ListInstances(
 	_ context.Context, _ *dicerdv1.ListInstancesRequest,
 ) (*dicerdv1.ListInstancesResponse, error) {
-	instances := h.store.Instances()
+	instances := h.instanceManager.Instances()
 
 	resp := &dicerdv1.ListInstancesResponse{
 		Instances: make([]*dicerdv1.Instance, 0, len(instances)),
@@ -467,17 +389,27 @@ func (h *instanceHandler) view(instance instance.Spec) (*dicerdv1.Instance, erro
 	return viewInstance(h.instanceManager, instance)
 }
 
+// viewNamed assembles the API representation of the instance named or with
+// the ID nameOrID, as it is now.
+func (h *instanceHandler) viewNamed(nameOrID string) (*dicerdv1.Instance, error) {
+	instance, err := h.instanceManager.Instance(nameOrID)
+	if err != nil {
+		return nil, err
+	}
+	return h.view(instance)
+}
+
 // viewInstance assembles an instance's spec, status, address and health.
 func viewInstance(instanceManager *instance.Manager, spec instance.Spec) (*dicerdv1.Instance, error) {
-	status, err := instanceManager.Status(spec)
+	status, err := instanceManager.Status(spec.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	if allocation, err := instanceManager.Allocation(spec); err == nil {
+	if allocation, err := instanceManager.Allocation(spec.ID); err == nil {
 		status.IP, status.MAC = allocation.IP, allocation.MAC
 	}
-	if check, health, ok := instanceManager.Health(spec); ok {
+	if check, health, ok := instanceManager.Health(spec.ID); ok {
 		status.HealthCheck, status.Health = &check, &health
 	}
 

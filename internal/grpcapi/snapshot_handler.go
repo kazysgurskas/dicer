@@ -9,14 +9,12 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // snapshotHandler handles snapshot-related RPCs.
 type snapshotHandler struct {
-	store           *filestore.Store
 	instanceManager *instance.Manager
 }
 
@@ -27,17 +25,12 @@ func (h *snapshotHandler) CreateSnapshot(
 	if req.GetInstance() == "" {
 		return nil, errdefs.InvalidArgument("instance is required")
 	}
-	instance, err := h.store.Instance(req.GetInstance())
+	snapshot, err := h.instanceManager.CreateSnapshot(ctx, req.GetInstance(), req.GetName())
 	if err != nil {
 		return nil, err
 	}
 
-	snapshot, err := h.instanceManager.CreateSnapshot(ctx, instance, req.GetName())
-	if err != nil {
-		return nil, err
-	}
-
-	return snapshotToProto(snapshot, instance.Name), nil
+	return snapshotToProto(snapshot, h.instanceName(snapshot)), nil
 }
 
 // ListSnapshots lists the snapshots, or those of one instance.
@@ -46,7 +39,7 @@ func (h *snapshotHandler) ListSnapshots(
 ) (*dicerdv1.ListSnapshotsResponse, error) {
 	var instanceID string
 	if req.GetInstance() != "" {
-		instance, err := h.store.Instance(req.GetInstance())
+		instance, err := h.instanceManager.Instance(req.GetInstance())
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +77,7 @@ func (h *snapshotHandler) DeleteSnapshot(
 		return nil, err
 	}
 
-	if err := h.instanceManager.DeleteSnapshot(ctx, snapshot); err != nil {
+	if err := h.instanceManager.DeleteSnapshot(ctx, snapshot.ID); err != nil {
 		return nil, err
 	}
 
@@ -100,7 +93,7 @@ func (h *snapshotHandler) RestoreSnapshot(
 		return nil, err
 	}
 
-	instance, err := h.instanceManager.RestoreSnapshot(ctx, snapshot)
+	instance, err := h.instanceManager.RestoreSnapshot(ctx, snapshot.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,17 +114,16 @@ func (h *snapshotHandler) ForkSnapshot(
 	if err != nil {
 		return nil, err
 	}
-	// What a created instance is checked for applies to a fork as much.
-	creation := instanceHandler{store: h.store, instanceManager: h.instanceManager}
-	if err := creation.checkCanStart(fork); err != nil {
+
+	if err := h.instanceManager.ForkSnapshot(ctx, snapshot.ID, fork); err != nil {
 		return nil, err
 	}
 
-	if err := h.instanceManager.ForkSnapshot(ctx, snapshot, fork); err != nil {
+	forked, err := h.instanceManager.Instance(fork.ID)
+	if err != nil {
 		return nil, err
 	}
-
-	return viewInstance(h.instanceManager, fork)
+	return viewInstance(h.instanceManager, forked)
 }
 
 // snapshot resolves the snapshot a request names.
@@ -146,7 +138,7 @@ func (h *snapshotHandler) snapshot(nameOrID string) (instance.Snapshot, error) {
 // instanceName returns the name a snapshot's instance has now, or, if it
 // has been deleted, the name it had.
 func (h *snapshotHandler) instanceName(snapshot instance.Snapshot) string {
-	if instance, err := h.store.Instance(snapshot.Instance.ID); err == nil {
+	if instance, err := h.instanceManager.Instance(snapshot.Instance.ID); err == nil {
 		return instance.Name
 	}
 	return snapshot.Instance.Name

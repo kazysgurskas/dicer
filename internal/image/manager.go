@@ -210,13 +210,19 @@ func (m *Manager) List() []*Image {
 	return m.index.list()
 }
 
-// Delete removes a locally held image and its disk. Like Image, it does not
-// consult a registry: deleting a tag removes the image pulled under it, even
-// if the tag has since moved.
-func (m *Manager) Delete(ref string) error {
+// InUse holds the images in use, by digest, each with what uses it, as an
+// error names it: instance "web", snapshot "before".
+type InUse map[string]string
+
+// Delete removes an image and its disk, refusing one in inUse with an
+// errdefs.ErrInvalidState error. A nil inUse refuses none.
+func (m *Manager) Delete(ref string, inUse InUse) error {
 	image, err := m.Image(ref)
 	if err != nil {
 		return err
+	}
+	if user, ok := inUse[image.Digest]; ok {
+		return errdefs.InvalidState("image %q is in use by %s", ref, user)
 	}
 
 	if err := m.index.delete(image.Digest); err != nil && !errors.Is(err, errdefs.ErrNotFound) {

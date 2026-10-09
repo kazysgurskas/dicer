@@ -37,7 +37,7 @@ func TestStartPublishesPortsAndStopUnpublishes(t *testing.T) {
 	h.withPorts(network.PortMapping{HostPort: 8080, GuestPort: 80})
 	h.start(t)
 
-	allocation, err := h.manager.Allocation(h.instance)
+	allocation, err := h.manager.allocationOf(h.instance)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestStartPublishesPortsAndStopUnpublishes(t *testing.T) {
 		t.Fatalf("published = %+v, want %v at the instance's address %s", got, h.instance.Ports, allocation.IP)
 	}
 
-	if err := h.manager.Stop(t.Context(), h.instance); err != nil {
+	if err := h.manager.stop(t.Context(), h.instance); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
 	if _, ok := h.hostNetwork.published[h.instance.ID]; ok {
@@ -81,7 +81,7 @@ func TestFailedPublishUndoesNetwork(t *testing.T) {
 	h.withPorts(network.PortMapping{HostPort: 22, GuestPort: 22})
 	h.hostNetwork.publishErr = errors.New("host port is in use")
 
-	if err := h.manager.Start(t.Context(), h.instance); err == nil {
+	if err := h.manager.start(t.Context(), h.instance); err == nil {
 		t.Fatal("Start succeeded although its ports could not be published")
 	}
 	if !slices.Contains(h.hostNetwork.removedTAPs, h.instance.ID) {
@@ -96,7 +96,7 @@ func TestStartRefusesPortHeldByAnotherInstance(t *testing.T) {
 			h.withPorts(network.PortMapping{HostIP: "192.0.2.1", HostPort: 8080, GuestPort: 80})
 			h.seedRunning(t, "db", state, network.PortMapping{HostPort: 8080, GuestPort: 5432})
 
-			err := h.manager.Start(t.Context(), h.instance)
+			err := h.manager.start(t.Context(), h.instance)
 			if !errors.Is(err, errdefs.ErrInvalidState) {
 				t.Fatalf("Start = %v, want a refusal for the port %s instance holds", err, state)
 			}
@@ -129,13 +129,13 @@ func TestRestoreSnapshotPublishesPorts(t *testing.T) {
 	h.withPorts(network.PortMapping{HostPort: 8080, GuestPort: 80})
 	h.running(t)
 
-	snapshot, err := h.manager.CreateSnapshot(t.Context(), h.instance, "good")
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "good")
 	if err != nil {
 		t.Fatalf("CreateSnapshot: %v", err)
 	}
 	h.stopped(t)
 
-	if _, err := h.manager.RestoreSnapshot(t.Context(), snapshot); err != nil {
+	if _, err := h.manager.restoreSnapshot(t.Context(), snapshot); err != nil {
 		t.Fatalf("RestoreSnapshot: %v", err)
 	}
 	if _, ok := h.hostNetwork.published[h.instance.ID]; !ok {

@@ -65,7 +65,7 @@ type GCRemoval struct {
 
 // expiredImages returns those of images not in use and unused for longer
 // than the policy allows at now.
-func (p GCPolicy) expiredImages(images []*Image, inUse map[string]struct{}, now time.Time) []*Image {
+func (p GCPolicy) expiredImages(images []*Image, inUse InUse, now time.Time) []*Image {
 	if p.MaxUnusedAge <= 0 {
 		return nil
 	}
@@ -82,7 +82,7 @@ func (p GCPolicy) expiredImages(images []*Image, inUse map[string]struct{}, now 
 // collectableImages returns those of images garbage collection may remove
 // at now -- not in use, nor used within gcGracePeriod -- least recently used
 // first.
-func collectableImages(images []*Image, inUse map[string]struct{}, now time.Time) []*Image {
+func collectableImages(images []*Image, inUse InUse, now time.Time) []*Image {
 	var out []*Image
 	for _, image := range images {
 		if _, used := inUse[image.Digest]; used || now.Sub(image.LastUsedAt) < gcGracePeriod {
@@ -101,7 +101,7 @@ func collectableImages(images []*Image, inUse map[string]struct{}, now time.Time
 // marks those in inUse as used now. Stale images go first, then the least
 // recently used while the store is too large, re-measuring after each since
 // layers may be shared.
-func (m *Manager) CollectGarbage(p GCPolicy, inUse map[string]struct{}, now time.Time) (GCResult, error) {
+func (m *Manager) CollectGarbage(p GCPolicy, inUse InUse, now time.Time) (GCResult, error) {
 	var result GCResult
 
 	for digest := range inUse {
@@ -203,7 +203,7 @@ func (m *Manager) storeSize() (int64, error) {
 // inUse reports the digests of the images in use; a pass that cannot learn
 // them removes nothing, since without them any image could be one in use.
 func (m *Manager) RunGC(
-	ctx context.Context, p GCPolicy, interval time.Duration, inUse func() (map[string]struct{}, error),
+	ctx context.Context, p GCPolicy, interval time.Duration, inUse func() (InUse, error),
 ) {
 	m.logger.InfoContext(ctx, "image garbage collection enabled",
 		"max_unused_age", p.MaxUnusedAge, "max_size", p.MaxSize, "interval", interval)
@@ -223,7 +223,7 @@ func (m *Manager) RunGC(
 }
 
 // runGCPass runs one pass of RunGC, logging what it did.
-func (m *Manager) runGCPass(ctx context.Context, p GCPolicy, inUse func() (map[string]struct{}, error)) {
+func (m *Manager) runGCPass(ctx context.Context, p GCPolicy, inUse func() (InUse, error)) {
 	keep, err := inUse()
 	if err != nil {
 		m.logger.WarnContext(ctx, "image garbage collection skipped: cannot tell which images are in use",

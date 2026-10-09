@@ -39,7 +39,7 @@ func TestCreateFollowsThePullPolicy(t *testing.T) {
 				images.held = &image.Image{Name: "alpine", Digest: "sha256:bbbb", DiskPath: images.diskPath}
 			}
 
-			instance := Spec{ID: "new-id", Name: "new", ImageRef: "alpine"}
+			instance := Spec{ID: "new-id", Name: "new", ImageRef: "alpine", KernelName: "k", NetworkName: "default", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30}
 			err := h.manager.Create(t.Context(), instance, tt.policy)
 
 			if images.pulls != tt.wantPulls {

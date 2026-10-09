@@ -58,7 +58,7 @@ func TestPrune(t *testing.T) {
 	pruned := pullTestImage(t, m, fakeRegistry, "alpine:3.20", prunedDigest)
 	pullTestImage(t, m, fakeRegistry, "debian:13", prunedDigest2)
 
-	result, err := m.Prune(map[string]struct{}{keptDigest: {}})
+	result, err := m.Prune(InUse{keptDigest: `instance "web"`})
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestPruneKeepsEverythingInUse(t *testing.T) {
 	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	pullTestImage(t, m, fakeRegistry, "alpine:3.21", digest)
 
-	result, err := m.Prune(map[string]struct{}{digest: {}})
+	result, err := m.Prune(InUse{digest: `instance "web"`})
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestPruneCountsCacheReclaim(t *testing.T) {
 	m, fakeRegistry := newManagerWithFakes(t)
 	fakeRegistry.pruneReclaims = 4096
 
-	result, err := m.Prune(map[string]struct{}{})
+	result, err := m.Prune(InUse{})
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}

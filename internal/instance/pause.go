@@ -13,7 +13,11 @@ import (
 )
 
 // Pause halts the guest's vCPUs without tearing anything down.
-func (m *Manager) Pause(ctx context.Context, instance Spec) error {
+func (m *Manager) Pause(ctx context.Context, nameOrID string) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
 	return m.setPaused(ctx, instance, pauseMove{
 		operation: operationPause,
 		from:      StateRunning,
@@ -25,7 +29,11 @@ func (m *Manager) Pause(ctx context.Context, instance Spec) error {
 }
 
 // Resume restarts the vCPUs of a paused instance.
-func (m *Manager) Resume(ctx context.Context, instance Spec) error {
+func (m *Manager) Resume(ctx context.Context, nameOrID string) error {
+	instance, err := m.store.Instance(nameOrID)
+	if err != nil {
+		return err
+	}
 	return m.setPaused(ctx, instance, pauseMove{
 		operation: operationResume,
 		from:      StatePaused,
@@ -53,8 +61,11 @@ func (m *Manager) setPaused(ctx context.Context, instance Spec, move pauseMove) 
 	lock := m.lock(instance.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := m.rereadDefinition(&instance); err != nil {
+		return err
+	}
 
-	status, err := m.Status(instance)
+	status, err := m.statusOf(instance)
 	if err != nil {
 		return err
 	}

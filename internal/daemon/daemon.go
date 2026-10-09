@@ -9,6 +9,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/netip"
@@ -20,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/dns"
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hostinfo"
@@ -32,6 +34,7 @@ import (
 	"github.com/konradasb/dicer/internal/metric"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
+	"github.com/konradasb/dicer/internal/token"
 	"github.com/konradasb/dicer/internal/version"
 	"github.com/konradasb/dicer/internal/volume"
 )
@@ -51,6 +54,7 @@ type daemon struct {
 	imageManager  *image.Manager
 	kernelManager *kernel.Manager
 	volumeManager *volume.Manager
+	tokenManager  *token.Manager
 	initrdManager *initrd.Manager
 
 	// starters launch VMMs, one for each hypervisor version this daemon
@@ -85,6 +89,9 @@ func (d *daemon) Run(ctx context.Context) error {
 	if err := d.openStore(); err != nil {
 		return err
 	}
+	if err := d.openEvents(); err != nil {
+		return err
+	}
 	if err := d.openNetworks(); err != nil {
 		return err
 	}
@@ -115,10 +122,13 @@ func (d *daemon) Run(ctx context.Context) error {
 	d.instanceManager.WarnDeprecatedHypervisorVersions(ctx)
 
 	// Created before serving, so that no request finds either missing.
-	if err := d.ensureDefaultNetwork(); err != nil {
+	if err := d.networkManager.EnsureDefault(d.cfg.Network.DefaultSubnet); err != nil {
+		if errors.Is(err, errdefs.ErrExists) {
+			return fmt.Errorf("%w; set network.default_subnet to a free subnet", err)
+		}
 		return err
 	}
-	if err := d.ensureDefaultKernel(); err != nil {
+	if err := d.kernelManager.EnsureDefault(); err != nil {
 		return err
 	}
 
@@ -222,14 +232,31 @@ func (d *daemon) openStore() error {
 	return nil
 }
 
-// openNetworks opens the network manager, which keeps the networks' address
-// allocations.
+// openEvents opens the event log, which the managers record into.
+func (d *daemon) openEvents() error {
+	var err error
+	d.events, err = event.Open(event.Config{
+		File:     filepath.Join(d.cfg.DataDir, eventsFile),
+		MaxCount: d.cfg.Events.MaxCount,
+		MaxAge:   d.cfg.Events.MaxAge,
+		Logger:   d.logger,
+	})
+	if err != nil {
+		return fmt.Errorf("open events: %w", err)
+	}
+	return nil
+}
+
+// openNetworks opens the network manager, which defines the networks and
+// keeps their address allocations.
 func (d *daemon) openNetworks() error {
 	var err error
 	d.networkManager, err = network.NewManager(network.Config{
-		Dir:    filepath.Join(d.cfg.DataDir, "allocations"),
-		Store:  d.store,
-		Logger: d.logger,
+		Dir:         filepath.Join(d.cfg.DataDir, "allocations"),
+		Store:       d.store,
+		HostSubnets: hostnet.Subnets,
+		Events:      d.events,
+		Logger:      d.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("open network manager: %w", err)
@@ -244,17 +271,6 @@ const eventsFile = "events.jsonl"
 // initServices creates the managers the API and the instance manager use,
 // and the instance manager itself.
 func (d *daemon) initServices() error {
-	var err error
-	d.events, err = event.Open(event.Config{
-		File:     filepath.Join(d.cfg.DataDir, eventsFile),
-		MaxCount: d.cfg.Events.MaxCount,
-		MaxAge:   d.cfg.Events.MaxAge,
-		Logger:   d.logger,
-	})
-	if err != nil {
-		return fmt.Errorf("open events: %w", err)
-	}
-
 	auths := make(map[string]registry.Auth, len(d.cfg.Registries))
 	for host, r := range d.cfg.Registries {
 		auths[host] = r.auth()
@@ -287,6 +303,7 @@ func (d *daemon) initServices() error {
 	d.kernelManager, err = kernel.NewManager(kernel.Config{
 		DataDir: d.cfg.DataDir,
 		Store:   d.store,
+		Events:  d.events,
 		Logger:  d.logger,
 	})
 	if err != nil {
@@ -302,9 +319,12 @@ func (d *daemon) initServices() error {
 		return fmt.Errorf("create initrd manager: %w", err)
 	}
 
+	d.tokenManager = token.NewManager(token.Config{Store: d.store})
+
 	d.volumeManager = volume.NewManager(volume.Config{
 		DataDir: d.cfg.DataDir,
 		Store:   d.store,
+		Events:  d.events,
 		Logger:  d.logger,
 	})
 
