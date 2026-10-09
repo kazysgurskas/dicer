@@ -103,6 +103,7 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		DataDir:          d.cfg.DataDir,
 		Version:          version.Version,
 	})
+	d.metrics.Register(api)
 
 	listeners = make([]apiListener, 0, 2)
 	//nolint:contextcheck // interceptors run with each call's own context
@@ -140,8 +141,8 @@ func (d *daemon) newGRPCServer(
 ) *grpc.Server {
 	audit := grpcapi.NewAudit(d.logger)
 
-	unary := []grpc.UnaryServerInterceptor{d.metrics.UnaryServerInterceptor()}
-	stream := []grpc.StreamServerInterceptor{d.metrics.StreamServerInterceptor()}
+	unary := []grpc.UnaryServerInterceptor{api.UnaryMetricsInterceptor()}
+	stream := []grpc.StreamServerInterceptor{api.StreamMetricsInterceptor()}
 	if authentication != nil {
 		unary = append(unary, authentication.UnaryInterceptor())
 		stream = append(stream, authentication.StreamInterceptor())

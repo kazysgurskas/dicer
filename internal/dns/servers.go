@@ -24,8 +24,6 @@ const Port = 53
 type Config struct {
 	// Resolver knows the networks' instances.
 	Resolver Resolver
-	// Metrics records what the servers answer. Nil records nothing.
-	Metrics Metrics
 	// DefaultNameservers are the nameservers a network that names none
 	// forwards to.
 	DefaultNameservers []string
@@ -39,8 +37,9 @@ type Config struct {
 // concurrent use, but calls for one network must not overlap: the instance
 // manager makes them under the network's lock.
 type Servers struct {
-	cfg    Config
-	logger *slog.Logger
+	cfg     Config
+	logger  *slog.Logger
+	metrics metrics
 
 	mu      sync.Mutex
 	servers map[string]*server
@@ -51,9 +50,6 @@ func NewServers(cfg Config) *Servers {
 	if cfg.Port == 0 {
 		cfg.Port = Port
 	}
-	if cfg.Metrics == nil {
-		cfg.Metrics = discardMetrics{}
-	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -61,6 +57,7 @@ func NewServers(cfg Config) *Servers {
 	return &Servers{
 		cfg:     cfg,
 		logger:  cfg.Logger.With("component", "dns"),
+		metrics: newMetrics(),
 		servers: make(map[string]*server),
 	}
 }
@@ -89,7 +86,7 @@ func (s *Servers) Serve(ctx context.Context, nw network.Network) error {
 		running.close()
 	}
 	addr := net.JoinHostPort(want.gateway.String(), strconv.Itoa(s.cfg.Port))
-	srv, err := listen(ctx, addr, want, s.cfg.Resolver, s.cfg.Metrics, s.logger)
+	srv, err := listen(ctx, addr, want, s.cfg.Resolver, s.metrics, s.logger)
 	if err != nil {
 		return fmt.Errorf("serve DNS for network %q on %s: %w", nw.Name, addr, err)
 	}

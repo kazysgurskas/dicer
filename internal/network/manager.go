@@ -33,8 +33,10 @@ const allocationTableExt = ".yaml"
 // servers do for every query -- reads no file. The Manager must be the only
 // writer of its directory. It is safe for concurrent use.
 type Manager struct {
-	dir    string
-	logger *slog.Logger
+	dir     string
+	store   Store
+	logger  *slog.Logger
+	metrics metrics
 
 	// writeMu serialises the changes to the allocation tables. Each is a
 	// read-modify-write of a network's file, made under writeMu alone, so
@@ -83,6 +85,9 @@ func newAllocationTable(allocations []Allocation) *allocationTable {
 type Config struct {
 	// Dir is the directory the allocation tables are kept in.
 	Dir string
+	// Store lists the networks whose address pools are served as metrics.
+	// Nil serves none.
+	Store Store
 	// Logger is where the Manager logs. Nil is slog.Default().
 	Logger *slog.Logger
 }
@@ -105,7 +110,9 @@ func NewManager(cfg Config) (*Manager, error) {
 
 	m := &Manager{
 		dir:                   cfg.Dir,
+		store:                 cfg.Store,
 		logger:                cfg.Logger.With("component", "network"),
+		metrics:               newMetrics(),
 		allocationTables:      make(map[string]*allocationTable),
 		allocationTableErrors: make(map[string]error),
 	}

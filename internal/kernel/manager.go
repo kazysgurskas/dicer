@@ -24,6 +24,8 @@ import (
 type Config struct {
 	// DataDir holds the kernels, under kernels/<id>; it is required.
 	DataDir string
+	// Store lists the kernels served as metrics. Nil serves none.
+	Store Store
 	// Logger defaults to slog.Default.
 	Logger *slog.Logger
 }
@@ -32,7 +34,9 @@ type Config struct {
 // use.
 type Manager struct {
 	dataDir string
+	store   Store
 	logger  *slog.Logger
+	metrics metrics
 }
 
 // NewManager returns a Manager for the kernels under cfg.DataDir.
@@ -46,7 +50,9 @@ func NewManager(cfg Config) (*Manager, error) {
 
 	return &Manager{
 		dataDir: cfg.DataDir,
+		store:   cfg.Store,
 		logger:  cfg.Logger.With("component", "kernel"),
+		metrics: newMetrics(),
 	}, nil
 }
 

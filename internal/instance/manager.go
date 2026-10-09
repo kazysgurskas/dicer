@@ -143,10 +143,9 @@ type Config struct {
 	// value is unlimited.
 	Capacity Capacity
 
-	// Metrics, Events and Logger are optional.
-	Metrics Metrics
-	Events  Recorder
-	Logger  *slog.Logger
+	// Events and Logger are optional.
+	Events Recorder
+	Logger *slog.Logger
 }
 
 // Manager drives instance lifecycle operations and owns the status that
@@ -163,7 +162,7 @@ type Manager struct {
 	starters    map[hypervisor.Type][]hypervisor.Starter
 	dnsServers  DNSServers
 	capacity    Capacity
-	metrics     Metrics
+	metrics     metrics
 	events      Recorder
 	logger      *slog.Logger
 
@@ -234,9 +233,6 @@ func NewManager(cfg Config) *Manager {
 	if cfg.RunDir == "" {
 		cfg.RunDir = defaults.RunDir
 	}
-	if cfg.Metrics == nil {
-		cfg.Metrics = discardMetrics{}
-	}
 	if cfg.Events == nil {
 		cfg.Events = discardRecorder{}
 	}
@@ -253,7 +249,7 @@ func NewManager(cfg Config) *Manager {
 		starters:    cfg.Starters,
 		dnsServers:  cfg.DNSServers,
 		capacity:    cfg.Capacity,
-		metrics:     cfg.Metrics,
+		metrics:     newMetrics(),
 		events:      cfg.Events,
 		logger:      cfg.Logger.With("component", "instance"),
 		procDir:     procfs.DefaultMountPoint,

@@ -1,20 +1,23 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package metrics
+package grpcapi
 
 import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/konradasb/dicer/internal/metric/metrictest"
 )
 
-func TestUnaryInterceptorCountsByCode(t *testing.T) {
+func TestUnaryMetricsInterceptorCountsByCode(t *testing.T) {
 	const method = "/dicerd.v1.DaemonService/StartInstance"
 
 	tests := []struct {
@@ -47,8 +50,8 @@ func TestUnaryInterceptorCountsByCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := New(Options{})
-			interceptor := m.UnaryServerInterceptor()
+			s := NewServer(Config{})
+			interceptor := s.UnaryMetricsInterceptor()
 
 			_, _ = interceptor(
 				context.Background(), nil,
@@ -56,21 +59,21 @@ func TestUnaryInterceptorCountsByCode(t *testing.T) {
 				tt.handler,
 			)
 
-			if got := testutil.ToFloat64(m.grpc.requests.WithLabelValues(method, tt.wantCode)); got != 1 {
+			if got := testutil.ToFloat64(s.metrics.requests.WithLabelValues(method, tt.wantCode)); got != 1 {
 				t.Errorf("requests{method=%q, code=%q} = %v, want 1", method, tt.wantCode, got)
 			}
-			if got := testutil.CollectAndCount(m.grpc.duration); got != 1 {
+			if got := testutil.CollectAndCount(s.metrics.duration); got != 1 {
 				t.Errorf("duration series = %d, want 1", got)
 			}
 		})
 	}
 }
 
-func TestUnaryInterceptorPassesTheResponseThrough(t *testing.T) {
-	m := New(Options{})
+func TestUnaryMetricsInterceptorPassesTheResponseThrough(t *testing.T) {
+	s := NewServer(Config{})
 
 	wantErr := status.Error(codes.InvalidArgument, "bad name")
-	resp, err := m.UnaryServerInterceptor()(
+	resp, err := s.UnaryMetricsInterceptor()(
 		context.Background(), "request",
 		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
 		func(context.Context, any) (any, error) { return "response", wantErr },
@@ -84,12 +87,12 @@ func TestUnaryInterceptorPassesTheResponseThrough(t *testing.T) {
 	}
 }
 
-func TestStreamInterceptorCountsCalls(t *testing.T) {
+func TestStreamMetricsInterceptorCountsCalls(t *testing.T) {
 	const method = "/dicerd.v1.DaemonService/GetInstanceLogs"
 
-	m := New(Options{})
+	s := NewServer(Config{})
 
-	err := m.StreamServerInterceptor()(
+	err := s.StreamMetricsInterceptor()(
 		nil, nil,
 		&grpc.StreamServerInfo{FullMethod: method},
 		func(any, grpc.ServerStream) error { return status.Error(codes.Canceled, "client left") },
@@ -98,7 +101,14 @@ func TestStreamInterceptorCountsCalls(t *testing.T) {
 		t.Fatalf("error = %v, want a Canceled status", err)
 	}
 
-	if got := testutil.ToFloat64(m.grpc.requests.WithLabelValues(method, codes.Canceled.String())); got != 1 {
+	if got := testutil.ToFloat64(s.metrics.requests.WithLabelValues(method, codes.Canceled.String())); got != 1 {
 		t.Errorf("requests{method=%q, code=Canceled} = %v, want 1", method, got)
 	}
+}
+
+func TestMetricsMatchTheirDescriptions(t *testing.T) {
+	s := NewServer(Config{})
+	s.recordCall("/dicerd.v1.InstanceService/Start", nil, time.Second)
+
+	metrictest.CheckDescriptions(t, s, MetricDescriptions())
 }

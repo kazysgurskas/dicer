@@ -727,24 +727,6 @@ func (f fakeVolumes) Path(id string) string {
 	return filepath.Join(f.dir, id, "disk.raw")
 }
 
-// recordedOperation is one call to the Metrics recorder.
-type recordedOperation struct {
-	operation string
-	failed    bool
-}
-
-// fakeMetrics is a Metrics that remembers what it was told.
-type fakeMetrics struct {
-	operations []recordedOperation
-	restarts   int
-}
-
-func (f *fakeMetrics) RecordInstanceRestart() { f.restarts++ }
-
-func (f *fakeMetrics) RecordInstanceOperation(operation string, err error, _ time.Duration) {
-	f.operations = append(f.operations, recordedOperation{operation: operation, failed: err != nil})
-}
-
 // fakeProbe answers health check probes as a test says, and counts them.
 type fakeProbe struct {
 	mu      sync.Mutex

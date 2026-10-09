@@ -355,7 +355,7 @@ func (m *Manager) restart(ctx context.Context, instanceID string, pending *pendi
 		return
 	}
 
-	m.metrics.RecordInstanceRestart()
+	m.metrics.restarts.Inc()
 	m.logger.InfoContext(ctx, "restarting instance", "instance", instance.Name, "restart_count", status.RestartCount)
 
 	if err := m.admit(instance, instance.Resources()); err != nil {

@@ -11,11 +11,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/metrics"
+	"github.com/konradasb/dicer/internal/metric"
 	"github.com/konradasb/dicer/internal/version"
 )
 
@@ -32,145 +30,29 @@ const (
 	metricsReadHeaderTimeout = 5 * time.Second
 )
 
-// newMetrics builds the metrics this daemon records into, whether or not the
-// endpoint is served. The scrape-time sources read the store and managers
-// that openStore, openNetworks and initServices create later.
-func (d *daemon) newMetrics() *metrics.Metrics {
-	return metrics.New(metrics.Options{
+// newMetrics builds the registry the daemon serves its metrics from, whether
+// or not the endpoint is served. The managers' metrics are registered on it
+// once they exist: see registerMetrics.
+func (d *daemon) newMetrics() *metric.Registry {
+	return metric.New(metric.Config{
 		Version: version.Version,
 		Commit:  version.Commit,
 		Logger:  d.logger.With("component", "metrics"),
-		Sources: metrics.Sources{
-			Instances:     d.instanceSummary,
-			InstanceStats: d.instanceStats,
-			Networks:      d.networkSummaries,
-			Images:        d.imageSummary,
-			Kernels:       d.kernelSummary,
-			Volumes:       d.volumeSummary,
-		},
 	})
 }
 
-// instanceSummary reads the current instance counts for a scrape. It reports
-// nothing before the instance manager exists.
-func (d *daemon) instanceSummary() metrics.InstanceSummary {
-	if d.instanceManager == nil {
-		return metrics.InstanceSummary{}
+// registerMetrics registers each manager's metrics, and the DNS servers' if
+// there are any. It is called once the managers exist. The API server's are
+// registered in listenAPI, which makes it.
+func (d *daemon) registerMetrics() {
+	d.metrics.Register(d.networkManager)
+	d.metrics.Register(d.instanceManager)
+	d.metrics.Register(d.imageManager)
+	d.metrics.Register(d.kernelManager)
+	d.metrics.Register(d.volumeManager)
+	if d.dnsServers != nil {
+		d.metrics.Register(d.dnsServers)
 	}
-
-	usage := d.instanceManager.Usage()
-
-	byState := make(map[string]int, len(usage.ByState))
-	for state, n := range usage.ByState {
-		byState[strings.ToLower(string(state))] = n
-	}
-	byHealth := make(map[string]int, len(usage.ByHealth))
-	for status, n := range usage.ByHealth {
-		byHealth[string(status)] = n
-	}
-
-	allocatable := usage.Capacity.Allocatable()
-
-	return metrics.InstanceSummary{
-		ByState:                byState,
-		ByHealth:               byHealth,
-		VCPUs:                  usage.Allocated.VCPUs,
-		MemoryBytes:            usage.Allocated.MemoryBytes,
-		AllocatableVCPUs:       allocatable.VCPUs,
-		AllocatableMemoryBytes: allocatable.MemoryBytes,
-	}
-}
-
-// instanceStats reads what each instance uses of the host for a scrape. It
-// reports nothing before the instance manager exists.
-func (d *daemon) instanceStats() []instance.Stats {
-	if d.instanceManager == nil {
-		return nil
-	}
-
-	return d.instanceManager.Stats()
-}
-
-// networkSummaries reads each network's address pool usage for a scrape. A
-// network whose allocations cannot be read is skipped.
-func (d *daemon) networkSummaries() []metrics.NetworkSummary {
-	if d.store == nil || d.networkManager == nil {
-		return nil
-	}
-
-	networks := d.store.Networks()
-
-	summaries := make([]metrics.NetworkSummary, 0, len(networks))
-	for _, network := range networks {
-		allocations, err := d.networkManager.List(network.Name)
-		if err != nil {
-			d.logger.Warn("cannot read allocations for metrics",
-				"network", network.Name, "error", err)
-			continue
-		}
-
-		_, available := network.IPCounts(len(allocations))
-		summaries = append(summaries, metrics.NetworkSummary{
-			Name:      network.Name,
-			Allocated: len(allocations),
-			Available: available,
-		})
-	}
-
-	return summaries
-}
-
-// imageSummary counts the images pulled, and sums their sizes, for a scrape.
-// It reports nothing before the image manager exists.
-func (d *daemon) imageSummary() metrics.ImageSummary {
-	if d.imageManager == nil {
-		return metrics.ImageSummary{}
-	}
-
-	images := d.imageManager.List()
-
-	summary := metrics.ImageSummary{Count: len(images)}
-	for _, image := range images {
-		summary.DiskBytes += image.SizeBytes
-	}
-
-	return summary
-}
-
-// kernelSummary counts the kernels defined, and sums what they hold on disk,
-// for a scrape. It reports nothing before the kernel manager exists.
-func (d *daemon) kernelSummary() metrics.KernelSummary {
-	if d.store == nil || d.kernelManager == nil {
-		return metrics.KernelSummary{}
-	}
-
-	kernels := d.store.Kernels()
-
-	summary := metrics.KernelSummary{Count: len(kernels)}
-	for _, k := range kernels {
-		summary.DiskBytes += d.kernelManager.DiskBytes(k.ID)
-	}
-
-	return summary
-}
-
-// volumeSummary counts the volumes defined, and sums their sizes and what
-// they take up on disk, for a scrape. It reports nothing before the volume
-// manager exists.
-func (d *daemon) volumeSummary() metrics.VolumeSummary {
-	if d.store == nil || d.volumeManager == nil {
-		return metrics.VolumeSummary{}
-	}
-
-	volumes := d.store.Volumes()
-
-	summary := metrics.VolumeSummary{Count: len(volumes)}
-	for _, v := range volumes {
-		summary.SizeBytes += v.SizeBytes
-		summary.DiskBytes += d.volumeManager.DiskBytes(v.ID)
-	}
-
-	return summary
 }
 
 // serveMetrics serves the metrics endpoint until ctx is cancelled. It returns

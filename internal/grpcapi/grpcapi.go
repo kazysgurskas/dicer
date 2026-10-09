@@ -102,6 +102,8 @@ type Server struct {
 	hostHandler
 	resourceHandler
 	eventsHandler
+
+	metrics metrics
 }
 
 // NewServer creates a Server with the given configuration.
@@ -153,6 +155,7 @@ func NewServer(cfg Config) *Server {
 			fingerprint:   cfg.Fingerprint,
 		},
 		eventsHandler: eventsHandler{events: cfg.Events},
+		metrics:       newMetrics(),
 	}
 }
 

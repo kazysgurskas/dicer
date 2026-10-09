@@ -23,6 +23,8 @@ import (
 type Config struct {
 	// DataDir is the directory volume disks are kept under.
 	DataDir string
+	// Store lists the volumes served as metrics. Nil serves none.
+	Store Store
 	// Logger is where the Manager logs. Nil is slog.Default().
 	Logger *slog.Logger
 }
@@ -32,7 +34,9 @@ type Config struct {
 // disk is found by ID.
 type Manager struct {
 	dataDir string
+	store   Store
 	logger  *slog.Logger
+	metrics metrics
 
 	// createDisk is the disk creation itself, replaced in tests.
 	createDisk func(ctx context.Context, path string, sizeBytes int64) error
@@ -46,7 +50,9 @@ func NewManager(cfg Config) *Manager {
 
 	return &Manager{
 		dataDir:    cfg.DataDir,
+		store:      cfg.Store,
 		logger:     cfg.Logger.With("component", "volume"),
+		metrics:    newMetrics(),
 		createDisk: diskfile.CreateExt4,
 	}
 }

@@ -19,6 +19,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/konradasb/dicer/internal/network"
@@ -48,33 +51,24 @@ func (f fakeResolver) LookupAddr(_ string, addr netip.Addr) []string {
 	return out
 }
 
-// fakeMetrics counts the queries recorded, by result, and the forwards.
-type fakeMetrics struct {
-	mu       sync.Mutex
-	queries  map[string]int
-	forwards int
+// recorded returns the queries m recorded on network shop with result.
+func recorded(m metrics, result string) int {
+	return int(testutil.ToFloat64(m.queries.WithLabelValues("shop", result)))
 }
 
-func (f *fakeMetrics) RecordDNSQuery(network, result string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.queries == nil {
-		f.queries = map[string]int{}
+// forwardsTimed returns how many forwards m timed on network shop.
+func forwardsTimed(t *testing.T, m metrics) uint64 {
+	t.Helper()
+
+	var sample dto.Metric
+	histogram, ok := m.forwardDuration.WithLabelValues("shop").(prometheus.Metric)
+	if !ok {
+		t.Fatal("the forward duration is not a metric")
 	}
-	f.queries[network+" "+result]++
-}
-
-func (f *fakeMetrics) RecordDNSForward(string, time.Duration) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.forwards++
-}
-
-// recorded returns the queries recorded on network shop with result.
-func (f *fakeMetrics) recorded(result string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.queries["shop "+result]
+	if err := histogram.Write(&sample); err != nil {
+		t.Fatal(err)
+	}
+	return sample.GetHistogram().GetSampleCount()
 }
 
 // upstream is a nameserver that answers every A query with 192.0.2.99, over
@@ -148,7 +142,7 @@ func newUpstream(t *testing.T) *upstream {
 }
 
 // startServer serves network shop on loopback, with the instances given,
-// recording into a fakeMetrics: see metricsOf.
+// recording into metrics of its own.
 func startServer(t *testing.T, instances fakeResolver, upstreams []string, isolated bool) *server {
 	t.Helper()
 
@@ -159,22 +153,12 @@ func startServer(t *testing.T, instances fakeResolver, upstreams []string, isola
 		gateway:          netip.MustParseAddr("10.8.0.1"),
 		upstreams:        upstreams,
 		answersInstances: !isolated,
-	}, instances, &fakeMetrics{}, slog.New(slog.DiscardHandler))
+	}, instances, newMetrics(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.close)
 	return srv
-}
-
-// metricsOf returns what a server from startServer records into.
-func metricsOf(t *testing.T, srv *server) *fakeMetrics {
-	t.Helper()
-	m, ok := srv.metrics.(*fakeMetrics)
-	if !ok {
-		t.Fatalf("server records into %T, not a fakeMetrics", srv.metrics)
-	}
-	return m
 }
 
 // ask sends a query over transport ("udp" or "tcp") and returns the answer.
@@ -281,7 +265,7 @@ func TestServerAnswersUnderANetworkNamedInCapitals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := listen(t.Context(), "127.0.0.1:0", nw, resolver, discardMetrics{}, slog.New(slog.DiscardHandler))
+	srv, err := listen(t.Context(), "127.0.0.1:0", nw, resolver, newMetrics(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +445,7 @@ func TestServerAnswersOverUDPWhileTCPIsFull(t *testing.T) {
 	if _, err := extra.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
 		t.Errorf("read on a connection beyond maxConnections = %v, want it closed", err)
 	}
-	if got := metricsOf(t, srv).recorded(QueryDropped); got != 1 {
+	if got := recorded(srv.metrics, QueryDropped); got != 1 {
 		t.Errorf("dropped queries = %d, want 1 for the connection closed", got)
 	}
 }
@@ -515,7 +499,7 @@ func TestServerOnAnInternalNetworkAnswersOnlyItsInstances(t *testing.T) {
 		gateway:          netip.MustParseAddr("10.8.0.1"),
 		answersInstances: true,
 		internal:         true,
-	}, fakeResolver{"db": "10.8.0.5"}, &fakeMetrics{}, slog.New(slog.DiscardHandler))
+	}, fakeResolver{"db": "10.8.0.5"}, newMetrics(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +555,7 @@ func TestServerRefusesWhatIsNotAQuery(t *testing.T) {
 // with, and that only a forwarded one is timed.
 func TestServerRecordsHowItAnswered(t *testing.T) {
 	srv := startServer(t, fakeResolver{"db": "10.8.0.5"}, nil, false)
-	metrics := metricsOf(t, srv)
+	m := srv.metrics
 
 	query := func(name string) []byte {
 		t.Helper()
@@ -600,12 +584,12 @@ func TestServerRecordsHowItAnswered(t *testing.T) {
 		QueryInvalid:   1,
 		QueryDropped:   0,
 	} {
-		if got := metrics.recorded(result); got != want {
+		if got := recorded(m, result); got != want {
 			t.Errorf("%s queries = %d, want %d", result, got, want)
 		}
 	}
-	if metrics.forwards != 2 {
-		t.Errorf("forwards timed = %d, want 2", metrics.forwards)
+	if got := forwardsTimed(t, m); got != 2 {
+		t.Errorf("forwards timed = %d, want 2", got)
 	}
 }
 

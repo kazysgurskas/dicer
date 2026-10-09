@@ -29,7 +29,7 @@ import (
 	"github.com/konradasb/dicer/internal/initrd"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
-	"github.com/konradasb/dicer/internal/metrics"
+	"github.com/konradasb/dicer/internal/metric"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
 	"github.com/konradasb/dicer/internal/version"
@@ -57,7 +57,7 @@ type daemon struct {
 	// carries, by type with the default version first.
 	starters map[hypervisor.Type][]hypervisor.Starter
 
-	metrics *metrics.Metrics
+	metrics *metric.Registry
 	events  *event.Log
 }
 
@@ -92,6 +92,7 @@ func (d *daemon) Run(ctx context.Context) error {
 	if err := d.initServices(); err != nil {
 		return err
 	}
+	d.registerMetrics()
 
 	// Deferred first so it runs last: the instance manager records events
 	// until it is closed.
@@ -227,6 +228,7 @@ func (d *daemon) openNetworks() error {
 	var err error
 	d.networkManager, err = network.NewManager(network.Config{
 		Dir:    filepath.Join(d.cfg.DataDir, "allocations"),
+		Store:  d.store,
 		Logger: d.logger,
 	})
 	if err != nil {
@@ -268,7 +270,6 @@ func (d *daemon) initServices() error {
 		MaxConcurrentPulls: 1,
 		Registry:           registryClient,
 		Events:             d.events,
-		Metrics:            d.metrics,
 		Logger:             d.logger,
 	})
 	if err != nil {
@@ -285,6 +286,7 @@ func (d *daemon) initServices() error {
 
 	d.kernelManager, err = kernel.NewManager(kernel.Config{
 		DataDir: d.cfg.DataDir,
+		Store:   d.store,
 		Logger:  d.logger,
 	})
 	if err != nil {
@@ -302,6 +304,7 @@ func (d *daemon) initServices() error {
 
 	d.volumeManager = volume.NewManager(volume.Config{
 		DataDir: d.cfg.DataDir,
+		Store:   d.store,
 		Logger:  d.logger,
 	})
 
@@ -326,7 +329,6 @@ func (d *daemon) initServices() error {
 		HostNetwork: d.hostNetwork,
 		Starters:    d.starters,
 		Capacity:    capacity,
-		Metrics:     d.metrics,
 		Events:      d.events,
 		Logger:      d.logger,
 	}
@@ -335,7 +337,6 @@ func (d *daemon) initServices() error {
 		// instances, and it starts and stops the servers.
 		d.dnsServers = dns.NewServers(dns.Config{
 			Resolver:           instanceNames{d},
-			Metrics:            d.metrics,
 			DefaultNameservers: []string{network.DefaultNameserver},
 			Logger:             d.logger,
 		})

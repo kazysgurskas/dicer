@@ -132,7 +132,7 @@ internal/
   hypervisor/           the hypervisor interface, and its two drivers
   process/              supervising hypervisor processes
   guest/                the host–guest contract, and dicer-init and dicer-agent
-  event/ metrics/       the event log and the Prometheus metrics
+  event/ metric/        the event log, and serving the Prometheus metrics
   archive/              the tar streams file copies travel as
   errdefs/ naming/      error classes, and the rule resource names follow
   defaults/ version/    host paths, and build identity
@@ -176,8 +176,11 @@ make docs-versions  # every version, into docs/site, as it is published
     the daemon's;
   - the compose file the same way, from `internal/compose`'s `rawFile`, and
     the keys it refuses from its `unsupported`;
-  - the metrics from the `Description` each is registered with in
-    `internal/metrics`, whose tests fail if one served is not described;
+  - the metrics from the `Description`s each package lists in its
+    `MetricDescriptions`. The package serves them as a collector, and its
+    tests fail if that serves anything else (`metrictest.CheckDescriptions`).
+    A package with metrics of its own is added to `tools/docgen`'s list, and
+    the daemon registers its collector;
   - the API from `proto/dicerd/v1`, with `tools/docgen/api.md.tmpl`.
 - `docs/versions` lists the versions the site is built for, newest first.
   [RELEASES.md](RELEASES.md) says when to add one.

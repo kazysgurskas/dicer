@@ -83,7 +83,7 @@ const (
 	maxMessage = 65535
 )
 
-// How a server answered a query, as Metrics.RecordDNSQuery is told.
+// How a server answered a query: the result label of dicer_dns_queries_total.
 const (
 	// QueryLocal is a query answered from the network's own names, found
 	// or not.
@@ -100,26 +100,6 @@ const (
 	// the server was too busy.
 	QueryDropped = "dropped"
 )
-
-// Metrics records what the servers answer. It is declared here, and
-// satisfied by internal/metrics, so this package measures itself without
-// depending on a metrics library. It must be safe for concurrent use.
-type Metrics interface {
-	// RecordDNSQuery records a query to a network's server, and how it
-	// was answered: QueryLocal, QueryForwarded, QueryFailed, QueryInvalid
-	// or QueryDropped.
-	RecordDNSQuery(network, result string)
-
-	// RecordDNSForward records how long asking a network's upstream
-	// nameservers took, answered or not.
-	RecordDNSForward(network string, d time.Duration)
-}
-
-// discardMetrics is the Metrics used when none is configured.
-type discardMetrics struct{}
-
-func (discardMetrics) RecordDNSQuery(string, string)          {}
-func (discardMetrics) RecordDNSForward(string, time.Duration) {}
 
 // servedNetwork is what a server needs to know of the network it serves.
 type servedNetwork struct {
@@ -145,7 +125,7 @@ type servedNetwork struct {
 type server struct {
 	network  servedNetwork
 	resolver Resolver
-	metrics  Metrics
+	metrics  metrics
 	logger   *slog.Logger
 
 	udp net.PacketConn
@@ -165,7 +145,7 @@ type server struct {
 
 // listen starts a server for nw on addr.
 func listen(
-	ctx context.Context, addr string, nw servedNetwork, resolver Resolver, metrics Metrics, logger *slog.Logger,
+	ctx context.Context, addr string, nw servedNetwork, resolver Resolver, metrics metrics, logger *slog.Logger,
 ) (*server, error) {
 	var lc net.ListenConfig
 	udp, err := lc.ListenPacket(ctx, "udp4", addr)
@@ -225,7 +205,7 @@ func (s *server) serveUDP(ctx context.Context) {
 		select {
 		case s.inFlight <- struct{}{}:
 		default:
-			s.metrics.RecordDNSQuery(s.network.name, QueryDropped)
+			s.metrics.recordQuery(s.network.name, QueryDropped)
 			continue // too busy: the guest asks again
 		}
 
@@ -255,7 +235,7 @@ func (s *server) serveTCP(ctx context.Context) {
 		select {
 		case s.connections <- struct{}{}:
 		default:
-			s.metrics.RecordDNSQuery(s.network.name, QueryDropped)
+			s.metrics.recordQuery(s.network.name, QueryDropped)
 			_ = conn.Close() // too busy: the guest asks again
 			continue
 		}
@@ -299,37 +279,37 @@ func (s *server) answer(
 	var p dnsmessage.Parser
 	header, err := p.Start(query)
 	if err != nil || header.Response {
-		s.metrics.RecordDNSQuery(s.network.name, QueryInvalid)
+		s.metrics.recordQuery(s.network.name, QueryInvalid)
 		return nil
 	}
 	questions, err := p.AllQuestions()
 	if err != nil || len(questions) != 1 {
-		s.metrics.RecordDNSQuery(s.network.name, QueryInvalid)
+		s.metrics.recordQuery(s.network.name, QueryInvalid)
 		return reply(header, questions, dnsmessage.RCodeFormatError, nil)
 	}
 	q := questions[0]
 
 	if q.Class == dnsmessage.ClassINET {
 		if records, rcode, ok := s.ownRecords(q); ok {
-			s.metrics.RecordDNSQuery(s.network.name, QueryLocal)
+			s.metrics.recordQuery(s.network.name, QueryLocal)
 			return reply(header, questions, rcode, records)
 		}
 	}
 
 	if s.network.internal {
-		s.metrics.RecordDNSQuery(s.network.name, QueryLocal)
+		s.metrics.recordQuery(s.network.name, QueryLocal)
 		return reply(header, questions, dnsmessage.RCodeNameError, nil)
 	}
 
 	started := time.Now()
 	upstream, err := forward(ctx, query)
-	s.metrics.RecordDNSForward(s.network.name, time.Since(started))
+	s.metrics.recordForward(s.network.name, time.Since(started))
 	if err != nil {
-		s.metrics.RecordDNSQuery(s.network.name, QueryFailed)
+		s.metrics.recordQuery(s.network.name, QueryFailed)
 		s.logger.DebugContext(ctx, "forward DNS query", "name", q.Name.String(), "error", err)
 		return reply(header, questions, dnsmessage.RCodeServerFailure, nil)
 	}
-	s.metrics.RecordDNSQuery(s.network.name, QueryForwarded)
+	s.metrics.recordQuery(s.network.name, QueryForwarded)
 	return upstream
 }
 

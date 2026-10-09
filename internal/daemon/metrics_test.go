@@ -14,8 +14,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/konradasb/dicer/internal/network"
 )
 
 // newTestDaemon returns a daemon with metrics built but no services, which is
@@ -146,76 +144,5 @@ func scrape(t *testing.T, url string) string {
 			t.Fatalf("GET %s: %v", url, err)
 		}
 		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func TestNetworkSummariesJoinsDefinitionsAndAllocations(t *testing.T) {
-	d := newTestDaemon(t, MetricsConfig{})
-	openTestDataDir(t, d)
-
-	// A /24 has 256 addresses, of which the network, broadcast and gateway
-	// addresses are not assignable: 253 can be handed out.
-	const subnet = "172.20.0.0/24"
-	nw := network.Network{
-		ID: "n-1", Name: "default", Subnet: subnet, Gateway: "172.20.0.1", Bridge: "dicer0",
-	}
-	if err := d.store.CreateNetwork(nw); err != nil {
-		t.Fatalf("create network: %v", err)
-	}
-
-	for _, id := range []string{"i-1", "i-2"} {
-		if _, err := d.networkManager.Allocate(nw, id, ""); err != nil {
-			t.Fatalf("allocate for %s: %v", id, err)
-		}
-	}
-
-	stats := d.networkSummaries()
-	if len(stats) != 1 {
-		t.Fatalf("got %d networks, want 1: %+v", len(stats), stats)
-	}
-
-	got := stats[0]
-	if got.Name != nw.Name {
-		t.Errorf("Name = %q, want %q", got.Name, nw.Name)
-	}
-	if got.Allocated != 2 {
-		t.Errorf("Allocated = %d, want 2", got.Allocated)
-	}
-	if want := int64(253 - 2); got.Available != want {
-		t.Errorf("Available = %d, want %d", got.Available, want)
-	}
-}
-
-// A host with no networks reports none, rather than an error or a series.
-func TestNetworkSummariesWithNoNetworks(t *testing.T) {
-	d := newTestDaemon(t, MetricsConfig{})
-	openTestDataDir(t, d)
-
-	if stats := d.networkSummaries(); len(stats) != 0 {
-		t.Errorf("networkSummaries() = %+v, want none", stats)
-	}
-}
-
-// The sources are registered before the store and the network manager are
-// opened, so they have to cope with being called first.
-func TestNetworkSummariesBeforeTheDataDirIsOpened(t *testing.T) {
-	d := newTestDaemon(t, MetricsConfig{})
-
-	if stats := d.networkSummaries(); stats != nil {
-		t.Errorf("networkSummaries() = %+v, want nil before the store and the network manager are opened", stats)
-	}
-}
-
-// openTestDataDir gives a daemon a store and a network manager in a temporary
-// data directory, as Run opens them at startup.
-func openTestDataDir(t *testing.T, d *daemon) {
-	t.Helper()
-
-	d.cfg.DataDir = t.TempDir()
-	if err := d.openStore(); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.openNetworks(); err != nil {
-		t.Fatal(err)
 	}
 }

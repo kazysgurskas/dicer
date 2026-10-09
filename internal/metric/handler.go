@@ -1,7 +1,7 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-package metrics
+package metric
 
 import (
 	"fmt"
@@ -11,10 +11,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Handler serves this registry's metrics in the Prometheus exposition format.
-func (m *Metrics) Handler() http.Handler {
-	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{
-		ErrorLog:          scrapeErrorLog{logger: m.logger},
+// Handler returns an http.Handler that serves the registry's metrics in the
+// Prometheus exposition format.
+func (r *Registry) Handler() http.Handler {
+	return promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{
+		ErrorLog:          scrapeErrorLog{logger: r.logger},
 		ErrorHandling:     promhttp.ContinueOnError,
 		EnableOpenMetrics: true,
 	})

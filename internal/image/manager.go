@@ -40,10 +40,6 @@ type Config struct {
 	// Registry fetches images. It decides the platform pulled.
 	Registry registryClient
 
-	// Metrics records pulls and garbage collection. Optional: when nil,
-	// they are not recorded.
-	Metrics Metrics
-
 	// Events records what happens to images. Optional: when nil, it is not
 	// recorded.
 	Events Recorder
@@ -73,41 +69,6 @@ type registryClient interface {
 	CacheSize() (int64, error)
 }
 
-// Metrics records how pulls went. It is declared here, and satisfied by
-// internal/metrics, so this package measures itself without depending on a
-// metrics library.
-type Metrics interface {
-	// RecordImagePull records a pull that went to a registry: its outcome,
-	// how long it took and the compressed bytes it downloaded.
-	RecordImagePull(err error, d time.Duration, downloadedBytes int64)
-
-	// RecordImageConversion records the time spent packing an unpacked
-	// image into the disk a guest boots from.
-	RecordImageConversion(d time.Duration)
-
-	// RecordImageCacheLookup records whether a requested image was already
-	// held on this host.
-	RecordImageCacheLookup(hit bool)
-
-	// RecordImageGCCollected records an image garbage collection removed,
-	// and why: GCReasonUnused or GCReasonSize.
-	RecordImageGCCollected(reason string)
-
-	// RecordImageGCReclaimed records the bytes garbage collection gave back.
-	RecordImageGCReclaimed(bytes int64)
-}
-
-// discardMetrics is the Metrics used when none is configured, so that the
-// pull path can record unconditionally. It is the same treatment
-// Config.Logger gets.
-type discardMetrics struct{}
-
-func (discardMetrics) RecordImagePull(error, time.Duration, int64) {}
-func (discardMetrics) RecordImageConversion(time.Duration)         {}
-func (discardMetrics) RecordImageCacheLookup(bool)                 {}
-func (discardMetrics) RecordImageGCCollected(string)               {}
-func (discardMetrics) RecordImageGCReclaimed(int64)                {}
-
 // packer packs a directory tree into a filesystem image at outputPath, and
 // returns the image's size in bytes.
 type packer interface {
@@ -122,7 +83,7 @@ type Manager struct {
 	pullSlots *semaphore.Weighted // bounds concurrent pulls of different images
 	registry  registryClient
 	packer    packer
-	metrics   Metrics
+	metrics   metrics
 	events    Recorder
 	logger    *slog.Logger
 
@@ -139,9 +100,6 @@ func NewManager(cfg Config) (*Manager, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	if cfg.Metrics == nil {
-		cfg.Metrics = discardMetrics{}
-	}
 	if cfg.Events == nil {
 		cfg.Events = discardRecorder{}
 	}
@@ -152,7 +110,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		pullSlots: semaphore.NewWeighted(int64(cfg.MaxConcurrentPulls)),
 		registry:  cfg.Registry,
 		packer:    erofs{},
-		metrics:   cfg.Metrics,
+		metrics:   newMetrics(),
 		events:    cfg.Events,
 		logger:    cfg.Logger.With("component", "image"),
 		pulls:     make(map[string]*pull),
@@ -187,7 +145,7 @@ func (m *Manager) Pull(ctx context.Context, ref string, onProgress ProgressFunc)
 
 	digest := resolved.Digest()
 	image, hit := m.index.get(digest)
-	m.metrics.RecordImageCacheLookup(hit)
+	m.metrics.cacheLookups.WithLabelValues(cacheLookupResult(hit)).Inc()
 	if hit {
 		// Pulled again, though nothing was fetched: that is a use.
 		m.markUsed(digest, time.Now())
@@ -334,7 +292,7 @@ func (m *Manager) pullFromRegistry(
 	// the disk it became.
 	var downloaded downloadCounter
 	started := time.Now()
-	defer func() { m.metrics.RecordImagePull(err, time.Since(started), downloaded.total()) }()
+	defer func() { m.observePull(err, started, downloaded.total()) }()
 
 	m.logger.InfoContext(ctx, "pulling image", "ref", resolved.String(), "digest", digest)
 
@@ -362,7 +320,7 @@ func (m *Manager) pullFromRegistry(
 	diskPath := m.diskPath(digestHex)
 	convertStarted := time.Now()
 	sizeBytes, err := m.packer.Pack(ctx, rootfsDir, diskPath)
-	m.metrics.RecordImageConversion(time.Since(convertStarted))
+	m.metrics.conversionDuration.Observe(time.Since(convertStarted).Seconds())
 	if err != nil {
 		return m.discardFailedPull(digestHex, &ConvertError{Digest: digest, Format: "erofs", Cause: err})
 	}

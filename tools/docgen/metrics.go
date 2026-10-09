@@ -7,10 +7,17 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/konradasb/dicer/internal/dns"
+	"github.com/konradasb/dicer/internal/grpcapi"
+	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
-	"github.com/konradasb/dicer/internal/metrics"
+	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/metric"
+	"github.com/konradasb/dicer/internal/network"
+	"github.com/konradasb/dicer/internal/volume"
 )
 
 // metricSection is a section of the metrics reference: a group's table, and
@@ -23,48 +30,48 @@ type metricSection struct {
 // with no section fails the generation.
 var metricSections = []metricSection{
 	{
-		group:   metrics.GroupDaemon,
+		group:   metric.GroupDaemon,
 		heading: "Daemon",
 		after:   "The daemon's uptime is `time() - process_start_time_seconds`.",
 	},
 	{
-		group:   metrics.GroupInstances,
+		group:   metric.GroupInstances,
 		heading: "Instances",
 		after: "The allocatable amounts are the host's CPUs and memory, less the reserve, multiplied by " +
 			"the overcommit, as the configuration's [`resources`]({{< relref \"/docs/reference/configuration#resources\" >}}) " +
 			"sets them. See [Capacity]({{< relref \"/docs/guides/capacity\" >}}).",
 	},
 	{
-		group:   metrics.GroupInstanceStats,
+		group:   metric.GroupInstanceStats,
 		heading: "Instance stats",
 		after: "What each running or paused instance uses of the host, read from its hypervisor process " +
 			"and TAP device, with nothing asked of the guest. A series begins again each time the instance " +
 			"starts, and is gone while it is stopped. `dicer stats` shows the same live.",
 	},
 	{
-		group:   metrics.GroupImages,
+		group:   metric.GroupImages,
 		heading: "Images",
 	},
 	{
-		group:   metrics.GroupKernels,
+		group:   metric.GroupKernels,
 		heading: "Kernels",
 	},
 	{
-		group:   metrics.GroupVolumes,
+		group:   metric.GroupVolumes,
 		heading: "Volumes",
 	},
 	{
-		group:   metrics.GroupNetworks,
+		group:   metric.GroupNetworks,
 		heading: "Networks",
 	},
 	{
-		group:   metrics.GroupDNS,
+		group:   metric.GroupDNS,
 		heading: "DNS",
 		after: "What each network's DNS server, on its gateway address, has answered. There is none while the " +
 			"configuration's [`network.dns`]({{< relref \"/docs/reference/configuration#network-dns\" >}}) is off.",
 	},
 	{
-		group:   metrics.GroupAPI,
+		group:   metric.GroupAPI,
 		heading: "API",
 	},
 }
@@ -77,21 +84,26 @@ const metricsIntro = "The Prometheus metrics the daemon serves at `/metrics`, on
 	"The endpoint also serves the Go runtime's `go_*` metrics and the daemon process's `process_*` " +
 	"metrics, and speaks OpenMetrics to a scraper that asks for it.\n"
 
-// writeMetrics writes the metrics reference from those the daemon registers.
-func writeMetrics(dir string) error {
-	// Every source given, so that the gauges read from them are registered
-	// too; they are never read here.
-	m := metrics.New(metrics.Options{Sources: metrics.Sources{
-		Instances:     func() metrics.InstanceSummary { return metrics.InstanceSummary{} },
-		InstanceStats: func() []instance.Stats { return nil },
-		Networks:      func() []metrics.NetworkSummary { return nil },
-		Images:        func() metrics.ImageSummary { return metrics.ImageSummary{} },
-		Kernels:       func() metrics.KernelSummary { return metrics.KernelSummary{} },
-		Volumes:       func() metrics.VolumeSummary { return metrics.VolumeSummary{} },
-	}})
+// metricDescriptions returns every metric the daemon serves, as each package
+// lists it.
+func metricDescriptions() []metric.Description {
+	return slices.Concat(
+		metric.Descriptions(),
+		instance.MetricDescriptions(),
+		image.MetricDescriptions(),
+		kernel.MetricDescriptions(),
+		volume.MetricDescriptions(),
+		network.MetricDescriptions(),
+		dns.MetricDescriptions(),
+		grpcapi.MetricDescriptions(),
+	)
+}
 
-	byGroup := map[string][]metrics.Description{}
-	for _, d := range m.Reference() {
+// writeMetrics writes the metrics reference from the metrics each package
+// lists.
+func writeMetrics(dir string) error {
+	byGroup := map[string][]metric.Description{}
+	for _, d := range metricDescriptions() {
 		byGroup[d.Group] = append(byGroup[d.Group], d)
 	}
 

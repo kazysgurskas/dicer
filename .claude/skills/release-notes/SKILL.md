@@ -43,7 +43,7 @@ changed for them, and what they have to do about it.
   not admit to:
 
   ```console
-  git diff --stat PREV..TAG -- proto/ internal/daemon/config.go internal/cli/ internal/metrics/ '*.go'
+  git diff --stat PREV..TAG -- proto/ internal/daemon/config.go internal/cli/ internal/metric/ '*.go'
   ```
 
   and read the diff where the stat is not enough.

@@ -140,11 +140,11 @@ func (m *Manager) collect(p GCPolicy, images []*Image, reason GCReason, result *
 	removed, err := m.remove(images)
 	for _, image := range removed.Images {
 		result.Removed = append(result.Removed, GCRemoval{Image: &image, Reason: reason})
-		m.metrics.RecordImageGCCollected(string(reason))
+		m.metrics.gcCollected.WithLabelValues(string(reason)).Inc()
 		m.record(&image, event.ActionCollected, gcMessage(p, &image, reason), map[string]string{"reason": string(reason)})
 	}
 	result.ReclaimedBytes += removed.ReclaimedBytes
-	m.metrics.RecordImageGCReclaimed(removed.ReclaimedBytes)
+	m.metrics.gcReclaimed.Add(float64(removed.ReclaimedBytes))
 	return err
 }
 

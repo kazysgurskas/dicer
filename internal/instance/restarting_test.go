@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // A workload that exits 0 is a clean end: the instance is Stopped, not
@@ -50,8 +52,6 @@ func TestOnFailureRestartsCrashedInstance(t *testing.T) {
 	h := newHarness(t)
 	h.setRestart(t, RestartPolicy{Mode: RestartModeOnFailure})
 	h.restartAtOnce()
-	metrics := &fakeMetrics{}
-	h.manager.metrics = metrics
 	h.start(t)
 
 	h.crash(t)
@@ -64,8 +64,8 @@ func TestOnFailureRestartsCrashedInstance(t *testing.T) {
 	if h.manager.vmm(h.instance.ID) != h.starter.vmm() {
 		t.Error("the restarted VMM is not supervised")
 	}
-	if metrics.restarts != 1 {
-		t.Errorf("restarts recorded = %d, want 1", metrics.restarts)
+	if got := testutil.ToFloat64(h.manager.metrics.restarts); got != 1 {
+		t.Errorf("restarts recorded = %v, want 1", got)
 	}
 }
 
