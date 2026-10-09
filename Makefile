@@ -251,11 +251,13 @@ DOCS_DIR := $(CURDIR)/docs
 # The reference pages generated from the code: the command line, the
 # configuration, the compose file and the metrics by tools/docgen, the API by protoc-gen-doc
 # with its template.
-# They are committed, and CI checks they are current.
+# They are committed, and CI checks they are current. tools/docgen reads the
+# metrics from the packages that serve them, and the kernel package embeds
+# the default kernel, so that has to be downloaded first.
 DOCS_API_TEMPLATE := {"version":"v2","plugins":[{"local":"$(PROTOC_GEN_DOC)","out":"docs/content/docs/reference","opt":["tools/docgen/api.md.tmpl,api.md"]}]}
 
 .PHONY: docs-gen
-docs-gen: $(BUF) $(PROTOC_GEN_DOC) ## Generate the documentation site's reference pages
+docs-gen: $(BUF) $(PROTOC_GEN_DOC) $(KERNEL_BIN)/$(GOARCH)/$(KERNEL_VERSION)/vmlinux.zst ## Generate the documentation site's reference pages
 	go run ./tools/docgen
 	$(BUF) generate --template '$(DOCS_API_TEMPLATE)' --path proto/dicerd/v1
 
