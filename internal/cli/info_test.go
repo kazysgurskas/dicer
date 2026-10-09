@@ -68,7 +68,7 @@ func TestWriteInfo(t *testing.T) {
 └───────┘
 
          Remote: local (unix:///run/dicer/dicer.sock)
-    Network API: off (set api.tcp.listen to serve it over the network)
+       Listener: off (set server.listen to serve the API over TCP)
 
     Hypervisors: cloud-hypervisor v49.0.0 (default), v48.0.0 (deprecated)
                  firecracker v1.17.0
@@ -85,8 +85,8 @@ func TestWriteInfo(t *testing.T) {
 	}
 }
 
-func TestWriteInfoWithNetworkAPI(t *testing.T) {
-	host := dicer.HostInfo{APIAddresses: []string{"192.0.2.1:7443"}}
+func TestWriteInfoWithAListener(t *testing.T) {
+	host := dicer.HostInfo{ListenerAddresses: []string{"192.0.2.1:7443"}, Fingerprint: "abcd", Token: "laptop"}
 
 	var out bytes.Buffer
 	if err := writeInfo(&out, target{name: remote.Local, remote: remote.Remote{Address: dicer.DefaultAddress}},
@@ -95,7 +95,7 @@ func TestWriteInfoWithNetworkAPI(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"    Network API: 192.0.2.1:7443\n",
+		"       Listener: 192.0.2.1:7443\n                 fingerprint abcd\n                 token laptop\n",
 		"no instances defined\n",
 	} {
 		if !strings.Contains(out.String(), want) {

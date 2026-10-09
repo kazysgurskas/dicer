@@ -66,22 +66,17 @@ func writeConfiguration(root, dir string) error {
 					"check a change with `sudo dicerd validate` before `sudo systemctl restart dicerd`.\n\n" +
 					"```yaml\n" +
 					"data_dir: /var/lib/dicer\n" +
-					"api:\n" +
+					"server:\n" +
+					"  listen: 0.0.0.0:7443\n" +
 					"  socket:\n" +
 					"    group: dicer\n" +
-					"  tcp:\n" +
-					"    listen: 0.0.0.0:7443\n" +
-					"    tls:\n" +
-					"      cert_file: /etc/dicerd/tls/server.pem\n" +
-					"      key_file: /etc/dicerd/tls/server-key.pem\n" +
-					"      client_ca_file: /etc/dicerd/tls/ca.pem\n" +
 					"metrics:\n" +
 					"  enable: true\n" +
 					"images:\n" +
 					"  gc_max_size: 50GiB\n" +
 					"```\n\n" +
 					"## General {#general}\n\n" +
-					"The daemon's own settings. The sections after them are the API, resources, networking, " +
+					"The daemon's own settings. The sections after them are the server, resources, networking, " +
 					"metrics, images, events and registries.",
 				importPath: daemonPackage, structName: "Config",
 			}},

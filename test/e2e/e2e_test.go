@@ -201,18 +201,17 @@ func (e *environment) deploy(ctx context.Context) error {
 func (e *environment) writeConfig(ctx context.Context) error {
 	config := fmt.Sprintf(`data_dir: %s
 run_dir: %s
-api:
+server:
+  listen: %s
   socket:
     path: %s
-  tcp:
-    listen: %s
 log_level: debug
 network:
   default_subnet: %s
 metrics:
   enable: true
   listen: %s
-`, e.paths.dataDir, e.paths.runDir, e.paths.socket, e.paths.api, defaultSubnet, e.paths.metrics)
+`, e.paths.dataDir, e.paths.runDir, e.paths.api, e.paths.socket, defaultSubnet, e.paths.metrics)
 
 	// A heredoc keeps the file's content out of the command line, where it
 	// would have to survive two levels of shell quoting.

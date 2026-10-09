@@ -37,7 +37,10 @@ option go_package = "github.com/konradasb/dicer/proto/dicerd/v1;dicerdv1";
 //   instance, addresses on a network.
 // - `UNAVAILABLE`: something the daemon needs cannot be reached: a registry,
 //   a guest's agent. Trying again may work.
-// - `PERMISSION_DENIED`: the guest refused, such as a file it protects.
+// - `PERMISSION_DENIED`: the call's token does not have the scope it needs,
+//   or the guest refused, such as a file it protects.
+// - `UNAUTHENTICATED`: a call to the daemon's TCP listener had no token, or
+//   one the daemon does not know.
 // - `UNIMPLEMENTED`: the daemon, or an instance's guest agent, is too old for
 //   the call.
 // - `INTERNAL`: anything else: the daemon failed.
@@ -201,6 +204,22 @@ service DaemonService {
   // DeleteKernel removes a kernel that no instance references. The default
   // kernel cannot be deleted.
   rpc DeleteKernel(DeleteKernelRequest) returns (google.protobuf.Empty);
+
+  // CreateToken makes a token for the daemon's TCP listener. It returns the
+  // token's value, which is never returned again: the daemon keeps only the
+  // SHA-256 of its secret. It fails with FAILED_PRECONDITION if the daemon
+  // is not served over TCP.
+  rpc CreateToken(CreateTokenRequest) returns (IssuedToken);
+  // ListTokens returns every token, without their values.
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
+  // GetToken returns one token, without its value.
+  rpc GetToken(GetTokenRequest) returns (Token);
+  // RotateToken gives a token a new secret and returns its new value, as
+  // CreateToken does. The old value stops working at once.
+  rpc RotateToken(RotateTokenRequest) returns (IssuedToken);
+  // DeleteToken removes a token. A client using it is refused from its next
+  // call.
+  rpc DeleteToken(DeleteTokenRequest) returns (google.protobuf.Empty);
 
   // GetHostInfo reports what the daemon is: its version, the hypervisors it
   // carries, and how it is reached.
@@ -1218,6 +1237,63 @@ message DeleteKernelRequest {
   string name = 1;
 }
 
+// Token is a credential a client presents to the daemon's TCP listener.
+message Token {
+  string id = 1;
+  string name = 2;
+  // What the token allows: "*" for everything, or RESOURCE:ACTION, such as
+  // "instances:write". RESOURCE is instances, snapshots, networks, volumes,
+  // images, kernels, tokens or events, and ACTION is read or write. Events
+  // have only read. A read scope allows the calls that look at its resource. A
+  // write scope also allows those that change it. A call its token's scopes
+  // do not allow fails with PERMISSION_DENIED. A token may make, rotate and
+  // delete only tokens whose scopes its own allow.
+  repeated string scopes = 3;
+  google.protobuf.Timestamp create_time = 4;
+  google.protobuf.Timestamp update_time = 5;
+  // When the token last made a call, to the minute. Unset if it never has.
+  google.protobuf.Timestamp last_use_time = 6;
+}
+
+// IssuedToken is a token with its value, as it is made or rotated.
+message IssuedToken {
+  Token token = 1;
+  // What a client connects with: "dicer_" and the secret. Unless
+  // server.crt_file gives the daemon's certificate, an underscore and the
+  // daemon's fingerprint follow, which the client checks the daemon by.
+  string value = 2;
+}
+
+message CreateTokenRequest {
+  string name = 1;
+  // What the token allows, as Token.scopes says. Unset is "*".
+  repeated string scopes = 2;
+  // The token's secret: at least 32 letters and digits. Unset has the daemon
+  // make one, which is what you want unless a tool must know the secret
+  // before the token exists.
+  string secret = 3;
+}
+
+message ListTokensRequest {}
+
+message ListTokensResponse {
+  repeated Token tokens = 1;
+}
+
+message GetTokenRequest {
+  string name = 1;
+}
+
+message RotateTokenRequest {
+  string name = 1;
+  // The token's new secret, as CreateTokenRequest.secret says.
+  string secret = 2;
+}
+
+message DeleteTokenRequest {
+  string name = 1;
+}
+
 message GetHostInfoRequest {}
 
 message GetHostInfoResponse {
@@ -1228,13 +1304,21 @@ message GetHostInfoResponse {
   // Field 4 held the fingerprint of the key the API was served with, back
   // when the network API authenticated its clients.
   reserved 4;
-  // The addresses the API is served on over TCP, for a client being pointed
-  // at this daemon. Empty if it is not served over TCP.
-  repeated string api_addresses = 5;
+  // The addresses clients reach the daemon's TCP listener at. For a
+  // listener on all of the host's addresses, they are the host's own, with
+  // the default route's first. Loopback, link-local and Dicer's bridges'
+  // addresses are left out. Empty if the API is not served over TCP.
+  repeated string listener_addresses = 5;
   // Fields 6 and 7 held the default kernel and network, back when they
   // could be configured. Both are now named "default".
   reserved 6, 7;
   reserved "default_kernel", "default_network";
+  // The fingerprint of the daemon's certificate on its TCP listener: the
+  // SHA-256 of its public key, hex-encoded. Empty if it is not served over
+  // TCP.
+  string fingerprint = 8;
+  // The name of the token this call was made with. Empty over the socket.
+  string token = 9;
 }
 
 message GetResourcesRequest {}

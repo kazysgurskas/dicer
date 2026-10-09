@@ -30,6 +30,8 @@ var classes = []struct {
 	{errdefs.ErrInvalidArgument, codes.InvalidArgument},
 	{errdefs.ErrResourceExhausted, codes.ResourceExhausted},
 	{errdefs.ErrUnavailable, codes.Unavailable},
+	{errdefs.ErrUnauthenticated, codes.Unauthenticated},
+	{errdefs.ErrPermissionDenied, codes.PermissionDenied},
 	{errors.ErrUnsupported, codes.Unimplemented},
 	{context.Canceled, codes.Canceled},
 	{context.DeadlineExceeded, codes.DeadlineExceeded},

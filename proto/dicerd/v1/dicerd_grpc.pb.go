@@ -66,6 +66,11 @@ const (
 	DaemonService_ListKernels_FullMethodName            = "/dicerd.v1.DaemonService/ListKernels"
 	DaemonService_GetKernel_FullMethodName              = "/dicerd.v1.DaemonService/GetKernel"
 	DaemonService_DeleteKernel_FullMethodName           = "/dicerd.v1.DaemonService/DeleteKernel"
+	DaemonService_CreateToken_FullMethodName            = "/dicerd.v1.DaemonService/CreateToken"
+	DaemonService_ListTokens_FullMethodName             = "/dicerd.v1.DaemonService/ListTokens"
+	DaemonService_GetToken_FullMethodName               = "/dicerd.v1.DaemonService/GetToken"
+	DaemonService_RotateToken_FullMethodName            = "/dicerd.v1.DaemonService/RotateToken"
+	DaemonService_DeleteToken_FullMethodName            = "/dicerd.v1.DaemonService/DeleteToken"
 	DaemonService_GetHostInfo_FullMethodName            = "/dicerd.v1.DaemonService/GetHostInfo"
 	DaemonService_GetResources_FullMethodName           = "/dicerd.v1.DaemonService/GetResources"
 	DaemonService_GetEvents_FullMethodName              = "/dicerd.v1.DaemonService/GetEvents"
@@ -101,7 +106,10 @@ const (
 //     instance, addresses on a network.
 //   - `UNAVAILABLE`: something the daemon needs cannot be reached: a registry,
 //     a guest's agent. Trying again may work.
-//   - `PERMISSION_DENIED`: the guest refused, such as a file it protects.
+//   - `PERMISSION_DENIED`: the call's token does not have the scope it needs,
+//     or the guest refused, such as a file it protects.
+//   - `UNAUTHENTICATED`: a call to the daemon's TCP listener had no token, or
+//     one the daemon does not know.
 //   - `UNIMPLEMENTED`: the daemon, or an instance's guest agent, is too old for
 //     the call.
 //   - `INTERNAL`: anything else: the daemon failed.
@@ -259,6 +267,21 @@ type DaemonServiceClient interface {
 	// DeleteKernel removes a kernel that no instance references. The default
 	// kernel cannot be deleted.
 	DeleteKernel(ctx context.Context, in *DeleteKernelRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// CreateToken makes a token for the daemon's TCP listener. It returns the
+	// token's value, which is never returned again: the daemon keeps only the
+	// SHA-256 of its secret. It fails with FAILED_PRECONDITION if the daemon
+	// is not served over TCP.
+	CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*IssuedToken, error)
+	// ListTokens returns every token, without their values.
+	ListTokens(ctx context.Context, in *ListTokensRequest, opts ...grpc.CallOption) (*ListTokensResponse, error)
+	// GetToken returns one token, without its value.
+	GetToken(ctx context.Context, in *GetTokenRequest, opts ...grpc.CallOption) (*Token, error)
+	// RotateToken gives a token a new secret and returns its new value, as
+	// CreateToken does. The old value stops working at once.
+	RotateToken(ctx context.Context, in *RotateTokenRequest, opts ...grpc.CallOption) (*IssuedToken, error)
+	// DeleteToken removes a token. A client using it is refused from its next
+	// call.
+	DeleteToken(ctx context.Context, in *DeleteTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// GetHostInfo reports what the daemon is: its version, the hypervisors it
 	// carries, and how it is reached.
 	GetHostInfo(ctx context.Context, in *GetHostInfoRequest, opts ...grpc.CallOption) (*GetHostInfoResponse, error)
@@ -757,6 +780,56 @@ func (c *daemonServiceClient) DeleteKernel(ctx context.Context, in *DeleteKernel
 	return out, nil
 }
 
+func (c *daemonServiceClient) CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*IssuedToken, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssuedToken)
+	err := c.cc.Invoke(ctx, DaemonService_CreateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) ListTokens(ctx context.Context, in *ListTokensRequest, opts ...grpc.CallOption) (*ListTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTokensResponse)
+	err := c.cc.Invoke(ctx, DaemonService_ListTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) GetToken(ctx context.Context, in *GetTokenRequest, opts ...grpc.CallOption) (*Token, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Token)
+	err := c.cc.Invoke(ctx, DaemonService_GetToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) RotateToken(ctx context.Context, in *RotateTokenRequest, opts ...grpc.CallOption) (*IssuedToken, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssuedToken)
+	err := c.cc.Invoke(ctx, DaemonService_RotateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *daemonServiceClient) DeleteToken(ctx context.Context, in *DeleteTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, DaemonService_DeleteToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *daemonServiceClient) GetHostInfo(ctx context.Context, in *GetHostInfoRequest, opts ...grpc.CallOption) (*GetHostInfoResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetHostInfoResponse)
@@ -826,7 +899,10 @@ type DaemonService_GetEventsClient = grpc.ServerStreamingClient[GetEventsRespons
 //     instance, addresses on a network.
 //   - `UNAVAILABLE`: something the daemon needs cannot be reached: a registry,
 //     a guest's agent. Trying again may work.
-//   - `PERMISSION_DENIED`: the guest refused, such as a file it protects.
+//   - `PERMISSION_DENIED`: the call's token does not have the scope it needs,
+//     or the guest refused, such as a file it protects.
+//   - `UNAUTHENTICATED`: a call to the daemon's TCP listener had no token, or
+//     one the daemon does not know.
 //   - `UNIMPLEMENTED`: the daemon, or an instance's guest agent, is too old for
 //     the call.
 //   - `INTERNAL`: anything else: the daemon failed.
@@ -984,6 +1060,21 @@ type DaemonServiceServer interface {
 	// DeleteKernel removes a kernel that no instance references. The default
 	// kernel cannot be deleted.
 	DeleteKernel(context.Context, *DeleteKernelRequest) (*emptypb.Empty, error)
+	// CreateToken makes a token for the daemon's TCP listener. It returns the
+	// token's value, which is never returned again: the daemon keeps only the
+	// SHA-256 of its secret. It fails with FAILED_PRECONDITION if the daemon
+	// is not served over TCP.
+	CreateToken(context.Context, *CreateTokenRequest) (*IssuedToken, error)
+	// ListTokens returns every token, without their values.
+	ListTokens(context.Context, *ListTokensRequest) (*ListTokensResponse, error)
+	// GetToken returns one token, without its value.
+	GetToken(context.Context, *GetTokenRequest) (*Token, error)
+	// RotateToken gives a token a new secret and returns its new value, as
+	// CreateToken does. The old value stops working at once.
+	RotateToken(context.Context, *RotateTokenRequest) (*IssuedToken, error)
+	// DeleteToken removes a token. A client using it is refused from its next
+	// call.
+	DeleteToken(context.Context, *DeleteTokenRequest) (*emptypb.Empty, error)
 	// GetHostInfo reports what the daemon is: its version, the hypervisors it
 	// carries, and how it is reached.
 	GetHostInfo(context.Context, *GetHostInfoRequest) (*GetHostInfoResponse, error)
@@ -1134,6 +1225,21 @@ func (UnimplementedDaemonServiceServer) GetKernel(context.Context, *GetKernelReq
 }
 func (UnimplementedDaemonServiceServer) DeleteKernel(context.Context, *DeleteKernelRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteKernel not implemented")
+}
+func (UnimplementedDaemonServiceServer) CreateToken(context.Context, *CreateTokenRequest) (*IssuedToken, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateToken not implemented")
+}
+func (UnimplementedDaemonServiceServer) ListTokens(context.Context, *ListTokensRequest) (*ListTokensResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTokens not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetToken(context.Context, *GetTokenRequest) (*Token, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetToken not implemented")
+}
+func (UnimplementedDaemonServiceServer) RotateToken(context.Context, *RotateTokenRequest) (*IssuedToken, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RotateToken not implemented")
+}
+func (UnimplementedDaemonServiceServer) DeleteToken(context.Context, *DeleteTokenRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteToken not implemented")
 }
 func (UnimplementedDaemonServiceServer) GetHostInfo(context.Context, *GetHostInfoRequest) (*GetHostInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHostInfo not implemented")
@@ -1877,6 +1983,96 @@ func _DaemonService_DeleteKernel_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DaemonService_CreateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).CreateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_CreateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).CreateToken(ctx, req.(*CreateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_ListTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).ListTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_ListTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).ListTokens(ctx, req.(*ListTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_GetToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetToken(ctx, req.(*GetTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_RotateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).RotateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_RotateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).RotateToken(ctx, req.(*RotateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DaemonService_DeleteToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).DeleteToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_DeleteToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).DeleteToken(ctx, req.(*DeleteTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DaemonService_GetHostInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetHostInfoRequest)
 	if err := dec(in); err != nil {
@@ -2074,6 +2270,26 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteKernel",
 			Handler:    _DaemonService_DeleteKernel_Handler,
+		},
+		{
+			MethodName: "CreateToken",
+			Handler:    _DaemonService_CreateToken_Handler,
+		},
+		{
+			MethodName: "ListTokens",
+			Handler:    _DaemonService_ListTokens_Handler,
+		},
+		{
+			MethodName: "GetToken",
+			Handler:    _DaemonService_GetToken_Handler,
+		},
+		{
+			MethodName: "RotateToken",
+			Handler:    _DaemonService_RotateToken_Handler,
+		},
+		{
+			MethodName: "DeleteToken",
+			Handler:    _DaemonService_DeleteToken_Handler,
 		},
 		{
 			MethodName: "GetHostInfo",

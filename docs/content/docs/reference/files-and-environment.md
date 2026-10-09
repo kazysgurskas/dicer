@@ -19,7 +19,6 @@ variables it reads. The paths below are the defaults. The daemon's
 | `/usr/lib/systemd/system/dicerd.service` | The service, as the package installs it. `install.sh` writes it to `/etc/systemd/system`. |
 | `/usr/lib/sysctl.d/60-dicer.conf` | The package's setting that turns IPv4 forwarding on. `install.sh` writes `/etc/sysctl.d/99-dicer.conf`, if forwarding was off. |
 | `/usr/lib/firewalld/zones/dicer.xml` | The `dicer` firewalld zone, as the package installs it. `install.sh` writes it to `/etc/firewalld/zones`, where firewalld is installed. See [Networking](../../concepts/networking#firewalld). |
-| `/etc/dicerd/tls/` | Where the [Remote access](../../guides/remote-access) guide and the Ansible role keep the daemon's TLS files. Purging the deb package removes them with `/etc/dicerd`. |
 | `/var/lib/dicer` | Persistent state, `data_dir`, kept across reboots. |
 | `/run/dicer` | Runtime state, `run_dir`. It is a tmpfs, which a reboot clears. |
 | `/run/dicer/dicer.sock` | The API's socket. The configuration that the package and `install.sh` write lets root and the `dicer` group use it. |
@@ -43,6 +42,8 @@ which keeps them consistent.
 │   ├── overlay.img           its copy of the instance's overlay disk
 │   └── ...                   a memory snapshot's memory and device state
 ├── networks/<name>.yaml      network definitions
+├── tokens/<name>.yaml        tokens, each with its secret's SHA-256, not the secret
+├── server.crt, server.key    the certificate the API is served with over TCP, unless server.crt_file names another
 ├── allocations/<network>.yaml   which instance has which address
 ├── volumes/
 │   ├── <name>.yaml           volume definitions
@@ -103,7 +104,7 @@ as `dicer fork` does.
 
 | Path | |
 |---|---|
-| `~/.config/dicer/remotes.yaml` | Remotes, and which is current. The directory is `$DICER_CONFIG_DIR` if set. Otherwise it is `dicer` in the user's configuration directory: `$XDG_CONFIG_HOME/dicer` or `~/.config/dicer` on Linux, and `~/Library/Application Support/dicer` on macOS. |
+| `~/.config/dicer/remotes.yaml` | Remotes, with their tokens, and which is current. Only its owner can read it. The directory is `$DICER_CONFIG_DIR` if set. Otherwise it is `dicer` in the user's configuration directory: `$XDG_CONFIG_HOME/dicer` or `~/.config/dicer` on Linux, and `~/Library/Application Support/dicer` on macOS. |
 
 ## Environment variables
 
@@ -112,6 +113,7 @@ as `dicer fork` does.
 | Variable | |
 |---|---|
 | `DICER_REMOTE` | The remote that commands go to, as a name or an address, unless `--remote` is given. See [Remote access](../../guides/remote-access#choose-which-daemon-to-talk-to). |
+| `DICER_TOKEN` | The token for a daemon's TCP listener, in place of the remote's own. |
 | `DICER_CONFIG_DIR` | Where remotes are kept. |
 | `DICER_DEBUG` | Set to `1` or `true` to trace every call to the daemon on standard error, as `--debug` does. |
 | `DICER_COMPOSE_FILE` | The compose file `dicer compose` uses, unless `-f` is given. |

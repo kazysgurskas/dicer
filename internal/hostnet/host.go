@@ -35,10 +35,10 @@ type Config struct {
 	UploadBurstMultiplier   int
 	DownloadBurstMultiplier int
 
-	// APIPort is the TCP port the daemon serves its API on. Guests are kept
+	// ListenerPort is the port of the daemon's TCP listener. Guests are kept
 	// from reaching it on any of the host's addresses, since whoever reaches
 	// the API controls the host. 0 is none.
-	APIPort int
+	ListenerPort int
 
 	// Logger is the logger to use. Nil is slog.Default.
 	Logger *slog.Logger

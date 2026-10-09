@@ -57,8 +57,9 @@ const (
 // write them for someone configuring the daemon.
 type Config struct {
 	// DataDir is where the daemon keeps what persists: the definitions of
-	// instances, networks, volumes and kernels, the images, and the
-	// instances' disks. Unset is /var/lib/dicer.
+	// instances, networks, volumes, kernels and tokens, the images, the
+	// instances' disks, and the certificate it makes for itself. Unset is
+	// /var/lib/dicer.
 	DataDir string `yaml:"data_dir,omitempty"`
 
 	// RunDir is where the daemon keeps runtime state: sockets, config disks
@@ -66,9 +67,9 @@ type Config struct {
 	// reboot clears it. Unset is /run/dicer.
 	RunDir string `yaml:"run_dir,omitempty"`
 
-	// API is where the API is served: always on a Unix socket, and on TCP
-	// too if api.tcp.listen is set.
-	API APIConfig `yaml:"api"`
+	// Server is where the API is served: always on a Unix socket, and over
+	// TCP too if server.listen is set.
+	Server ServerConfig `yaml:"server"`
 
 	// Resources is how much CPU and memory instances may be given, all
 	// together: the host's CPUs times cpu_overcommit, and its memory less
@@ -169,17 +170,30 @@ func (r RegistryConfig) auth() registry.Auth {
 	}
 }
 
-// APIConfig controls where the API is served: always on a Unix socket, and
-// on TCP if Listen is set.
-type APIConfig struct {
+// ServerConfig controls where the API is served: always on a Unix socket,
+// and over TCP too if Listen is set.
+type ServerConfig struct {
+	// Listen is the host:port to serve the API on over TCP, such as
+	// 0.0.0.0:7443. Unset, the API is served on the socket alone. Over TCP,
+	// every connection uses TLS 1.3, and every call needs a token, which
+	// `dicer token create` makes. Guests cannot reach it, on any of the
+	// host's addresses.
+	Listen string `yaml:"listen,omitempty"`
+
+	// CrtFile is the PEM certificate the API is served with over TCP. It
+	// must name the address clients connect to, and is reloaded when it
+	// changes on disk. Unset, the daemon makes a certificate of its own and
+	// keeps it in data_dir. Every token then carries its fingerprint, so
+	// clients need nothing else to check the daemon by.
+	CrtFile string `yaml:"crt_file,omitempty"`
+
+	// KeyFile is the PEM private key of crt_file. It is reloaded when it
+	// changes on disk.
+	KeyFile string `yaml:"key_file,omitempty"`
+
 	// Socket is the local Unix socket. Anyone who can open it has full
 	// control of the daemon.
 	Socket SocketConfig `yaml:"socket"`
-
-	// TCP is the network listener. Without tls it is unauthenticated and
-	// unencrypted: anyone who can reach it has root-equivalent access to
-	// this host. Guests cannot reach it, on any of the host's addresses.
-	TCP TCPConfig `yaml:"tcp"`
 
 	// Keepalive is how the daemon finds clients that have gone without
 	// closing their connection, because their host lost power or the network
@@ -187,6 +201,28 @@ type APIConfig struct {
 	// a connection otherwise lasts until the kernel gives up on it, which
 	// can take a quarter of an hour.
 	Keepalive KeepaliveConfig `yaml:"keepalive"`
+}
+
+// ServesTCP reports whether the API is served over TCP.
+func (s ServerConfig) ServesTCP() bool {
+	return s.Listen != ""
+}
+
+// ListenerPort returns the port of the TCP listener, or 0 if the API is not
+// served over TCP or Listen names no port number.
+func (s ServerConfig) ListenerPort() int {
+	if !s.ServesTCP() {
+		return 0
+	}
+	_, port, err := net.SplitHostPort(s.Listen)
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return 0
+	}
+	return n
 }
 
 // KeepaliveConfig is how the daemon and its clients check that the other is
@@ -211,11 +247,11 @@ type KeepaliveConfig struct {
 func (k *KeepaliveConfig) validate() error {
 	switch {
 	case k.Interval <= 0:
-		return errors.New("api.keepalive.interval must be positive")
+		return errors.New("server.keepalive.interval must be positive")
 	case k.Timeout <= 0:
-		return errors.New("api.keepalive.timeout must be positive")
+		return errors.New("server.keepalive.timeout must be positive")
 	case k.MinClientInterval <= 0:
-		return errors.New("api.keepalive.min_client_interval must be positive")
+		return errors.New("server.keepalive.min_client_interval must be positive")
 	}
 	return nil
 }
@@ -246,91 +282,13 @@ func (s SocketConfig) gid() (int, error) {
 	}
 	g, err := user.LookupGroup(s.Group)
 	if err != nil {
-		return 0, fmt.Errorf("api.socket.group: %w", err)
+		return 0, fmt.Errorf("server.socket.group: %w", err)
 	}
 	id, err := strconv.Atoi(g.Gid)
 	if err != nil {
-		return 0, fmt.Errorf("api.socket.group %s has the ID %q, not a number", s.Group, g.Gid)
+		return 0, fmt.Errorf("server.socket.group %s has the ID %q, not a number", s.Group, g.Gid)
 	}
 	return id, nil
-}
-
-// TCPConfig controls the network listener. Without TLS it is
-// unauthenticated and unencrypted.
-type TCPConfig struct {
-	// Listen is the host:port to serve on, such as 0.0.0.0:7443. Unset
-	// serves no listener.
-	Listen string `yaml:"listen,omitempty"`
-
-	// TLS is the listener's TLS.
-	TLS TLSConfig `yaml:"tls"`
-}
-
-// Enabled reports whether the API is served over TCP.
-func (t TCPConfig) Enabled() bool {
-	return t.Listen != ""
-}
-
-// Port returns the TCP port the API is served on, or 0 if it is not served
-// over TCP or Listen names no port number.
-func (t TCPConfig) Port() int {
-	if !t.Enabled() {
-		return 0
-	}
-	_, port, err := net.SplitHostPort(t.Listen)
-	if err != nil {
-		return 0
-	}
-	n, err := strconv.Atoi(port)
-	if err != nil || n < 1 || n > 65535 {
-		return 0
-	}
-	return n
-}
-
-// TLSConfig configures TLS on the network listener. The certificate and key
-// are reloaded when they change on disk; the client CA is read at startup.
-type TLSConfig struct {
-	// CertFile is the daemon's PEM certificate, which must name the address
-	// clients connect to. It is reloaded when it changes on disk.
-	CertFile string `yaml:"cert_file,omitempty"`
-
-	// KeyFile is the PEM private key for CertFile. It is reloaded when it
-	// changes on disk.
-	KeyFile string `yaml:"key_file,omitempty"`
-
-	// ClientCAFile holds the PEM authorities client certificates must be
-	// issued by. Set, every client must present a valid certificate; unset,
-	// any client is accepted. Use a CA dedicated to Dicer's clients. It is
-	// read at startup.
-	ClientCAFile string `yaml:"client_ca_file,omitempty"`
-}
-
-// Enabled reports whether the listener is served over TLS.
-func (t TLSConfig) Enabled() bool {
-	return t.CertFile != "" || t.KeyFile != ""
-}
-
-// RequiresClientCert reports whether callers must present a certificate.
-func (t TLSConfig) RequiresClientCert() bool {
-	return t.ClientCAFile != ""
-}
-
-// validate reports whether the TLS settings are a usable combination. The
-// files are read when the listener is built.
-func (t TLSConfig) validate() error {
-	switch {
-	case t.CertFile != "" && t.KeyFile == "":
-		return errors.New("api.tcp.tls.cert_file is set without api.tcp.tls.key_file")
-	case t.KeyFile != "" && t.CertFile == "":
-		return errors.New("api.tcp.tls.key_file is set without api.tcp.tls.cert_file")
-	case t.ClientCAFile != "" && !t.Enabled():
-		return errors.New(
-			"api.tcp.tls.client_ca_file needs a certificate of its own: " +
-				"set api.tcp.tls.cert_file and api.tcp.tls.key_file too")
-	}
-
-	return nil
 }
 
 // ResourcesConfig sets how much of the host instances may be given: host
@@ -512,7 +470,7 @@ func (c *Config) Validate() error {
 	if c.DataDir == "" {
 		return errors.New("data_dir is required")
 	}
-	if err := c.API.validate(); err != nil {
+	if err := c.Server.validate(); err != nil {
 		return err
 	}
 	if err := c.Resources.validate(); err != nil {
@@ -536,31 +494,37 @@ func (c *Config) Validate() error {
 	return c.Metrics.validate()
 }
 
-// validate reports whether the API configuration is usable.
-func (a *APIConfig) validate() error {
-	if a.Socket.Path == "" {
-		return errors.New("api.socket.path is required")
+// validate reports whether the server configuration is usable. The
+// certificate's files are read when the listener is built.
+func (s *ServerConfig) validate() error {
+	if s.Socket.Path == "" {
+		return errors.New("server.socket.path is required")
 	}
-	if _, err := a.Socket.gid(); err != nil {
+	if _, err := s.Socket.gid(); err != nil {
 		return err
 	}
-	if err := a.Keepalive.validate(); err != nil {
+	if err := s.Keepalive.validate(); err != nil {
 		return err
 	}
 
-	if !a.TCP.Enabled() {
+	switch {
+	case s.CrtFile != "" && s.KeyFile == "":
+		return errors.New("server.crt_file is set without server.key_file")
+	case s.KeyFile != "" && s.CrtFile == "":
+		return errors.New("server.key_file is set without server.crt_file")
+	}
+
+	if !s.ServesTCP() {
 		return nil
 	}
-
-	if _, _, err := net.SplitHostPort(a.TCP.Listen); err != nil {
-		return fmt.Errorf("invalid api.tcp.listen %q: want host:port: %w", a.TCP.Listen, err)
+	if _, _, err := net.SplitHostPort(s.Listen); err != nil {
+		return fmt.Errorf("invalid server.listen %q: want host:port: %w", s.Listen, err)
 	}
 	// Guests are kept from the port by its number, so it must have one.
-	if a.TCP.Port() == 0 {
-		return fmt.Errorf("invalid api.tcp.listen %q: want a port number from 1 to 65535", a.TCP.Listen)
+	if s.ListenerPort() == 0 {
+		return fmt.Errorf("invalid server.listen %q: want a port number from 1 to 65535", s.Listen)
 	}
-
-	return a.TCP.TLS.validate()
+	return nil
 }
 
 // validate reports whether the metrics configuration is usable. A disabled
@@ -594,7 +558,7 @@ func defaultConfig() Config {
 	return Config{
 		DataDir: defaults.DataDir,
 		RunDir:  defaults.RunDir,
-		API: APIConfig{
+		Server: ServerConfig{
 			Socket: SocketConfig{Path: defaults.Socket, Mode: defaultSocketMode},
 			Keepalive: KeepaliveConfig{
 				Interval:          defaultKeepaliveInterval,

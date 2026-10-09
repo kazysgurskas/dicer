@@ -57,14 +57,15 @@ func TestValidateRejectsAnInvalidValue(t *testing.T) {
 	}
 }
 
-// The daemon only reads the TLS files as it starts; validate reads them now.
-func TestValidateReadsTheTLSFiles(t *testing.T) {
+// The daemon only reads the certificate's files as it starts; validate reads
+// them now.
+func TestValidateReadsTheCertificateFiles(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.pem")
-	path := writeConfig(t, "api:\n  tcp:\n    listen: 127.0.0.1:7443\n    tls:\n"+
-		"      cert_file: "+missing+"\n      key_file: "+missing+"\n")
+	path := writeConfig(t, "server:\n  listen: 127.0.0.1:7443\n"+
+		"  crt_file: "+missing+"\n  key_file: "+missing+"\n")
 
 	if _, err := runValidate(t, path); err == nil {
-		t.Error("validate accepted TLS files that do not exist")
+		t.Error("validate accepted certificate files that do not exist")
 	}
 }
 

@@ -9,9 +9,12 @@ import (
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/token"
 )
 
 func TestRemoteValidate(t *testing.T) {
+	value := token.Format(token.NewSecret(), "")
+
 	for _, tc := range []struct {
 		name   string
 		remote Remote
@@ -20,10 +23,10 @@ func TestRemoteValidate(t *testing.T) {
 		{"socket", Remote{Address: "unix:///run/dicer/dicer.sock"}, nil},
 		{"host and port", Remote{Address: "192.0.2.1:7443"}, nil},
 		{"dns target", Remote{Address: "dns:///dicer1.example.com:7443"}, nil},
-		{"with tls", Remote{Address: "192.0.2.1:7443", TLS: &TLS{CAFile: "ca.pem"}}, nil},
+		{"with a token", Remote{Address: "192.0.2.1:7443", Token: value}, nil},
 		{"relative socket", Remote{Address: "unix://dicer.sock"}, errdefs.ErrInvalidArgument},
 		{"no port", Remote{Address: "192.0.2.1"}, errdefs.ErrInvalidArgument},
-		{"half a keypair", Remote{Address: "192.0.2.1:7443", TLS: &TLS{CertFile: "c.pem"}}, errdefs.ErrInvalidArgument},
+		{"with what is not a token", Remote{Address: "192.0.2.1:7443", Token: "hunter2"}, errdefs.ErrInvalidArgument},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.remote.Validate()
@@ -37,12 +40,12 @@ func TestRemoteValidate(t *testing.T) {
 	}
 }
 
-// A socket is controlled by its file permissions; TLS on it would be
+// A socket is controlled by its file permissions; a token for it would be
 // configuration that does nothing, which is worse than being refused.
-func TestSocketRemoteRefusesTLS(t *testing.T) {
-	err := Remote{Address: "unix:///run/dicer/dicer.sock", TLS: &TLS{CAFile: "ca.pem"}}.Validate()
+func TestSocketRemoteRefusesAToken(t *testing.T) {
+	err := Remote{Address: "unix:///run/dicer/dicer.sock", Token: token.Format(token.NewSecret(), "")}.Validate()
 	if !errors.Is(err, errdefs.ErrInvalidArgument) || !strings.Contains(err.Error(), "file permissions") {
-		t.Errorf("a unix remote with TLS = %v, want it refused, saying why", err)
+		t.Errorf("a unix remote with a token = %v, want it refused, saying why", err)
 	}
 }
 
@@ -60,14 +63,10 @@ func TestIsAddress(t *testing.T) {
 }
 
 func TestClientOptions(t *testing.T) {
-	opts, err := Remote{Address: "unix:///run/dicer/dicer.sock"}.ClientOptions()
-	if err != nil || len(opts) != 1 {
-		t.Errorf("a socket's options = %d, %v; want its address alone", len(opts), err)
+	if opts := (Remote{Address: "unix:///run/dicer/dicer.sock"}).ClientOptions(); len(opts) != 1 {
+		t.Errorf("a socket's options = %d, want its address alone", len(opts))
 	}
-
-	// The TLS files are read for the options, so a missing one is reported
-	// then.
-	if _, err := (Remote{Address: "192.0.2.1:7443", TLS: &TLS{CAFile: "does-not-exist.pem"}}).ClientOptions(); err == nil {
-		t.Error("a missing CA file was accepted")
+	if opts := (Remote{Address: "192.0.2.1:7443", Token: token.Format(token.NewSecret(), "")}).ClientOptions(); len(opts) != 2 {
+		t.Errorf("a TCP remote's options = %d, want its address and token", len(opts))
 	}
 }

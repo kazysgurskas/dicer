@@ -41,13 +41,17 @@ var (
 	// daemon, a registry or a guest's agent. Trying again may work.
 	ErrUnavailable = errors.New("unavailable")
 
-	// ErrPermissionDenied means the guest refused, such as a file it
-	// protects.
+	// ErrPermissionDenied means the call was refused: the token's scopes do
+	// not allow it, or the guest refused, such as a file it protects.
 	ErrPermissionDenied = errors.New("permission denied")
 
 	// ErrUnimplemented means the daemon, or an instance's guest agent, is too
 	// old for the call.
 	ErrUnimplemented = errors.New("unimplemented")
+
+	// ErrUnauthenticated means the daemon's TCP listener refused the call's
+	// token: it was deleted or rotated, or was never this daemon's.
+	ErrUnauthenticated = errors.New("unauthenticated")
 )
 
 // statusErrors pairs each status code with the error it is reported as.
@@ -60,6 +64,7 @@ var statusErrors = map[codes.Code]error{
 	codes.Unavailable:        ErrUnavailable,
 	codes.PermissionDenied:   ErrPermissionDenied,
 	codes.Unimplemented:      ErrUnimplemented,
+	codes.Unauthenticated:    ErrUnauthenticated,
 	codes.Canceled:           context.Canceled,
 	codes.DeadlineExceeded:   context.DeadlineExceeded,
 }

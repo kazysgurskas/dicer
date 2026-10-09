@@ -6,7 +6,7 @@ description: "Manage the daemons this client talks to"
 
 Manage the daemons this client talks to.
 
-The built-in remote "local" is the daemon on this machine, on its socket. A daemon on another machine is added with its address, and with the TLS material that verifies it and identifies this client to it.
+The built-in remote "local" is the daemon on this machine, on its socket. A daemon on another machine is added with the address of its TCP listener and a token, which `dicer token create` makes on the daemon's host.
 
 ## Commands
 

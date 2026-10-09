@@ -1,23 +1,27 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package filestore stores the instance, snapshot, network, volume and
-// kernel definitions as YAML files, cached in memory and written through:
+// Package filestore stores the instance, snapshot, network, volume, kernel
+// and token definitions as YAML files, cached in memory and written through:
 //
 //	/var/lib/dicer/instances/<name>/config.yaml
 //	/var/lib/dicer/snapshots/<name>/config.yaml
 //	/var/lib/dicer/networks/<name>.yaml
 //	/var/lib/dicer/volumes/<name>.yaml
 //	/var/lib/dicer/kernels/<name>.yaml
+//	/var/lib/dicer/tokens/<name>.yaml
 package filestore
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/konradasb/dicer/internal/defaults"
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/types"
 )
 
@@ -40,6 +44,7 @@ type Manager struct {
 	networks  *collection[types.Network]
 	volumes   *collection[types.Volume]
 	kernels   *collection[types.Kernel]
+	tokens    *collection[types.Token]
 }
 
 // NewManager loads all definitions into memory, creating their directories
@@ -74,9 +79,13 @@ func NewManager(cfg Config) (*Manager, error) {
 			"kernel", filepath.Join(cfg.DataDir, "kernels"), flat, logger,
 			func(v types.Kernel) (string, string) { return v.ID, v.Name },
 		),
+		tokens: newCollection(
+			"token", filepath.Join(cfg.DataDir, "tokens"), flat, logger,
+			func(v types.Token) (string, string) { return v.ID, v.Name },
+		),
 	}
 	for _, load := range []func() error{
-		m.instances.load, m.snapshots.load, m.networks.load, m.volumes.load, m.kernels.load,
+		m.instances.load, m.snapshots.load, m.networks.load, m.volumes.load, m.kernels.load, m.tokens.load,
 	} {
 		if err := load(); err != nil {
 			return nil, err
@@ -90,6 +99,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		"networks", m.networks.len(),
 		"volumes", m.volumes.len(),
 		"kernels", m.kernels.len(),
+		"tokens", m.tokens.len(),
 	)
 
 	return m, nil
@@ -242,4 +252,51 @@ func (m *Manager) DeleteKernel(nameOrID string) error {
 // Kernels returns every kernel, sorted by name.
 func (m *Manager) Kernels() []types.Kernel {
 	return m.kernels.definitions()
+}
+
+// CreateToken records a new token.
+func (m *Manager) CreateToken(v types.Token) error {
+	return m.tokens.create(v)
+}
+
+// Token returns a token by name or ID.
+func (m *Manager) Token(nameOrID string) (types.Token, error) {
+	return m.tokens.definition(nameOrID)
+}
+
+// TokenBySecretSHA256 returns the token whose secret has the SHA-256
+// secretSHA256, or an errdefs.ErrNotFound error if there is none. It
+// compares them in constant time.
+func (m *Manager) TokenBySecretSHA256(secretSHA256 string) (types.Token, error) {
+	matches := m.tokens.matchingDefinitions(func(v types.Token) bool {
+		return subtle.ConstantTimeCompare([]byte(v.SecretSHA256), []byte(secretSHA256)) == 1
+	})
+	if len(matches) == 0 {
+		return types.Token{}, errdefs.NotFound("no token with that secret")
+	}
+	return matches[0], nil
+}
+
+// UpdateToken replaces a token.
+func (m *Manager) UpdateToken(v types.Token) error {
+	return m.tokens.update(v)
+}
+
+// RecordTokenUse records that a token, by name or ID, made a call at a time.
+// It changes nothing else, so a token rotated meanwhile stays rotated.
+func (m *Manager) RecordTokenUse(nameOrID string, at time.Time) error {
+	return m.tokens.change(nameOrID, func(v types.Token) types.Token {
+		v.LastUsedAt = at
+		return v
+	})
+}
+
+// DeleteToken removes a token.
+func (m *Manager) DeleteToken(nameOrID string) error {
+	return m.tokens.delete(nameOrID)
+}
+
+// Tokens returns every token, sorted by name.
+func (m *Manager) Tokens() []types.Token {
+	return m.tokens.definitions()
 }

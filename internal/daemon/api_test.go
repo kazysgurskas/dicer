@@ -7,6 +7,7 @@ package daemon
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"os"
 	"os/user"
@@ -18,8 +19,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/konradasb/dicer"
+	"github.com/konradasb/dicer/internal/token"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -122,12 +125,21 @@ func TestKeepaliveLetsClientsPing(t *testing.T) {
 	}
 	counted := &countingListener{Listener: listener}
 
-	s := grpc.NewServer(keepaliveOptions(defaultConfig().API.Keepalive)...)
+	tlsConfig, fingerprint, err := serverTLSConfig(ServerConfig{}, t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := append(keepaliveOptions(defaultConfig().Server.Keepalive), grpc.Creds(credentials.NewTLS(tlsConfig)))
+	s := grpc.NewServer(opts...)
 	dicerdv1.RegisterDaemonServiceServer(s, hostInfoServer{})
 	go func() { _ = s.Serve(counted) }()
 	t.Cleanup(s.Stop)
 
-	c, err := dicer.NewClient(dicer.WithAddress(listener.Addr().String()), dicer.WithKeepalive(10*time.Second, 5*time.Second))
+	c, err := dicer.NewClient(
+		dicer.WithAddress(listener.Addr().String()),
+		dicer.WithToken(token.Format(token.NewSecret(), fingerprint)),
+		dicer.WithKeepalive(10*time.Second, 5*time.Second),
+	)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

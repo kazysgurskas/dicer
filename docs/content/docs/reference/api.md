@@ -40,7 +40,10 @@ was, and whose message says it for a person:
   instance, addresses on a network.
 - `UNAVAILABLE`: something the daemon needs cannot be reached: a registry,
   a guest's agent. Trying again may work.
-- `PERMISSION_DENIED`: the guest refused, such as a file it protects.
+- `PERMISSION_DENIED`: the call's token does not have the scope it needs,
+  or the guest refused, such as a file it protects.
+- `UNAUTHENTICATED`: a call to the daemon's TCP listener had no token, or
+  one the daemon does not know.
 - `UNIMPLEMENTED`: the daemon, or an instance's guest agent, is too old for
   the call.
 - `INTERNAL`: anything else: the daemon failed.
@@ -90,6 +93,11 @@ was, and whose message says it for a person:
 | `ListKernels` | [`ListKernelsRequest`](#listkernelsrequest) | [`ListKernelsResponse`](#listkernelsresponse) | ListKernels returns every kernel, the default one among them. |
 | `GetKernel` | [`GetKernelRequest`](#getkernelrequest) | [`Kernel`](#kernel) | GetKernel returns one kernel. |
 | `DeleteKernel` | [`DeleteKernelRequest`](#deletekernelrequest) | `google.protobuf.Empty` | DeleteKernel removes a kernel that no instance references. The default kernel cannot be deleted. |
+| `CreateToken` | [`CreateTokenRequest`](#createtokenrequest) | [`IssuedToken`](#issuedtoken) | CreateToken makes a token for the daemon's TCP listener. It returns the token's value, which is never returned again: the daemon keeps only the SHA-256 of its secret. It fails with FAILED_PRECONDITION if the daemon is not served over TCP. |
+| `ListTokens` | [`ListTokensRequest`](#listtokensrequest) | [`ListTokensResponse`](#listtokensresponse) | ListTokens returns every token, without their values. |
+| `GetToken` | [`GetTokenRequest`](#gettokenrequest) | [`Token`](#token) | GetToken returns one token, without its value. |
+| `RotateToken` | [`RotateTokenRequest`](#rotatetokenrequest) | [`IssuedToken`](#issuedtoken) | RotateToken gives a token a new secret and returns its new value, as CreateToken does. The old value stops working at once. |
+| `DeleteToken` | [`DeleteTokenRequest`](#deletetokenrequest) | `google.protobuf.Empty` | DeleteToken removes a token. A client using it is refused from its next call. |
 | `GetHostInfo` | [`GetHostInfoRequest`](#gethostinforequest) | [`GetHostInfoResponse`](#gethostinforesponse) | GetHostInfo reports what the daemon is: its version, the hypervisors it carries, and how it is reached. |
 | `GetResources` | [`GetResourcesRequest`](#getresourcesrequest) | [`GetResourcesResponse`](#getresourcesresponse) | GetResources reports how much CPU and memory instances may be given, how much is committed to them, and how full the data directory's disk is. |
 | `GetEvents` | [`GetEventsRequest`](#geteventsrequest) | stream [`GetEventsResponse`](#geteventsresponse) | GetEvents streams what has happened to the resources on this host: the history kept, oldest first, in batches, then, with follow, each new event as it happens, none missed between the two. A follower that does not keep up is disconnected with RESOURCE_EXHAUSTED rather than slowing the host. |
@@ -194,6 +202,14 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | `instance` | `string` | The instance to snapshot. |
 | `name` | `string` | The snapshot's name. The instance's and the time's when empty, as in web-20260102t150405z. |
 
+### CreateTokenRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` |  |
+| `scopes` | repeated `string` | What the token allows, as Token.scopes says. Unset is "*". |
+| `secret` | `string` | The token's secret: at least 32 letters and digits. Unset has the daemon make one, which is what you want unless a tool must know the secret before the token exists. |
+
 ### CreateVolumeRequest
 
 | Field | Type | Description |
@@ -232,6 +248,12 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | The snapshot's name or ID. |
+
+### DeleteTokenRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` |  |
 
 ### DeleteVolumeRequest
 
@@ -372,7 +394,9 @@ GetEventsResponse is a batch of events, oldest first.
 | `version` | `string` |  |
 | `hostname` | `string` |  |
 | `hypervisors` | repeated [`HypervisorInfo`](#hypervisorinfo) | The hypervisors this daemon can start instances with. |
-| `api_addresses` | repeated `string` | The addresses the API is served on over TCP, for a client being pointed at this daemon. Empty if it is not served over TCP. |
+| `listener_addresses` | repeated `string` | The addresses clients reach the daemon's TCP listener at. For a listener on all of the host's addresses, they are the host's own, with the default route's first. Loopback, link-local and Dicer's bridges' addresses are left out. Empty if the API is not served over TCP. |
+| `fingerprint` | `string` | The fingerprint of the daemon's certificate on its TCP listener: the SHA-256 of its public key, hex-encoded. Empty if it is not served over TCP. |
+| `token` | `string` | The name of the token this call was made with. Empty over the socket. |
 
 ### GetImageRequest
 
@@ -437,6 +461,12 @@ GetEventsResponse is a batch of events, oldest first.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | The snapshot's name or ID. |
+
+### GetTokenRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` |  |
 
 ### GetVolumeRequest
 
@@ -648,6 +678,15 @@ them again.
 | `network_receive_packets` | `int64` | Packets the guest received and transmitted. |
 | `network_transmit_packets` | `int64` |  |
 
+### IssuedToken
+
+IssuedToken is a token with its value, as it is made or rotated.
+
+| Field | Type | Description |
+|---|---|---|
+| `token` | [`Token`](#token) |  |
+| `value` | `string` | What a client connects with: "dicer_" and the secret. Unless server.crt_file gives the daemon's certificate, an underscore and the daemon's fingerprint follow, which the client checks the daemon by. |
+
 ### Kernel
 
 Kernel is a guest kernel image available to instances.
@@ -728,6 +767,14 @@ Kernel is a guest kernel image available to instances.
 | Field | Type | Description |
 |---|---|---|
 | `snapshots` | repeated [`Snapshot`](#snapshot) |  |
+
+### ListTokensRequest
+
+### ListTokensResponse
+
+| Field | Type | Description |
+|---|---|---|
+| `tokens` | repeated [`Token`](#token) |  |
 
 ### ListVolumesRequest
 
@@ -898,6 +945,13 @@ an instance that stays up for ten minutes starts the count again.
 |---|---|---|
 | `name` | `string` |  |
 
+### RotateTokenRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` |  |
+| `secret` | `string` | The token's new secret, as CreateTokenRequest.secret says. |
+
 ### Snapshot
 
 Snapshot is an instance frozen to disk. It outlives the instance it was
@@ -934,6 +988,19 @@ taken from, and never holds the instance's volumes.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` |  |
+
+### Token
+
+Token is a credential a client presents to the daemon's TCP listener.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` |  |
+| `name` | `string` |  |
+| `scopes` | repeated `string` | What the token allows: "*" for everything, or RESOURCE:ACTION, such as "instances:write". RESOURCE is instances, snapshots, networks, volumes, images, kernels, tokens or events, and ACTION is read or write. Events have only read. A read scope allows the calls that look at its resource. A write scope also allows those that change it. A call its token's scopes do not allow fails with PERMISSION_DENIED. A token may make, rotate and delete only tokens whose scopes its own allow. |
+| `create_time` | `google.protobuf.Timestamp` |  |
+| `update_time` | `google.protobuf.Timestamp` |  |
+| `last_use_time` | `google.protobuf.Timestamp` | When the token last made a call, to the minute. Unset if it never has. |
 
 ### UpdateInstanceRequest
 

@@ -183,6 +183,26 @@ func kernelToProto(k types.Kernel) *dicerdv1.Kernel {
 	}
 }
 
+// tokenToProto converts a token, without the SHA-256 of its secret.
+func tokenToProto(t types.Token) *dicerdv1.Token {
+	scopes := make([]string, 0, len(t.Scopes))
+	for _, scope := range t.Scopes {
+		scopes = append(scopes, string(scope))
+	}
+
+	out := &dicerdv1.Token{
+		Id:         t.ID,
+		Name:       t.Name,
+		Scopes:     scopes,
+		CreateTime: timestamppb.New(t.CreatedAt),
+		UpdateTime: timestamppb.New(t.UpdatedAt),
+	}
+	if !t.LastUsedAt.IsZero() {
+		out.LastUseTime = timestamppb.New(t.LastUsedAt)
+	}
+	return out
+}
+
 func imageToProto(image *types.Image) *dicerdv1.Image {
 	out := &dicerdv1.Image{
 		Name:        image.Name,

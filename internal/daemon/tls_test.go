@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/big"
@@ -22,10 +23,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/konradasb/dicer/internal/token"
 )
 
-// testCA is a certificate authority for one test, issuing the server and
-// client certificates it needs. Certificates are made rather than kept as
+// testCA is a certificate authority for one test, issuing the server
+// certificates it needs. Certificates are made rather than kept as
 // fixtures so that nothing in the tree expires.
 type testCA struct {
 	t    *testing.T
@@ -33,8 +36,8 @@ type testCA struct {
 	cert *x509.Certificate
 	key  *ecdsa.PrivateKey
 
-	// File is the authority's certificate, for client_ca_file and for a
-	// client's ca_file.
+	// File is the authority's certificate, for a client to check the
+	// daemon against.
 	File string
 }
 
@@ -164,11 +167,10 @@ func serve(t *testing.T, cfg *tls.Config) string {
 	return l.Addr().String()
 }
 
-// dial completes a handshake against addr with the given client material.
-func dial(t *testing.T, addr string, ca string, certFile, keyFile string) error {
+// dial completes a handshake against addr, checking the daemon against the
+// authorities in ca.
+func dial(t *testing.T, addr string, ca string) error {
 	t.Helper()
-
-	cfg := &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "127.0.0.1"}
 
 	pem, err := os.ReadFile(ca)
 	if err != nil {
@@ -176,15 +178,13 @@ func dial(t *testing.T, addr string, ca string, certFile, keyFile string) error 
 	}
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(pem)
-	cfg.RootCAs = pool
 
-	if certFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cfg.Certificates = []tls.Certificate{cert}
-	}
+	return handshake(t, addr, &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "127.0.0.1", RootCAs: pool})
+}
+
+// handshake connects to addr with cfg and makes a round trip.
+func handshake(t *testing.T, addr string, cfg *tls.Config) error {
+	t.Helper()
 
 	dialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: 5 * time.Second}, Config: cfg}
 	conn, err := dialer.DialContext(t.Context(), "tcp", addr)
@@ -193,10 +193,6 @@ func dial(t *testing.T, addr string, ca string, certFile, keyFile string) error 
 	}
 	defer func() { _ = conn.Close() }()
 
-	// The server verifies the client certificate while completing the
-	// handshake, and TLS 1.3 lets the client finish before it has heard
-	// the verdict. A round trip is what carries it back: a refusal arrives
-	// as an alert on the write or the read.
 	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		return err
 	}
@@ -210,51 +206,50 @@ func dial(t *testing.T, addr string, ca string, certFile, keyFile string) error 
 	return nil
 }
 
-func TestClientCAFileRequiresACertificateItIssued(t *testing.T) {
-	ca := newTestCA(t)
-	serverCert, serverKey := ca.issue("server", x509.ExtKeyUsageServerAuth)
-	clientCert, clientKey := ca.issue("client", x509.ExtKeyUsageClientAuth)
+// TestOwnCertificateIsMadeOnceAndKept checks that a daemon given no
+// certificate makes one, keeps its key to root, and serves the same one
+// after a restart, since every token pins its fingerprint.
+func TestOwnCertificateIsMadeOnceAndKept(t *testing.T) {
+	dataDir := t.TempDir()
+	logger := slog.New(slog.DiscardHandler)
 
-	cfg, err := serverTLSConfig(TLSConfig{
-		CertFile:     serverCert,
-		KeyFile:      serverKey,
-		ClientCAFile: ca.File,
-	}, slog.New(slog.DiscardHandler))
+	cfg, fingerprint, err := serverTLSConfig(ServerConfig{}, dataDir, logger)
 	if err != nil {
 		t.Fatalf("serverTLSConfig: %v", err)
 	}
-	addr := serve(t, cfg)
-
-	if err := dial(t, addr, ca.File, clientCert, clientKey); err != nil {
-		t.Errorf("a client the CA signed was refused: %v", err)
+	if len(fingerprint) != 64 {
+		t.Errorf("fingerprint = %q, want a hex SHA-256", fingerprint)
 	}
 
-	if err := dial(t, addr, ca.File, "", ""); err == nil {
-		t.Error("a client with no certificate was let in")
-	}
-
-	// A certificate from somewhere else is exactly as good as none.
-	other := newTestCA(t)
-	strangerCert, strangerKey := other.issue("stranger", x509.ExtKeyUsageClientAuth)
-	if err := dial(t, addr, ca.File, strangerCert, strangerKey); err == nil {
-		t.Error("a client holding another CA's certificate was let in")
-	}
-}
-
-func TestWithoutAClientCAFileAnyClientIsServed(t *testing.T) {
-	ca := newTestCA(t)
-	serverCert, serverKey := ca.issue("server", x509.ExtKeyUsageServerAuth)
-
-	cfg, err := serverTLSConfig(TLSConfig{CertFile: serverCert, KeyFile: serverKey}, slog.New(slog.DiscardHandler))
+	info, err := os.Stat(filepath.Join(dataDir, ownKeyFile))
 	if err != nil {
-		t.Fatalf("serverTLSConfig: %v", err)
+		t.Fatal(err)
 	}
-	if cfg.ClientAuth != tls.NoClientCert {
-		t.Errorf("ClientAuth = %v with no client CA, want NoClientCert", cfg.ClientAuth)
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("key mode = %o, want 600", mode)
 	}
 
-	if err := dial(t, serve(t, cfg), ca.File, "", ""); err != nil {
-		t.Errorf("a client with no certificate was refused: %v", err)
+	_, again, err := serverTLSConfig(ServerConfig{}, dataDir, logger)
+	if err != nil {
+		t.Fatalf("serverTLSConfig again: %v", err)
+	}
+	if again != fingerprint {
+		t.Errorf("fingerprint after a restart = %q, want %q", again, fingerprint)
+	}
+
+	// A client that knows the fingerprint, and nothing else, connects.
+	pinned := &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		InsecureSkipVerify: true, // VerifyConnection checks the fingerprint instead.
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if got := token.Fingerprint(cs.PeerCertificates[0]); got != fingerprint {
+				return fmt.Errorf("fingerprint %s, want %s", got, fingerprint)
+			}
+			return nil
+		},
+	}
+	if err := handshake(t, serve(t, cfg), pinned); err != nil {
+		t.Errorf("a client pinning the fingerprint was refused: %v", err)
 	}
 }
 
@@ -262,15 +257,20 @@ func TestTheServerCertificateStillHasToBeTrusted(t *testing.T) {
 	ca := newTestCA(t)
 	serverCert, serverKey := ca.issue("server", x509.ExtKeyUsageServerAuth)
 
-	cfg, err := serverTLSConfig(TLSConfig{CertFile: serverCert, KeyFile: serverKey}, slog.New(slog.DiscardHandler))
+	cfg, _, err := serverTLSConfig(ServerConfig{CrtFile: serverCert, KeyFile: serverKey}, t.TempDir(), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("serverTLSConfig: %v", err)
+	}
+	addr := serve(t, cfg)
+
+	if err := dial(t, addr, ca.File); err != nil {
+		t.Errorf("a client trusting the CA was refused: %v", err)
 	}
 
 	// A client that does not know this CA must not connect, or nothing
 	// stops something else answering at the address.
 	other := newTestCA(t)
-	if err := dial(t, serve(t, cfg), other.File, "", ""); err == nil {
+	if err := dial(t, addr, other.File); err == nil {
 		t.Error("a daemon signed by an unknown CA was accepted")
 	}
 }
@@ -337,62 +337,37 @@ func TestServerTLSConfigRejectsMaterialItCannotUse(t *testing.T) {
 	ca := newTestCA(t)
 	serverCert, serverKey := ca.issue("server", x509.ExtKeyUsageServerAuth)
 
-	empty := filepath.Join(t.TempDir(), "empty.pem")
-	writeFile(t, empty, []byte("not a certificate"))
+	notACertificate := filepath.Join(t.TempDir(), "bad.pem")
+	writeFile(t, notACertificate, []byte("not a certificate"))
 
 	for _, tc := range []struct {
 		name string
-		cfg  TLSConfig
+		cfg  ServerConfig
 		want string
 	}{
 		{
 			name: "no certificate file",
-			cfg:  TLSConfig{CertFile: filepath.Join(ca.dir, "absent.pem"), KeyFile: serverKey},
-			want: "cert_file",
+			cfg:  ServerConfig{CrtFile: filepath.Join(ca.dir, "absent.pem"), KeyFile: serverKey},
+			want: "read the API certificate:",
 		},
 		{
 			name: "no key file",
-			cfg:  TLSConfig{CertFile: serverCert, KeyFile: filepath.Join(ca.dir, "absent-key.pem")},
-			want: "key_file",
+			cfg:  ServerConfig{CrtFile: serverCert, KeyFile: filepath.Join(ca.dir, "absent-key.pem")},
+			want: "read the API certificate's key",
 		},
 		{
-			name: "client CA holding no certificates",
-			cfg:  TLSConfig{CertFile: serverCert, KeyFile: serverKey, ClientCAFile: empty},
-			want: "want PEM",
+			name: "a file holding no certificate",
+			cfg:  ServerConfig{CrtFile: notACertificate, KeyFile: serverKey},
+			want: "load the API certificate",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := serverTLSConfig(tc.cfg, slog.New(slog.DiscardHandler))
+			_, _, err := serverTLSConfig(tc.cfg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err == nil {
 				t.Fatal("serverTLSConfig accepted it")
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %v, want it to mention %q", err, tc.want)
-			}
-		})
-	}
-}
-
-func TestTLSConfigValidate(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		cfg     TLSConfig
-		wantErr bool
-	}{
-		{"nothing", TLSConfig{}, false},
-		{"a pair", TLSConfig{CertFile: "c", KeyFile: "k"}, false},
-		{"a pair and a client CA", TLSConfig{CertFile: "c", KeyFile: "k", ClientCAFile: "ca"}, false},
-		{"a certificate alone", TLSConfig{CertFile: "c"}, true},
-		{"a key alone", TLSConfig{KeyFile: "k"}, true},
-		{"a client CA alone", TLSConfig{ClientCAFile: "ca"}, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.cfg.validate()
-			if tc.wantErr && err == nil {
-				t.Error("validate accepted it")
-			}
-			if !tc.wantErr && err != nil {
-				t.Errorf("validate = %v, want no error", err)
 			}
 		})
 	}

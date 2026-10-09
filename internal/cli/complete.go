@@ -151,6 +151,21 @@ func listKernels(ctx context.Context, client *dicer.Client, _ []string) ([]strin
 // which the daemon provides and which cannot be deleted.
 const defaultName = "default"
 
+// listTokens completes token names, each described by its scopes.
+func listTokens(ctx context.Context, client *dicer.Client, _ []string) ([]string, error) {
+	tokens, err := client.Tokens.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(tokens))
+	for _, t := range tokens {
+		names = append(names, t.Name+"\t"+scopeList(t.Scopes))
+	}
+
+	return names, nil
+}
+
 // withoutDefault returns list without the default network or kernel, so that
 // delete --all and completion skip what cannot be deleted.
 func withoutDefault(list completer) completer {

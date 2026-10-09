@@ -64,9 +64,9 @@ func validateConfig(path string) error {
 
 	// What loadConfig cannot see, which the daemon only finds out as it
 	// starts: files it names, and the host it runs on.
-	if tls := cfg.API.TCP.TLS; cfg.API.TCP.Enabled() && tls.Enabled() {
-		if _, err := serverTLSConfig(tls, slog.New(slog.DiscardHandler)); err != nil {
-			return fmt.Errorf("api.tcp.tls: %w", err)
+	if server := cfg.Server; server.ServesTCP() && server.CrtFile != "" {
+		if _, err := newCertificate(server.CrtFile, server.KeyFile, slog.New(slog.DiscardHandler)); err != nil {
+			return fmt.Errorf("server.crt_file: %w", err)
 		}
 	}
 

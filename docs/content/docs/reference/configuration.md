@@ -10,15 +10,10 @@ icon: cog
 
 ```yaml
 data_dir: /var/lib/dicer
-api:
+server:
+  listen: 0.0.0.0:7443
   socket:
     group: dicer
-  tcp:
-    listen: 0.0.0.0:7443
-    tls:
-      cert_file: /etc/dicerd/tls/server.pem
-      key_file: /etc/dicerd/tls/server-key.pem
-      client_ca_file: /etc/dicerd/tls/ca.pem
 metrics:
   enable: true
 images:
@@ -27,13 +22,13 @@ images:
 
 ## General {#general}
 
-The daemon's own settings. The sections after them are the API, resources, networking, metrics, images, events and registries.
+The daemon's own settings. The sections after them are the server, resources, networking, metrics, images, events and registries.
 
 ### `data_dir` {#data-dir}
 
 *string*
 
-`data_dir` is where the daemon keeps what persists: the definitions of instances, networks, volumes and kernels, the images, and the instances' disks. Unset is `/var/lib/dicer`.
+`data_dir` is where the daemon keeps what persists: the definitions of instances, networks, volumes, kernels and tokens, the images, the instances' disks, and the certificate it makes for itself. Unset is `/var/lib/dicer`.
 
 ### `run_dir` {#run-dir}
 
@@ -47,91 +42,73 @@ The daemon's own settings. The sections after them are the API, resources, netwo
 
 `log_level` is debug, info, warn or error. Unset is info.
 
-## `api` {#api}
+## `server` {#server}
 
 *mapping*
 
-`api` is where the API is served: always on a Unix socket, and on TCP too if `api.tcp.listen` is set.
+`server` is where the API is served: always on a Unix socket, and over TCP too if `server.listen` is set.
 
-## `api.socket` {#api-socket}
+### `server.listen` {#server-listen}
+
+*string*
+
+`listen` is the host:port to serve the API on over TCP, such as 0.0.0.0:7443. Unset, the API is served on the socket alone. Over TCP, every connection uses TLS 1.3, and every call needs a token, which `dicer token create` makes. Guests cannot reach it, on any of the host's addresses.
+
+### `server.crt_file` {#server-crt-file}
+
+*string*
+
+`crt_file` is the PEM certificate the API is served with over TCP. It must name the address clients connect to, and is reloaded when it changes on disk. Unset, the daemon makes a certificate of its own and keeps it in `data_dir`. Every token then carries its fingerprint, so clients need nothing else to check the daemon by.
+
+### `server.key_file` {#server-key-file}
+
+*string*
+
+`key_file` is the PEM private key of `crt_file`. It is reloaded when it changes on disk.
+
+## `server.socket` {#server-socket}
 
 *mapping*
 
 `socket` is the local Unix socket. Anyone who can open it has full control of the daemon.
 
-### `api.socket.path` {#api-socket-path}
+### `server.socket.path` {#server-socket-path}
 
 *string*
 
 `path` is the socket's path. Unset is `/run/dicer/dicer.sock`.
 
-### `api.socket.mode` {#api-socket-mode}
+### `server.socket.mode` {#server-socket-mode}
 
 *integer*
 
 `mode` is the socket's permission bits. Unset is 0660.
 
-### `api.socket.group` {#api-socket-group}
+### `server.socket.group` {#server-socket-group}
 
 *string*
 
 `group` is the group the socket belongs to, by name or ID. Its members can use the API as far as mode lets the group, which is as much as root on this host. Unset leaves the socket root's alone.
 
-## `api.tcp` {#api-tcp}
-
-*mapping*
-
-`tcp` is the network listener. Without tls it is unauthenticated and unencrypted: anyone who can reach it has root-equivalent access to this host. Guests cannot reach it, on any of the host's addresses.
-
-### `api.tcp.listen` {#api-tcp-listen}
-
-*string*
-
-`listen` is the host:port to serve on, such as 0.0.0.0:7443. Unset serves no listener.
-
-## `api.tcp.tls` {#api-tcp-tls}
-
-*mapping*
-
-`tls` is the listener's TLS.
-
-### `api.tcp.tls.cert_file` {#api-tcp-tls-cert-file}
-
-*string*
-
-`cert_file` is the daemon's PEM certificate, which must name the address clients connect to. It is reloaded when it changes on disk.
-
-### `api.tcp.tls.key_file` {#api-tcp-tls-key-file}
-
-*string*
-
-`key_file` is the PEM private key for `cert_file`. It is reloaded when it changes on disk.
-
-### `api.tcp.tls.client_ca_file` {#api-tcp-tls-client-ca-file}
-
-*string*
-
-`client_ca_file` holds the PEM authorities client certificates must be issued by. Set, every client must present a valid certificate; unset, any client is accepted. Use a CA dedicated to Dicer's clients. It is read at startup.
-
-## `api.keepalive` {#api-keepalive}
+## `server.keepalive` {#server-keepalive}
 
 *mapping*
 
 `keepalive` is how the daemon finds clients that have gone without closing their connection, because their host lost power or the network between dropped, and how often clients may check the same of it. Such a connection otherwise lasts until the kernel gives up on it, which can take a quarter of an hour.
 
-### `api.keepalive.interval` {#api-keepalive-interval}
+### `server.keepalive.interval` {#server-keepalive-interval}
 
 *duration, such as 30s or 5m*
 
 `interval` is how long a connection may carry nothing before the daemon pings the client. Unset is 30s.
 
-### `api.keepalive.timeout` {#api-keepalive-timeout}
+### `server.keepalive.timeout` {#server-keepalive-timeout}
 
 *duration, such as 30s or 5m*
 
 `timeout` is how long the daemon waits for the answer to a ping before closing the connection. Unset is 10s.
 
-### `api.keepalive.min_client_interval` {#api-keepalive-min-client-interval}
+### `server.keepalive.min_client_interval` {#server-keepalive-min-client-interval}
 
 *duration, such as 30s or 5m*
 

@@ -18,9 +18,20 @@ type HostInfo struct {
 	// Hypervisors are the hypervisors the daemon can start instances with.
 	Hypervisors []HypervisorInfo `json:"hypervisors,omitzero"`
 
-	// APIAddresses are the addresses the API is served on over TCP. It is
-	// empty if the API is not served over TCP.
-	APIAddresses []string `json:"api_addresses,omitzero"`
+	// ListenerAddresses are the addresses clients reach the daemon's TCP
+	// listener at. For a listener on all of the host's addresses, they are
+	// the host's own, with the default route's first. It is empty if the API
+	// is not served over TCP.
+	ListenerAddresses []string `json:"listener_addresses,omitzero"`
+
+	// Fingerprint is the fingerprint of the certificate the API is served
+	// with over TCP: the SHA-256 of its public key, hex-encoded. It is empty
+	// if the API is not served over TCP.
+	Fingerprint string `json:"fingerprint,omitzero"`
+
+	// Token is the name of the token the call was made with. It is empty
+	// over the socket.
+	Token string `json:"token,omitzero"`
 }
 
 // HypervisorInfo is a hypervisor the daemon carries, and the versions of it
@@ -131,10 +142,12 @@ func (c *Client) Resources(ctx context.Context) (Resources, error) {
 // hostInfoFromProto returns what p says the daemon is.
 func hostInfoFromProto(p *dicerdv1.GetHostInfoResponse) HostInfo {
 	return HostInfo{
-		Version:      p.GetVersion(),
-		Hostname:     p.GetHostname(),
-		Hypervisors:  convertAll(p.GetHypervisors(), hypervisorInfoFromProto),
-		APIAddresses: p.GetApiAddresses(),
+		Version:           p.GetVersion(),
+		Hostname:          p.GetHostname(),
+		Hypervisors:       convertAll(p.GetHypervisors(), hypervisorInfoFromProto),
+		ListenerAddresses: p.GetListenerAddresses(),
+		Fingerprint:       p.GetFingerprint(),
+		Token:             p.GetToken(),
 	}
 }
 

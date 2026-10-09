@@ -4,8 +4,8 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -25,7 +25,7 @@ type namedRemote struct {
 }
 
 func (p *printableRemote) Columns() []string {
-	return []string{"Name", "Address", "TLS", "Current"}
+	return []string{"Name", "Address", "Auth", "Current"}
 }
 
 func (p *printableRemote) Rows() []map[string]any {
@@ -38,25 +38,23 @@ func (p *printableRemote) Rows() []map[string]any {
 		rows = append(rows, map[string]any{
 			"Name":    r.name,
 			"Address": r.remote.Address,
-			"TLS":     tlsSummary(r.remote.TLS),
+			"Auth":    authSummary(r.remote),
 			"Current": current,
 		})
 	}
 	return rows
 }
 
-// tlsSummary says in a word what a remote establishes about the daemon and
-// about itself.
-func tlsSummary(t *remote.TLS) string {
+// authSummary says in a word how a remote is let in: by the socket's file
+// permissions, or with a token.
+func authSummary(r remote.Remote) string {
 	switch {
-	case t == nil:
-		return ""
-	case t.CertFile != "" && t.CAFile != "":
-		return "mutual"
-	case t.CertFile != "":
-		return "client cert"
+	case r.IsSocket():
+		return "socket"
+	case r.Token != "":
+		return "token"
 	default:
-		return "server only"
+		return "-"
 	}
 }
 
@@ -67,8 +65,8 @@ func newRemoteCommand() *cobra.Command {
 		Aliases: []string{"remotes"},
 		Long: "Manage the daemons this client talks to.\n\n" +
 			"The built-in remote \"" + remote.Local + "\" is the daemon on this machine, on its " +
-			"socket. A daemon on another machine is added with its address, and with the TLS " +
-			"material that verifies it and identifies this client to it.",
+			"socket. A daemon on another machine is added with the address of its TCP " +
+			"listener and a token, which 'dicer token create' makes on the daemon's host.",
 	}
 
 	cmd.AddCommand(
@@ -82,42 +80,45 @@ func newRemoteCommand() *cobra.Command {
 }
 
 func newRemoteCreateCommand() *cobra.Command {
-	var tlsFlags remoteTLSFlags
-
 	cmd := &cobra.Command{
 		Use:   "create NAME ADDRESS",
 		Short: "Add a daemon to talk to",
 		Long: "Add a daemon to talk to.\n\n" +
-			"A unix:// socket is controlled by its file permissions: whoever can open it " +
-			"may do anything, and nothing further identifies either end.\n\n" +
-			"A daemon's TCP listener, HOST:PORT, is reached over TLS, or over nothing at all. With --tls-ca " +
-			"this client verifies the daemon and the connection is encrypted; with " +
-			"--tls-cert and --tls-key it identifies itself in turn, which a daemon " +
-			"configured with api.tcp.tls.client_ca_file requires. Given neither, the " +
-			"connection is plaintext and unauthenticated, so reach the daemon only over a " +
-			"network you trust as far as you trust the host.\n\n" +
-			"The files are read on every connection, not copied here, so a renewed " +
-			"certificate is picked up without the remote being changed.",
-		Example: "  dicer remote create prod dicer1.example.com:7443 \\\n" +
-			"    --tls-ca ~/.dicer/ca.pem \\\n" +
-			"    --tls-cert ~/.dicer/client.pem --tls-key ~/.dicer/client-key.pem\n" +
+			"A daemon's TCP listener, HOST:PORT, is reached with a token, which " +
+			"'dicer token create' makes on the daemon's host, printing this command to " +
+			"run with it. Give it with --token, paste it when asked, or pipe it in. " +
+			"--token keeps it in the shell's history, which the other two do not. The " +
+			"token is kept with the remote. It also says how to check that the daemon " +
+			"is the one that made it.\n\n" +
+			"A unix:// socket takes no token. It is controlled by its file permissions: " +
+			"whoever can open it may do anything.",
+		Example: "  dicer remote create prod dicer1.example.com:7443\n" +
+			"  echo \"$DICER_PROD_TOKEN\" | dicer remote create prod dicer1.example.com:7443\n" +
 			"  dicer remote create test unix:///run/dicer-test/dicer.sock",
 		Args:    needs([]string{"a name for the remote", "an address: HOST:PORT or unix:///PATH"}),
 		Aliases: []string{"new", "add"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, address := args[0], args[1]
 
-			err := updateRemoteConfig(func(cfg *remote.Config) error {
+			r, err := remote.Parse(address)
+			if err != nil {
+				return err
+			}
+			r.Token, _ = cmd.Flags().GetString("token")
+			if !r.IsSocket() && r.Token == "" {
+				if r.Token, err = readSecret(cmd, "Token: "); err != nil {
+					return err
+				}
+				if r.Token == "" {
+					return errors.New("no token given: make one on the daemon's host with " +
+						"'dicer token create NAME', and paste it here")
+				}
+			}
+
+			err = updateRemoteConfig(func(cfg *remote.Config) error {
 				if _, err := cfg.Remote(name); err == nil {
 					return fmt.Errorf("remote %q already exists", name)
 				}
-
-				r, err := remote.Parse(address)
-				if err != nil {
-					return err
-				}
-				r.TLS = tlsFlags.remoteTLS()
-
 				return cfg.Create(name, r)
 			})
 			if err != nil {
@@ -130,62 +131,9 @@ func newRemoteCreateCommand() *cobra.Command {
 		},
 	}
 
-	tlsFlags.register(cmd)
+	cmd.Flags().String("token", "", "The token to reach a TCP address with, instead of reading it")
 
 	return cmd
-}
-
-// remoteTLSFlags are the TLS files a remote is created with.
-type remoteTLSFlags struct {
-	cert       string
-	key        string
-	ca         string
-	serverName string
-}
-
-func (f *remoteTLSFlags) register(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.cert, "tls-cert", "",
-		"Certificate identifying this client to the daemon, in PEM")
-	cmd.Flags().StringVar(&f.key, "tls-key", "",
-		"Private key for --tls-cert, in PEM")
-	cmd.Flags().StringVar(&f.ca, "tls-ca", "",
-		"Authorities the daemon's certificate is checked against, in PEM")
-	cmd.Flags().StringVar(&f.serverName, "tls-server-name", "",
-		"Name the daemon's certificate must carry, if not the host in ADDRESS")
-
-	_ = cmd.MarkFlagFilename("tls-cert")
-	_ = cmd.MarkFlagFilename("tls-key")
-	_ = cmd.MarkFlagFilename("tls-ca")
-}
-
-// remoteTLS returns the TLS settings the flags give, or nil. Remote.Validate
-// checks them.
-func (f *remoteTLSFlags) remoteTLS() *remote.TLS {
-	if f.cert == "" && f.key == "" && f.ca == "" && f.serverName == "" {
-		return nil
-	}
-
-	return &remote.TLS{
-		CertFile:   absolutePath(f.cert),
-		KeyFile:    absolutePath(f.key),
-		CAFile:     absolutePath(f.ca),
-		ServerName: f.serverName,
-	}
-}
-
-// absolutePath resolves a path against the working directory, since a remote
-// is read back from somewhere else entirely.
-func absolutePath(path string) string {
-	if path == "" {
-		return ""
-	}
-
-	resolved, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-
-	return resolved
 }
 
 func newRemoteListCommand() *cobra.Command {

@@ -219,7 +219,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
   $SUDO tee "$CONFIG_FILE" >/dev/null <<EOF
 data_dir: ${DATA_DIR}
 run_dir: /run/dicer
-api:
+server:
   socket:
     path: /run/dicer/dicer.sock
     mode: 0660

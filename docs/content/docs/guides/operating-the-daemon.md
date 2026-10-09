@@ -75,9 +75,11 @@ The daemon does not start with a configuration it cannot use, and its log
 says why. Guests keep running in the meantime. Fix the file and start the
 daemon again.
 
-The API's TLS certificate and key are the one exception to the restart
-rule. The daemon reloads them when the files change, so renewing them needs
-no restart. A new `client_ca_file` does need one.
+The certificate and key of `server.crt_file` and `server.key_file` are the
+one exception to the restart rule. The daemon reloads them when the files
+change, so renewing them needs no restart. Tokens need no restart either:
+one works as soon as `dicer token create` makes it, and stops as soon as it
+is deleted.
 
 If you move `data_dir`, the packaged service cannot write to the new
 directory until you allow it in a drop-in:

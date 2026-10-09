@@ -39,6 +39,14 @@ var (
 	// ErrUnavailable is something the daemon needs that cannot be reached,
 	// such as a registry. Trying again later may succeed.
 	ErrUnavailable = errors.New("unavailable")
+
+	// ErrUnauthenticated is a call made without a credential the daemon
+	// accepts, such as a token it does not know.
+	ErrUnauthenticated = errors.New("unauthenticated")
+
+	// ErrPermissionDenied is a call its caller may not make, such as one a
+	// token's scopes do not allow.
+	ErrPermissionDenied = errors.New("permission denied")
 )
 
 // NotFound returns an error in the ErrNotFound class, formatted as
@@ -70,6 +78,16 @@ func ResourceExhausted(format string, args ...any) error {
 // Unavailable returns an error in the ErrUnavailable class.
 func Unavailable(format string, args ...any) error {
 	return classify(ErrUnavailable, format, args...)
+}
+
+// Unauthenticated returns an error in the ErrUnauthenticated class.
+func Unauthenticated(format string, args ...any) error {
+	return classify(ErrUnauthenticated, format, args...)
+}
+
+// PermissionDenied returns an error in the ErrPermissionDenied class.
+func PermissionDenied(format string, args ...any) error {
+	return classify(ErrPermissionDenied, format, args...)
 }
 
 // classified is an error in a class, whose message is its own alone.

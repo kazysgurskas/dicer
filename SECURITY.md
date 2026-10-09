@@ -43,8 +43,8 @@ The following are in scope for security reports:
 - `dicer-init` (the guest's PID 1) and `dicer-agent` (the guest agent) —
   privilege boundaries, command execution the host did not ask for, vsock
   exposure
-- The daemon's API — its TLS and client certificate handling, and any way to
-  use it without being allowed to
+- The daemon's API — its TLS, its tokens and how they are checked, and any
+  way to use it without being allowed to
 - Host networking — traffic crossing between networks, or between instances
   on an `--isolated` network, that the rules should stop
 - Files crossing the boundary — `dicer cp` writing outside the path it was
@@ -69,31 +69,30 @@ Dicer runs virtual machines and requires elevated host privileges. Operators sho
 
 - Run Dicer on a hardened Linux host with an up-to-date kernel, and keep Dicer
   updated to the latest release
-- **Treat access to the API as full control of the daemon.** The API has no
-  users or roles: every client the daemon accepts can do anything the API
-  allows.
+- **Treat access to the API as full control of the daemon.** Everyone who
+  can open the socket, and every token with scope `*`, can do anything the
+  API allows. Give other tokens only the scopes they need
 - Keep the Unix socket as it is set up: owned by root and the `dicer` group
-  (`api.socket.group`), and not open to others (`api.socket.mode`). Whoever
-  can open it controls the daemon, so add to the group only whom you would
-  give root
-- Leave the TCP listener (`api.tcp.listen`) unset unless you need it. When
+  (`server.socket.group`), and not open to others (`server.socket.mode`).
+  Whoever can open it controls the daemon, so add to the group only whom you
+  would give root
+- Leave the TCP listener (`server.listen`) unset unless you need it. When
   you serve it:
-  - Set `api.tcp.tls` with a certificate and key, so traffic is encrypted
-    (TLS 1.3). Without it the listener is plaintext and anyone who can reach
-    it controls the host: only bind it to loopback, behind an SSH tunnel
-  - Set `api.tcp.tls.client_ca_file` to a certificate authority used only
-    for Dicer clients. Without it, TLS encrypts but lets in any client
-  - There is no revocation list: a client certificate is trusted until it
-    expires. Issue short-lived ones, and replace the authority to shut a
-    client out sooner
+  - Every connection uses TLS 1.3, and every call needs a token. Treat a
+    token as you would a root password, and keep it out of logs. `dicer
+    remote create --token` leaves it in the shell's history; without
+    `--token`, it reads the token from a prompt or standard input
+  - Give each person or system a token of its own, so the audit log names
+    who made each call, and one can be shut out alone. `dicer token delete`
+    does so at once, and `dicer token rotate` replaces a token's value
   - Bind it to a private interface or VPN address where you can, and never
     expose it to the internet
-- Keep the daemon's configuration file and its TLS private key writable and
-  readable by root only: whoever can change the configuration decides who
-  may use the API
-- Know what the audit log does and does not record: every call that can change
-  something is logged with its method and result, but not who made it. Give
-  each person or system its own client certificate
+- Keep the daemon's configuration file, its data directory and the key of
+  its certificate readable by root only. Whoever can change the
+  configuration or the stored tokens decides who may use the API
+- Know what the audit log records: every call that can change something,
+  with its method, its result, and who made it: the user on the socket, or
+  the token over TCP
 - Serve the Prometheus metrics endpoint (`metrics.listen`) only where your
   monitoring can reach it: it is unauthenticated. It exposes counts and
   sizes, and the names of networks, but not what guests contain

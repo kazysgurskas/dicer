@@ -52,7 +52,7 @@ hosts, run a daemon on each and point a client at the one you mean.
 Everything Dicer does goes through one gRPC service, `dicerd.v1.DaemonService`.
 The `dicer` command line is one client of it, and any program can be another.
 The daemon serves it on a Unix socket, `/run/dicer/dicer.sock`. It can also
-listen on a TCP address, which should be secured with TLS. See
+listen on a TCP address, over TLS, for clients with a token. See
 [Remote access](../../guides/remote-access) and
 [the API reference](../../reference/api).
 

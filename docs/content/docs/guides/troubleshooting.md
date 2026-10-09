@@ -52,10 +52,18 @@ command with `sudo`, or [join the group](../remote-access#on-the-host-itself).
 Joining takes effect the next time you log in.
 
 For a remote daemon, check which daemon a command reaches with
-`dicer info`, and see [Remote access](../remote-access). A TLS error names
-what did not match. Usually the daemon's certificate lacks the name or
-address you connect to. Fix it with `--tls-server-name` or a new
-certificate.
+`dicer info`, and see [Remote access](../remote-access). The error says
+what went wrong:
+
+- *unauthenticated*: the daemon refused the token. It was deleted or
+  rotated, or was never this daemon's. The daemon's log says which, in a
+  `call refused` line. Make a new token on the host with
+  `dicer token create`, and add the remote again.
+- *certificate fingerprint mismatch*: the daemon's certificate was
+  replaced, or the address reaches another machine. Compare the fingerprint
+  `dicer info` shows on the host with the one the error wants.
+- *needs a token*: the remote has none. Add it with `dicer remote create`,
+  or set `$DICER_TOKEN`.
 
 ## A start is refused
 

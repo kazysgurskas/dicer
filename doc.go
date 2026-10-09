@@ -25,12 +25,13 @@
 //
 //	out, err := c.Instances.Command("web", "cat", "/etc/os-release").Output(ctx)
 //
-// A daemon on another machine is named by its address, a gRPC target:
+// A daemon on another machine is named by the address of its TCP listener,
+// and reached with a token that `dicer token create` makes on its host:
 //
-//	c, err := dicer.NewClient(dicer.WithAddress("host:7443"), dicer.WithTLS(cfg))
+//	c, err := dicer.NewClient(dicer.WithAddress("host:7443"), dicer.WithToken(token))
 //
-// The socket is protected by its file permissions. A TCP listener is
-// unauthenticated unless the daemon is configured with TLS.
+// The socket is protected by its file permissions. Over TCP, the connection
+// uses TLS, and the daemon is checked by the fingerprint the token carries.
 //
 // A failed call returns an error that matches the kind of failure it was,
 // such as ErrNotFound, and whose message is the daemon's:

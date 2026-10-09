@@ -115,6 +115,27 @@ func confirm(cmd *cobra.Command, question string) (bool, error) {
 	}
 }
 
+// readSecret reads a secret, such as a token: from a prompt that does not
+// echo it on a terminal, or else all of standard input. Surrounding space is
+// dropped.
+func readSecret(cmd *cobra.Command, prompt string) (string, error) {
+	if fd := int(os.Stdin.Fd()); term.IsTerminal(fd) {
+		cmd.PrintErr(prompt)
+		secret, err := term.ReadPassword(fd)
+		cmd.PrintErrln()
+		if err != nil {
+			return "", fmt.Errorf("read the secret: %w", err)
+		}
+		return strings.TrimSpace(string(secret)), nil
+	}
+
+	secret, err := io.ReadAll(cmd.InOrStdin())
+	if err != nil {
+		return "", fmt.Errorf("read the secret from standard input: %w", err)
+	}
+	return strings.TrimSpace(string(secret)), nil
+}
+
 // age renders a timestamp as a duration before now, e.g. "3 hours ago".
 func age(t time.Time) string {
 	if t.IsZero() {

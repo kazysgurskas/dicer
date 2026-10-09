@@ -29,7 +29,7 @@ import (
 // traffic away, to the host and beyond it.
 func (h *Host) ensureGatewayAccess(ctx context.Context, nw *types.Network) error {
 	h.rulesMu.Lock()
-	err := ensureInputRules(ctx, nw.Bridge, nw.Gateway, h.config.APIPort, nw.Internal)
+	err := ensureInputRules(ctx, nw.Bridge, nw.Gateway, h.config.ListenerPort, nw.Internal)
 	h.rulesMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("set up input rules: %w", err)

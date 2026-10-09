@@ -88,19 +88,19 @@ var dicerChains = []string{
 }
 
 // These return the comments that tag a bridge's rules.
-func natComment(bridge string) string             { return "dicer-nat-" + bridge }
-func forwardOutComment(bridge string) string      { return "dicer-fwd-out-" + bridge }
-func forwardInComment(bridge string) string       { return "dicer-fwd-in-" + bridge }
-func iccComment(bridge string) string             { return "dicer-icc-" + bridge }
-func isolationStage1Comment(bridge string) string { return "dicer-isolation-s1-" + bridge }
-func isolationStage2Comment(bridge string) string { return "dicer-isolation-s2-" + bridge }
-func internalComment(bridge string) string        { return "dicer-internal-" + bridge }
-func inputAcceptComment(bridge string) string     { return "dicer-input-accept-" + bridge }
-func inputDropComment(bridge string) string       { return "dicer-input-drop-" + bridge }
-func inputAPIDropComment(bridge string) string    { return "dicer-input-api-drop-" + bridge }
-func inputDNSComment(bridge string) string        { return "dicer-input-dns-" + bridge }
-func inputRepliesComment(bridge string) string    { return "dicer-input-replies-" + bridge }
-func inputInternalComment(bridge string) string   { return "dicer-input-internal-" + bridge }
+func natComment(bridge string) string               { return "dicer-nat-" + bridge }
+func forwardOutComment(bridge string) string        { return "dicer-fwd-out-" + bridge }
+func forwardInComment(bridge string) string         { return "dicer-fwd-in-" + bridge }
+func iccComment(bridge string) string               { return "dicer-icc-" + bridge }
+func isolationStage1Comment(bridge string) string   { return "dicer-isolation-s1-" + bridge }
+func isolationStage2Comment(bridge string) string   { return "dicer-isolation-s2-" + bridge }
+func internalComment(bridge string) string          { return "dicer-internal-" + bridge }
+func inputAcceptComment(bridge string) string       { return "dicer-input-accept-" + bridge }
+func inputDropComment(bridge string) string         { return "dicer-input-drop-" + bridge }
+func inputListenerDropComment(bridge string) string { return "dicer-input-listener-drop-" + bridge }
+func inputDNSComment(bridge string) string          { return "dicer-input-dns-" + bridge }
+func inputRepliesComment(bridge string) string      { return "dicer-input-replies-" + bridge }
+func inputInternalComment(bridge string) string     { return "dicer-input-internal-" + bridge }
 
 // setupIPTables ensures the NAT, forwarding and isolation rules of a bridge
 // and its subnet, those of an internal network among them. Input rules are
@@ -295,19 +295,20 @@ func removeIsolationRules(ctx context.Context, bridge string) error {
 }
 
 // ensureInputRules accepts traffic to a bridge's gateway IP only from that
-// bridge, so instances cannot reach another network's gateway. If apiPort is
-// not 0, it first drops the bridge's TCP traffic to that port on any of the
-// host's addresses, so guests cannot reach the daemon's API. An internal
+// bridge, so instances cannot reach another network's gateway. If
+// listenerPort is not 0, it first drops the bridge's TCP traffic to that
+// port on any of the host's addresses, so guests cannot reach the daemon's
+// TCP listener. An internal
 // bridge's guests reach the host only to ask the gateway's DNS server, and
 // to answer connections the host made to them. The rules are replaced
 // together to keep their order.
-func ensureInputRules(ctx context.Context, bridge, gatewayIP string, apiPort int, internal bool) error {
+func ensureInputRules(ctx context.Context, bridge, gatewayIP string, listenerPort int, internal bool) error {
 	var rules [][]string
-	if apiPort != 0 {
-		rules = append(rules, commented(inputAPIDropComment(bridge),
-			[]string{"-i", bridge, "-p", "tcp", "--dport", strconv.Itoa(apiPort), "-j", "DROP"}))
-	} else if err := deleteRulesWithComment(ctx, "filter", chainDicerInput, inputAPIDropComment(bridge)); err != nil {
-		return fmt.Errorf("remove input API drop rule for %s: %w", bridge, err)
+	if listenerPort != 0 {
+		rules = append(rules, commented(inputListenerDropComment(bridge),
+			[]string{"-i", bridge, "-p", "tcp", "--dport", strconv.Itoa(listenerPort), "-j", "DROP"}))
+	} else if err := deleteRulesWithComment(ctx, "filter", chainDicerInput, inputListenerDropComment(bridge)); err != nil {
+		return fmt.Errorf("remove input listener drop rule for %s: %w", bridge, err)
 	}
 	// A network deleted and created again under the same name, as the other
 	// kind, may still have the other kind's rule. If so, it is replaced.
@@ -348,7 +349,7 @@ func ensureInputRules(ctx context.Context, bridge, gatewayIP string, apiPort int
 func removeInputRules(ctx context.Context, bridge string) error {
 	var errs []error
 	for _, comment := range []string{
-		inputAPIDropComment(bridge),
+		inputListenerDropComment(bridge),
 		inputDNSComment(bridge),
 		inputRepliesComment(bridge),
 		inputInternalComment(bridge),

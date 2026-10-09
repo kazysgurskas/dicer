@@ -18,6 +18,9 @@ import (
 type fakeDaemon struct {
 	dicerdv1.UnimplementedDaemonServiceServer
 
+	// fingerprint is the fingerprint of the certificate serve gave it.
+	fingerprint string
+
 	getInstance      func(context.Context, *dicerdv1.GetInstanceRequest) (*dicerdv1.Instance, error)
 	getInstanceLogs  func(*dicerdv1.GetInstanceLogsRequest, grpc.ServerStreamingServer[dicerdv1.InstanceLogChunk]) error
 	execInstance     func(grpc.BidiStreamingServer[dicerdv1.ExecInstanceRequest, dicerdv1.ExecInstanceResponse]) error
@@ -32,7 +35,8 @@ type fakeDaemon struct {
 func connect(t *testing.T, daemon dicerdv1.DaemonServiceServer) *Client {
 	t.Helper()
 
-	c, err := NewClient(WithAddress(serve(t, daemon)))
+	address, value := serve(t, daemon)
+	c, err := NewClient(WithAddress(address), WithToken(value))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

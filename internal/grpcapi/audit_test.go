@@ -6,9 +6,6 @@ package grpcapi
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"fmt"
 	"log/slog"
 	"net"
@@ -21,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/konradasb/dicer/internal/types"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -30,11 +28,15 @@ func auditTo() (Audit, *bytes.Buffer) {
 	return NewAudit(slog.New(slog.NewTextHandler(&buf, nil))), &buf
 }
 
-// callUnary audits a unary call of method with req, made by caller.
-func callUnary(t *testing.T, a Audit, caller *peer.Peer, method string, req any) {
+// callUnary audits a unary call of method with req, made by caller with the
+// named token, or with none if it is empty.
+func callUnary(t *testing.T, a Audit, caller *peer.Peer, tokenName, method string, req any) {
 	t.Helper()
 
 	ctx := peer.NewContext(t.Context(), caller)
+	if tokenName != "" {
+		ctx = context.WithValue(ctx, tokenKey{}, types.Token{Name: tokenName})
+	}
 	info := &grpc.UnaryServerInfo{FullMethod: "/dicerd.v1.DaemonService/" + method}
 	handler := func(context.Context, any) (any, error) { return &emptypb.Empty{}, nil }
 	if _, err := a.UnaryInterceptor()(ctx, req, info, handler); err != nil {
@@ -45,35 +47,36 @@ func callUnary(t *testing.T, a Audit, caller *peer.Peer, method string, req any)
 func TestAuditNamesTheCallerAndTheResource(t *testing.T) {
 	unixAddr := &net.UnixAddr{Name: "@", Net: "unix"}
 	tcpAddr := &net.TCPAddr{IP: net.IPv4(10, 0, 0, 5), Port: 51234}
-	client := &x509.Certificate{Subject: pkix.Name{CommonName: "alice"}}
 
 	tests := []struct {
 		name   string
 		caller *peer.Peer
+		token  string
 		want   string
 	}{
 		{
 			"unix socket",
 			&peer.Peer{Addr: unixAddr, AuthInfo: UnixPeer{UID: 1000, PID: 4242}},
+			"",
 			"resource=web uid=1000 pid=4242 code=OK",
 		},
 		{
 			"tcp",
 			&peer.Peer{Addr: tcpAddr},
+			"",
 			"resource=web address=10.0.0.5:51234 code=OK",
 		},
 		{
-			"tls with a client certificate",
-			&peer.Peer{Addr: tcpAddr, AuthInfo: credentials.TLSInfo{
-				State: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{client}}},
-			}},
-			`resource=web address=10.0.0.5:51234 client_certificate="CN=alice" code=OK`,
+			"tls with a token",
+			&peer.Peer{Addr: tcpAddr, AuthInfo: credentials.TLSInfo{}},
+			"ci",
+			"resource=web address=10.0.0.5:51234 token=ci code=OK",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a, buf := auditTo()
-			callUnary(t, a, tt.caller, "StopInstance", &dicerdv1.StopInstanceRequest{Name: "web"})
+			callUnary(t, a, tt.caller, tt.token, "StopInstance", &dicerdv1.StopInstanceRequest{Name: "web"})
 
 			if !strings.Contains(buf.String(), "method=StopInstance "+tt.want) {
 				t.Errorf("audit = %q, want %q", buf.String(), tt.want)
@@ -85,7 +88,7 @@ func TestAuditNamesTheCallerAndTheResource(t *testing.T) {
 func TestAuditLeavesOutReads(t *testing.T) {
 	a, buf := auditTo()
 	caller := &peer.Peer{Addr: &net.UnixAddr{Name: "@", Net: "unix"}, AuthInfo: UnixPeer{UID: 0, PID: 1}}
-	callUnary(t, a, caller, "GetInstance", &dicerdv1.GetInstanceRequest{Name: "web"})
+	callUnary(t, a, caller, "", "GetInstance", &dicerdv1.GetInstanceRequest{Name: "web"})
 
 	if buf.Len() != 0 {
 		t.Errorf("audit = %q, want nothing for a read", buf.String())

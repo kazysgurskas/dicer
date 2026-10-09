@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/types"
@@ -365,5 +366,56 @@ func TestStagingLeftByACrashIsRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(staged); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the staging directory survived a reload")
+	}
+}
+
+func testToken(name, secretHash string) types.Token {
+	return types.Token{ID: "id-" + name, Name: name, SecretSHA256: secretHash, Scopes: []types.Scope{types.ScopeAll}}
+}
+
+func TestTokenIsFoundBySecretSHA256(t *testing.T) {
+	m := newTestManager(t)
+
+	const ciHash, deployHash = "aa", "bb"
+	for _, tok := range []types.Token{testToken("ci", ciHash), testToken("deploy", deployHash)} {
+		if err := m.CreateToken(tok); err != nil {
+			t.Fatalf("CreateToken: %v", err)
+		}
+	}
+
+	got, err := m.TokenBySecretSHA256(deployHash)
+	if err != nil || got.Name != "deploy" {
+		t.Errorf("TokenBySecretSHA256 = %q, %v; want deploy", got.Name, err)
+	}
+	if _, err := m.TokenBySecretSHA256("cc"); !errors.Is(err, errdefs.ErrNotFound) {
+		t.Errorf("TokenBySecretSHA256 of an unknown hash = %v, want ErrNotFound", err)
+	}
+}
+
+// TestRecordTokenUseKeepsARotation checks that recording a token's use, which
+// a call does with what it read before, never puts back a secret the token
+// was rotated away from meanwhile.
+func TestRecordTokenUseKeepsARotation(t *testing.T) {
+	m := newTestManager(t)
+
+	if err := m.CreateToken(testToken("ci", "old")); err != nil {
+		t.Fatal(err)
+	}
+	rotated := testToken("ci", "new")
+	if err := m.UpdateToken(rotated); err != nil {
+		t.Fatal(err)
+	}
+
+	used := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	if err := m.RecordTokenUse("ci", used); err != nil {
+		t.Fatalf("RecordTokenUse: %v", err)
+	}
+
+	got, _ := m.Token("ci")
+	if got.SecretSHA256 != "new" || !got.LastUsedAt.Equal(used) {
+		t.Errorf("token = %+v, want the new secret, last used at %v", got, used)
+	}
+	if err := m.RecordTokenUse("gone", used); !errors.Is(err, errdefs.ErrNotFound) {
+		t.Errorf("RecordTokenUse of a missing token = %v, want ErrNotFound", err)
 	}
 }

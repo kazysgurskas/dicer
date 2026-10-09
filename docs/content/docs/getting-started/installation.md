@@ -173,16 +173,11 @@ Example playbook:
   roles:
   - role: konradasb.general.dicerd
     vars:
-      dicerd_version: 0.3.0
-      dicerd_tls_certificate: "{{ lookup('file', 'tls/' ~ inventory_hostname ~ '.pem') }}"
-      dicerd_tls_private_key: "{{ lookup('file', 'tls/' ~ inventory_hostname ~ '-key.pem') }}"
-      dicerd_tls_client_ca: "{{ lookup('file', 'tls/ca.pem') }}"
       dicerd_group_members:
       - alice
       dicerd_config:
-        api:
-          tcp:
-            listen: 0.0.0.0:7443
+        server:
+          listen: 0.0.0.0:7443
 ```
 
 ```console
@@ -194,9 +189,7 @@ $ ansible-playbook -i inventory dicer.yml
 `dicerd validate` before it replaces the file. When the file changes, the
 role restarts the daemon, which leaves the instances running.
 
-The TLS files are written under `/etc/dicerd/tls`, and only root can read
-the private key. Keep the key in Ansible Vault. Each role's README lists
-its variables, and so does `ansible-doc -t role konradasb.general.dicerd`.
+Each role's README lists its variables, and so does `ansible-doc -t role konradasb.general.dicerd`.
 
 Use the role on a host that has no Dicer yet, or that has the package. Don't
 use it on a host the install script set up: the script's service, in

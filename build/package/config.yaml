@@ -9,7 +9,7 @@
 
 data_dir: /var/lib/dicer
 run_dir: /run/dicer
-api:
+server:
   socket:
     path: /run/dicer/dicer.sock
     mode: 0660

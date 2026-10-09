@@ -105,6 +105,21 @@ func run(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// runWithInput runs the CLI as run does, with input on standard input.
+func runWithInput(t *testing.T, input string, args ...string) (string, error) {
+	t.Helper()
+
+	cmd := NewCommand()
+	var out bytes.Buffer
+	cmd.SetIn(strings.NewReader(input))
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(args)
+
+	err := cmd.ExecuteContext(t.Context())
+	return out.String(), err
+}
+
 // isolateConfig gives the test a configuration directory of its own, and
 // clears whatever remote the environment names.
 func isolateConfig(t *testing.T) string {
@@ -113,6 +128,7 @@ func isolateConfig(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv(remote.ConfigDirEnv, dir)
 	t.Setenv(remoteEnv, "")
+	t.Setenv(tokenEnv, "")
 
 	return dir
 }

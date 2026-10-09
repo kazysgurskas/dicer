@@ -56,6 +56,7 @@ The common commands are shortcuts for the management commands most used: `dicer 
 | [`dicer network`]({{< relref "/docs/reference/cli/dicer_network" >}}) | Manage networks. |
 | [`dicer remote`]({{< relref "/docs/reference/cli/dicer_remote" >}}) | Manage the daemons this client talks to. |
 | [`dicer snapshot`]({{< relref "/docs/reference/cli/dicer_snapshot" >}}) | Manage snapshots. |
+| [`dicer token`]({{< relref "/docs/reference/cli/dicer_token" >}}) | Manage the tokens the daemon's TCP listener accepts. |
 | [`dicer volume`]({{< relref "/docs/reference/cli/dicer_volume" >}}) | Manage volumes. |
 
 ### System commands

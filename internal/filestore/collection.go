@@ -283,6 +283,26 @@ func (c *collection[T]) update(definition T) error {
 	return nil
 }
 
+// change replaces a definition, by name or ID, with what fn returns for it,
+// as one step: no write in between is lost. fn must keep its name and ID.
+func (c *collection[T]) change(nameOrID string, fn func(T) T) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	name, ok := c.nameOf(nameOrID)
+	if !ok {
+		return errdefs.NotFound("no %s %q", c.kind, nameOrID)
+	}
+
+	changed := fn(c.byName[name])
+	if err := c.write(name, changed); err != nil {
+		return err
+	}
+	id, _ := c.idAndName(changed)
+	c.cache(id, name, changed)
+	return nil
+}
+
 // rename stores renamed under its new name, moving its directory with it.
 func (c *collection[T]) rename(nameOrID string, renamed T) error {
 	c.mu.Lock()

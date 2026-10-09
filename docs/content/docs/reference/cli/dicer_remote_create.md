@@ -6,11 +6,9 @@ description: "Add a daemon to talk to"
 
 Add a daemon to talk to.
 
-A unix:// socket is controlled by its file permissions: whoever can open it may do anything, and nothing further identifies either end.
+A daemon's TCP listener, HOST:PORT, is reached with a token, which `dicer token create` makes on the daemon's host, printing this command to run with it. Give it with `--token`, paste it when asked, or pipe it in. `--token` keeps it in the shell's history, which the other two do not. The token is kept with the remote. It also says how to check that the daemon is the one that made it.
 
-A daemon's TCP listener, HOST:PORT, is reached over TLS, or over nothing at all. With `--tls-ca` this client verifies the daemon and the connection is encrypted; with `--tls-cert` and `--tls-key` it identifies itself in turn, which a daemon configured with api.tcp.tls.client_ca_file requires. Given neither, the connection is plaintext and unauthenticated, so reach the daemon only over a network you trust as far as you trust the host.
-
-The files are read on every connection, not copied here, so a renewed certificate is picked up without the remote being changed.
+A unix:// socket takes no token. It is controlled by its file permissions: whoever can open it may do anything.
 
 ## Usage
 
@@ -23,9 +21,8 @@ Also run as `dicer remote new`, `dicer remote add`.
 ## Examples
 
 ```console
-$ dicer remote create prod dicer1.example.com:7443 \
-  --tls-ca ~/.dicer/ca.pem \
-  --tls-cert ~/.dicer/client.pem --tls-key ~/.dicer/client-key.pem
+$ dicer remote create prod dicer1.example.com:7443
+$ echo "$DICER_PROD_TOKEN" | dicer remote create prod dicer1.example.com:7443
 $ dicer remote create test unix:///run/dicer-test/dicer.sock
 ```
 
@@ -33,10 +30,7 @@ $ dicer remote create test unix:///run/dicer-test/dicer.sock
 
 | Flag | Description |
 |---|---|
-| `--tls-ca string` | Authorities the daemon's certificate is checked against, in PEM. |
-| `--tls-cert string` | Certificate identifying this client to the daemon, in PEM. |
-| `--tls-key string` | Private key for `--tls-cert`, in PEM. |
-| `--tls-server-name string` | Name the daemon's certificate must carry, if not the host in ADDRESS. |
+| `--token string` | The token to reach a TCP address with, instead of reading it. |
 
 ## Global flags
 

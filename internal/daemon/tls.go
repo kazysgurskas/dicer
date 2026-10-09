@@ -6,54 +6,111 @@
 package daemon
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"math/big"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/konradasb/dicer/internal/atomicfile"
+	"github.com/konradasb/dicer/internal/token"
 )
 
-// serverTLSConfig builds the TLS configuration for the network listener.
-// With a client CA, callers without a valid certificate fail the handshake.
-func serverTLSConfig(cfg TLSConfig, logger *slog.Logger) (*tls.Config, error) {
-	cert, err := newCertificate(cfg.CertFile, cfg.KeyFile, logger)
-	if err != nil {
-		return nil, err
+// The files in data_dir the daemon keeps a certificate of its own in, when
+// server.crt_file gives none.
+const (
+	ownCrtFile = "server.crt"
+	ownKeyFile = "server.key"
+)
+
+// serverTLSConfig builds the TLS configuration of the TCP listener, and
+// returns the fingerprint of its certificate. The certificate is cfg's if it
+// gives one, and else the daemon's own, made in dataDir the first time.
+func serverTLSConfig(cfg ServerConfig, dataDir string, logger *slog.Logger) (*tls.Config, string, error) {
+	crtFile, keyFile := cfg.CrtFile, cfg.KeyFile
+	if crtFile == "" {
+		crtFile, keyFile = filepath.Join(dataDir, ownCrtFile), filepath.Join(dataDir, ownKeyFile)
+		if err := ensureOwnCertificate(crtFile, keyFile); err != nil {
+			return nil, "", err
+		}
 	}
 
-	tlsConfig := &tls.Config{
+	cert, err := newCertificate(crtFile, keyFile, logger)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &tls.Config{
 		MinVersion: tls.VersionTLS13,
 
 		// GetCertificate picks up a renewed certificate without a restart.
 		GetCertificate: cert.current,
+	}, token.Fingerprint(cert.cert.Leaf), nil
+}
+
+// ensureOwnCertificate makes the daemon's own certificate and its key, unless
+// the certificate is there already. Clients check it by the fingerprint of
+// its key, which tokens carry, so it names no host and never expires.
+func ensureOwnCertificate(crtFile, keyFile string) error {
+	if _, err := os.Stat(crtFile); err == nil {
+		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("read the API certificate: %w", err)
 	}
 
-	if !cfg.RequiresClientCert() {
-		return tlsConfig, nil
-	}
-
-	pem, err := os.ReadFile(cfg.ClientCAFile)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("read api.tcp.tls.client_ca_file: %w", err)
+		return fmt.Errorf("make the API certificate's key: %w", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return fmt.Errorf("make the API certificate's serial number: %w", err)
 	}
 
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("api.tcp.tls.client_ca_file %s holds no certificates; want PEM", cfg.ClientCAFile)
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "dicerd"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		// RFC 5280's date for a certificate with no expiry.
+		NotAfter:    time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return fmt.Errorf("make the API certificate: %w", err)
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return fmt.Errorf("encode the API certificate's key: %w", err)
 	}
 
-	tlsConfig.ClientCAs = pool
-	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-
-	return tlsConfig, nil
+	// The key first: the certificate's presence is what says both are
+	// there.
+	if err := atomicfile.Write(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
+		return fmt.Errorf("write the API certificate's key: %w", err)
+	}
+	if err := atomicfile.Write(crtFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644); err != nil {
+		return fmt.Errorf("write the API certificate: %w", err)
+	}
+	return nil
 }
 
 // certificate is the daemon's certificate, reloaded when its files change.
 type certificate struct {
-	certFile, keyFile string
-	logger            *slog.Logger
+	crtFile, keyFile string
+	logger           *slog.Logger
 
 	mu   sync.Mutex
 	cert *tls.Certificate
@@ -66,8 +123,8 @@ type certificate struct {
 }
 
 // newCertificate loads the certificate.
-func newCertificate(certFile, keyFile string, logger *slog.Logger) (*certificate, error) {
-	c := &certificate{certFile: certFile, keyFile: keyFile, logger: logger}
+func newCertificate(crtFile, keyFile string, logger *slog.Logger) (*certificate, error) {
+	c := &certificate{crtFile: crtFile, keyFile: keyFile, logger: logger}
 	if err := c.load(); err != nil {
 		return nil, err
 	}
@@ -92,7 +149,7 @@ func (c *certificate) current(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 		if time.Since(c.failureLoggedAt) > reloadFailureLogInterval {
 			c.failureLoggedAt = time.Now()
 			c.logger.Error("the API certificate changed but could not be read; still serving the previous one",
-				"cert_file", c.certFile, "error", err)
+				"crt_file", c.crtFile, "error", err)
 		}
 	}
 
@@ -105,16 +162,16 @@ const reloadFailureLogInterval = time.Minute
 // load reads the pair and records its modification times. The caller holds
 // the lock, except during construction.
 func (c *certificate) load() error {
-	certInfo, err := os.Stat(c.certFile)
+	certInfo, err := os.Stat(c.crtFile)
 	if err != nil {
-		return fmt.Errorf("read api.tcp.tls.cert_file: %w", err)
+		return fmt.Errorf("read the API certificate: %w", err)
 	}
 	keyInfo, err := os.Stat(c.keyFile)
 	if err != nil {
-		return fmt.Errorf("read api.tcp.tls.key_file: %w", err)
+		return fmt.Errorf("read the API certificate's key: %w", err)
 	}
 
-	pair, err := tls.LoadX509KeyPair(c.certFile, c.keyFile)
+	pair, err := tls.LoadX509KeyPair(c.crtFile, c.keyFile)
 	if err != nil {
 		return fmt.Errorf("load the API certificate: %w", err)
 	}
@@ -127,7 +184,7 @@ func (c *certificate) load() error {
 // changed reports whether either file has been modified since it was read. A
 // file that cannot be stat'ed counts as unchanged.
 func (c *certificate) changed() bool {
-	certInfo, err := os.Stat(c.certFile)
+	certInfo, err := os.Stat(c.crtFile)
 	if err != nil {
 		return false
 	}

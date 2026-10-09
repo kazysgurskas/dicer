@@ -27,6 +27,8 @@ func TestToStatus(t *testing.T) {
 		{fmt.Errorf("start web: %w", errdefs.InvalidState("it is running")), codes.FailedPrecondition,
 			"start web: it is running"},
 		{errdefs.Unavailable("cannot reach ghcr.io"), codes.Unavailable, "cannot reach ghcr.io"},
+		{errdefs.Unauthenticated("no token"), codes.Unauthenticated, "no token"},
+		{errdefs.PermissionDenied("needs events:read"), codes.PermissionDenied, "needs events:read"},
 		{fmt.Errorf("probe: %w", errors.ErrUnsupported), codes.Unimplemented, "probe: unsupported operation"},
 		{context.Canceled, codes.Canceled, "context canceled"},
 		{errors.New("disk on fire"), codes.Internal, "disk on fire"},

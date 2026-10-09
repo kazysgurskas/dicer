@@ -1,8 +1,9 @@
 // Copyright 2026 Dicer Authors
 // SPDX-License-Identifier: MIT
 
-// Package grpcapi implements the DaemonService gRPC service and the audit
-// interceptors in front of it.
+// Package grpcapi implements the DaemonService gRPC service and the
+// interceptors in front of it: those that authenticate a call's token,
+// authorize it by the token's scopes, and audit it.
 //
 // Handlers validate the request, call the definitions (filestore) or the
 // lifecycle manager (vm), and convert the result. They take their dependencies as concrete types.
@@ -41,8 +42,23 @@ type Config struct {
 	// Nil records nothing.
 	Events *events.Log
 
-	// APIAddress is the daemon's TCP address, or empty.
-	APIAddress string
+	// ListenAddress is the address the TCP listener is bound to, such as
+	// [::]:9000, or empty if the API is not served over TCP.
+	ListenAddress string
+
+	// HostAddresses returns the host's own addresses, which a TCP listener
+	// on all of them is reached at. Nil reports the listener's address as it
+	// is.
+	HostAddresses func() ([]netip.Addr, error)
+
+	// Fingerprint is the fingerprint of the certificate the daemon is served
+	// with over TCP, or empty if it is not.
+	Fingerprint string
+
+	// TokenFingerprint is the fingerprint every token carries, for clients
+	// to check the daemon by: Fingerprint, or empty for a certificate
+	// clients verify for themselves.
+	TokenFingerprint string
 
 	// HostSubnets returns the subnets of the host's interfaces, which a new
 	// network may not overlap. Nil skips the check.
@@ -82,6 +98,7 @@ type Server struct {
 	networkHandler
 	volumeHandler
 	kernelHandler
+	tokenHandler
 	imageHandler
 	hostHandler
 	resourceHandler
@@ -114,6 +131,11 @@ func NewServer(cfg Config) *Server {
 			kernels:     cfg.Kernels,
 			events:      recorderOf(cfg.Events),
 		},
+		tokenHandler: tokenHandler{
+			definitions: cfg.Definitions,
+			servesTCP:   cfg.ListenAddress != "",
+			fingerprint: cfg.TokenFingerprint,
+		},
 		imageHandler: imageHandler{
 			definitions: cfg.Definitions,
 			instances:   cfg.Instances,
@@ -125,9 +147,11 @@ func NewServer(cfg Config) *Server {
 			dataDir:     cfg.DataDir,
 		},
 		hostHandler: hostHandler{
-			version:     cfg.Version,
-			hypervisors: cfg.Hypervisors,
-			apiAddress:  cfg.APIAddress,
+			version:       cfg.Version,
+			hypervisors:   cfg.Hypervisors,
+			listenAddress: cfg.ListenAddress,
+			hostAddresses: cfg.HostAddresses,
+			fingerprint:   cfg.Fingerprint,
 		},
 		eventsHandler: eventsHandler{events: cfg.Events},
 	}

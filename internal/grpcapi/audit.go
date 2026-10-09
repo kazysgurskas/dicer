@@ -153,8 +153,8 @@ func resourceOf(req any) string {
 }
 
 // callerAttrs returns the log attributes that say who made a call: the user
-// and process on the Unix socket, or the address on TCP, with the subject
-// of the client certificate if one was verified.
+// and process on the Unix socket, or the address and the token's name on
+// TCP.
 func callerAttrs(ctx context.Context) []any {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
@@ -166,8 +166,8 @@ func callerAttrs(ctx context.Context) []any {
 		return []any{"uid", info.UID, "pid", info.PID}
 	case credentials.TLSInfo:
 		attrs := []any{"address", p.Addr.String()}
-		if chains := info.State.VerifiedChains; len(chains) > 0 && len(chains[0]) > 0 {
-			attrs = append(attrs, "client_certificate", chains[0][0].Subject.String())
+		if t, ok := tokenFrom(ctx); ok {
+			attrs = append(attrs, "token", t.Name)
 		}
 		return attrs
 	}

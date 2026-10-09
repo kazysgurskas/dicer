@@ -24,6 +24,8 @@ func TestClassStaysOutOfTheMessage(t *testing.T) {
 		{InvalidArgument("invalid name %q", "a_b"), ErrInvalidArgument, `invalid name "a_b"`},
 		{ResourceExhausted("no room"), ErrResourceExhausted, "no room"},
 		{Unavailable("cannot reach %s", "ghcr.io"), ErrUnavailable, "cannot reach ghcr.io"},
+		{Unauthenticated("no token"), ErrUnauthenticated, "no token"},
+		{PermissionDenied("needs %s", "events:read"), ErrPermissionDenied, "needs events:read"},
 	} {
 		t.Run(tc.class.Error(), func(t *testing.T) {
 			if got := tc.err.Error(); got != tc.want {

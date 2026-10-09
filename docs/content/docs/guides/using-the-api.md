@@ -126,23 +126,22 @@ The [package documentation](https://pkg.go.dev/github.com/konradasb/dicer)
 lists every call. A `dicer.Client` is safe for concurrent use; make one and
 share it.
 
-For a daemon's TCP listener, give its address and a TLS configuration:
+For a daemon's TCP listener, give its address and a token, which
+`dicer token create` makes on the daemon's host (see
+[Remote access](../remote-access)):
 
 ```go
-cert, err := tls.LoadX509KeyPair("client.pem", "client-key.pem")
-// …
-roots := x509.NewCertPool()
-roots.AppendCertsFromPEM(caPEM)
-
 c, err := dicer.NewClient(
 	dicer.WithAddress("dicer1.example.com:7443"),
-	dicer.WithTLS(&tls.Config{
-		RootCAs:      roots,
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS13,
-	}),
+	dicer.WithToken(os.Getenv("DICER_PROD_TOKEN")),
 )
 ```
+
+The token also carries the fingerprint of the daemon's certificate, which
+the client checks the daemon by. A daemon served with a certificate from an
+authority of your own needs `dicer.WithTLS` too, with the authority in its
+`RootCAs`. A call the daemon refuses the token of fails with
+`dicer.ErrUnauthenticated`. `c.Tokens` makes, rotates and deletes tokens.
 
 `dicer.WithKeepalive` sets how often the client checks that the daemon is
 still there (see [Remote access](../remote-access#connections-that-go-quiet)).
@@ -179,9 +178,13 @@ with grpc.insecure_channel("unix:///run/dicer/dicer.sock") as channel:
             print("no db")
 ```
 
-`insecure_channel` is right for the socket, which has no TLS. For a TCP
-listener with TLS, use `grpc.secure_channel` with
-`grpc.ssl_channel_credentials`.
+`insecure_channel` is right for the socket, which has no TLS. A daemon's
+TCP listener takes TLS and a token, sent with every call as the
+`authorization` header, `Bearer TOKEN`. The token ends with the
+fingerprint of the daemon's certificate: the SHA-256 of its public key,
+after the last underscore. Check the certificate the daemon presents
+against it before sending anything, or give the daemon a certificate of
+your own with `server.crt_file` and check it as usual.
 
 ## From the shell
 
@@ -199,6 +202,8 @@ $ grpcurl -plaintext -unix \
     /run/dicer/dicer.sock dicerd.v1.DaemonService/GetInstance
 ```
 
-For a TCP listener with TLS, replace `-plaintext -unix` and the socket with
-`-cacert ca.pem -cert client.pem -key client-key.pem` and the daemon's
-`HOST:PORT`.
+For a TCP listener, replace `-plaintext -unix` and the socket with
+`-H "authorization: Bearer $TOKEN"` and the daemon's `HOST:PORT`. grpcurl
+cannot check the daemon by a token's fingerprint, so this needs a daemon
+served with a certificate of `server.crt_file` that grpcurl can verify.
+Its `-insecure` would send the token to whatever answers at the address.

@@ -6,6 +6,7 @@ package grpcapi
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"slices"
 	"testing"
 
@@ -98,5 +99,36 @@ func TestHypervisorInfosOmitMissingDrivers(t *testing.T) {
 	got := h.hypervisorInfos()
 	if len(got) != 1 || got[0].GetType() != dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR {
 		t.Errorf("hypervisorInfos() = %+v, want only cloud-hypervisor", got)
+	}
+}
+
+// TestListenerAddressesOfAListenerOnAllAddressesAreTheHosts checks that a
+// client is told addresses it can connect to, not [::]:9000.
+func TestListenerAddressesOfAListenerOnAllAddressesAreTheHosts(t *testing.T) {
+	hostAddresses := func() ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("10.10.0.101"), netip.MustParseAddr("2001:db8::10")}, nil
+	}
+	failing := func() ([]netip.Addr, error) { return nil, errors.New("no interfaces") }
+
+	tests := []struct {
+		name          string
+		listenAddress string
+		hostAddresses func() ([]netip.Addr, error)
+		want          []string
+	}{
+		{"not served over TCP", "", hostAddresses, nil},
+		{"one address", "192.0.2.1:7443", hostAddresses, []string{"192.0.2.1:7443"}},
+		{"all IPv4 addresses", "0.0.0.0:7443", hostAddresses, []string{"10.10.0.101:7443", "[2001:db8::10]:7443"}},
+		{"all addresses", "[::]:9000", hostAddresses, []string{"10.10.0.101:9000", "[2001:db8::10]:9000"}},
+		{"the host's unknown", "[::]:9000", nil, []string{"[::]:9000"}},
+		{"the host's unreadable", "[::]:9000", failing, []string{"[::]:9000"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &hostHandler{listenAddress: tt.listenAddress, hostAddresses: tt.hostAddresses}
+			if got := h.listenerAddresses(); !slices.Equal(got, tt.want) {
+				t.Errorf("listenerAddresses = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

@@ -37,11 +37,11 @@ func TestLoadConfigMissingFileUsesDefaults(t *testing.T) {
 	if cfg.DataDir != want.DataDir {
 		t.Errorf("DataDir = %q, want %q", cfg.DataDir, want.DataDir)
 	}
-	if cfg.API.Socket.Path != want.API.Socket.Path {
-		t.Errorf("API.Socket.Path = %q, want %q", cfg.API.Socket.Path, want.API.Socket.Path)
+	if cfg.Server.Socket.Path != want.Server.Socket.Path {
+		t.Errorf("Server.Socket.Path = %q, want %q", cfg.Server.Socket.Path, want.Server.Socket.Path)
 	}
 	// The API is served on the network only when asked to be.
-	if cfg.API.TCP.Enabled() {
+	if cfg.Server.ServesTCP() {
 		t.Error("the API listens on TCP by default")
 	}
 	if cfg.LogLevel != want.LogLevel {
@@ -52,11 +52,10 @@ func TestLoadConfigMissingFileUsesDefaults(t *testing.T) {
 func TestLoadConfigOverridesDefaults(t *testing.T) {
 	path := writeConfig(t, `
 data_dir: /srv/dicer
-api:
+server:
+  listen: 0.0.0.0:7443
   socket:
     path: /tmp/dicer.sock
-  tcp:
-    listen: 0.0.0.0:7443
 log_level: debug
 network:
   uplink_interface: eth1
@@ -70,11 +69,11 @@ network:
 	if cfg.DataDir != "/srv/dicer" {
 		t.Errorf("DataDir = %q, want /srv/dicer", cfg.DataDir)
 	}
-	if cfg.API.Socket.Path != "/tmp/dicer.sock" {
-		t.Errorf("API.Socket.Path = %q, want /tmp/dicer.sock", cfg.API.Socket.Path)
+	if cfg.Server.Socket.Path != "/tmp/dicer.sock" {
+		t.Errorf("Server.Socket.Path = %q, want /tmp/dicer.sock", cfg.Server.Socket.Path)
 	}
-	if cfg.API.TCP.Listen != "0.0.0.0:7443" {
-		t.Errorf("API.TCP.Listen = %q, want 0.0.0.0:7443", cfg.API.TCP.Listen)
+	if cfg.Server.Listen != "0.0.0.0:7443" {
+		t.Errorf("Server.Listen = %q, want 0.0.0.0:7443", cfg.Server.Listen)
 	}
 	if cfg.Network.UplinkInterface != "eth1" {
 		t.Errorf("UplinkInterface = %q, want eth1", cfg.Network.UplinkInterface)
@@ -95,8 +94,8 @@ func TestLoadConfigPartialKeepsDefaults(t *testing.T) {
 	if cfg.DataDir != defaultConfig().DataDir {
 		t.Errorf("DataDir = %q, want the default to survive", cfg.DataDir)
 	}
-	if cfg.API.Socket.Mode != defaultConfig().API.Socket.Mode {
-		t.Errorf("API.Socket.Mode = %o, want the default to survive", cfg.API.Socket.Mode)
+	if cfg.Server.Socket.Mode != defaultConfig().Server.Socket.Mode {
+		t.Errorf("Server.Socket.Mode = %o, want the default to survive", cfg.Server.Socket.Mode)
 	}
 }
 
@@ -149,16 +148,19 @@ func TestValidate(t *testing.T) {
 		{name: "unknown log level", mutate: func(c *Config) { c.LogLevel = "verbose" }, wantErr: true},
 		{name: "empty log level", mutate: func(c *Config) { c.LogLevel = "" }, wantErr: true},
 		{name: "missing data dir", mutate: func(c *Config) { c.DataDir = "" }, wantErr: true},
-		{name: "missing socket", mutate: func(c *Config) { c.API.Socket.Path = "" }, wantErr: true},
-		{name: "tcp listener", mutate: func(c *Config) { c.API.TCP.Listen = "0.0.0.0:7443" }},
-		{name: "tcp without port", mutate: func(c *Config) { c.API.TCP.Listen = "0.0.0.0" }, wantErr: true},
-		{name: "tcp with named port", mutate: func(c *Config) { c.API.TCP.Listen = "0.0.0.0:https" }, wantErr: true},
-		{name: "tcp on any port", mutate: func(c *Config) { c.API.TCP.Listen = "0.0.0.0:0" }, wantErr: true},
-		{name: "socket group by id", mutate: func(c *Config) { c.API.Socket.Group = "0" }},
-		{name: "unknown socket group", mutate: func(c *Config) { c.API.Socket.Group = "no-such-group" }, wantErr: true},
-		{name: "no keepalive interval", mutate: func(c *Config) { c.API.Keepalive.Interval = 0 }, wantErr: true},
-		{name: "negative keepalive timeout", mutate: func(c *Config) { c.API.Keepalive.Timeout = -time.Second }, wantErr: true},
-		{name: "no keepalive client interval", mutate: func(c *Config) { c.API.Keepalive.MinClientInterval = 0 }, wantErr: true},
+		{name: "missing socket", mutate: func(c *Config) { c.Server.Socket.Path = "" }, wantErr: true},
+		{name: "tcp listener", mutate: func(c *Config) { c.Server.Listen = "0.0.0.0:7443" }},
+		{name: "tcp without port", mutate: func(c *Config) { c.Server.Listen = "0.0.0.0" }, wantErr: true},
+		{name: "tcp with named port", mutate: func(c *Config) { c.Server.Listen = "0.0.0.0:https" }, wantErr: true},
+		{name: "tcp on any port", mutate: func(c *Config) { c.Server.Listen = "0.0.0.0:0" }, wantErr: true},
+		{name: "certificate and key", mutate: func(c *Config) { c.Server.CrtFile, c.Server.KeyFile = "c", "k" }},
+		{name: "certificate alone", mutate: func(c *Config) { c.Server.CrtFile = "c" }, wantErr: true},
+		{name: "key alone", mutate: func(c *Config) { c.Server.KeyFile = "k" }, wantErr: true},
+		{name: "socket group by id", mutate: func(c *Config) { c.Server.Socket.Group = "0" }},
+		{name: "unknown socket group", mutate: func(c *Config) { c.Server.Socket.Group = "no-such-group" }, wantErr: true},
+		{name: "no keepalive interval", mutate: func(c *Config) { c.Server.Keepalive.Interval = 0 }, wantErr: true},
+		{name: "negative keepalive timeout", mutate: func(c *Config) { c.Server.Keepalive.Timeout = -time.Second }, wantErr: true},
+		{name: "no keepalive client interval", mutate: func(c *Config) { c.Server.Keepalive.MinClientInterval = 0 }, wantErr: true},
 		{name: "registry password", mutate: func(c *Config) {
 			c.Registries = map[string]RegistryConfig{"ghcr.io": {Username: "bot", Password: "x"}}
 		}},
@@ -392,7 +394,7 @@ func TestLoadConfigRejectsBadImageGC(t *testing.T) {
 
 // A keepalive setting given replaces its default and leaves the others.
 func TestLoadConfigKeepalive(t *testing.T) {
-	cfg, err := loadConfig(writeConfig(t, "api:\n  keepalive:\n    interval: 1m\n"))
+	cfg, err := loadConfig(writeConfig(t, "server:\n  keepalive:\n    interval: 1m\n"))
 	if err != nil {
 		t.Fatalf("loadConfig: %v", err)
 	}
@@ -402,8 +404,8 @@ func TestLoadConfigKeepalive(t *testing.T) {
 		Timeout:           defaultKeepaliveTimeout,
 		MinClientInterval: defaultKeepaliveMinClientInterval,
 	}
-	if cfg.API.Keepalive != want {
-		t.Errorf("keepalive = %+v, want %+v", cfg.API.Keepalive, want)
+	if cfg.Server.Keepalive != want {
+		t.Errorf("keepalive = %+v, want %+v", cfg.Server.Keepalive, want)
 	}
 }
 
@@ -431,7 +433,7 @@ func TestLoadConfigEvents(t *testing.T) {
 	}
 }
 
-func TestTCPConfigPort(t *testing.T) {
+func TestServerConfigListenerPort(t *testing.T) {
 	tests := []struct {
 		name   string
 		listen string
@@ -449,8 +451,8 @@ func TestTCPConfigPort(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := (TCPConfig{Listen: tt.listen}).Port(); got != tt.want {
-				t.Errorf("TCPConfig{Listen: %q}.Port() = %d, want %d", tt.listen, got, tt.want)
+			if got := (ServerConfig{Listen: tt.listen}).ListenerPort(); got != tt.want {
+				t.Errorf("ServerConfig{Listen: %q}.ListenerPort() = %d, want %d", tt.listen, got, tt.want)
 			}
 		})
 	}

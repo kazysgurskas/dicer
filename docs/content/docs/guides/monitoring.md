@@ -216,4 +216,4 @@ time=2026-10-06T09:14:02.511Z level=INFO msg="api call" component=audit method=S
 | `resource` | The name of the instance, snapshot, network, volume or kernel the call named, or the image's reference. A call that names none, such as a prune, has no `resource`. |
 | `uid`, `pid` | On the Unix socket, the user and process that connected, as the kernel reports them. |
 | `address` | Over TCP, the address the call came from. |
-| `client_certificate` | Over TCP with TLS, the subject of the client's certificate, if it presented one and it was verified. |
+| `token` | Over TCP, the name of the token the call was made with. |

@@ -7,10 +7,12 @@ package daemon
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,112 +53,110 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		}
 	}()
 
-	socket, err := listenSocket(ctx, d.cfg.API.Socket)
+	socket, err := listenSocket(ctx, d.cfg.Server.Socket)
 	if err != nil {
 		return nil, err
 	}
 
-	var apiAddress string
+	var listenAddress, fingerprint string
 	var tcp net.Listener
+	var tlsConfig *tls.Config
 
-	if d.cfg.API.TCP.Enabled() {
-		tcp, err = (&net.ListenConfig{}).Listen(ctx, "tcp", d.cfg.API.TCP.Listen)
+	if d.cfg.Server.ServesTCP() {
+		tlsConfig, fingerprint, err = serverTLSConfig(d.cfg.Server, d.cfg.DataDir, d.logger)
 		if err != nil {
-			return nil, fmt.Errorf("listen on %s: %w", d.cfg.API.TCP.Listen, err)
+			_ = socket.Close()
+			return nil, err
 		}
-		apiAddress = tcp.Addr().String()
+		tcp, err = (&net.ListenConfig{}).Listen(ctx, "tcp", d.cfg.Server.Listen)
+		if err != nil {
+			_ = socket.Close()
+			return nil, fmt.Errorf("listen on %s: %w", d.cfg.Server.Listen, err)
+		}
+
+		listenAddress = tcp.Addr().String()
+	}
+
+	// Tokens carry the fingerprint of the daemon's own certificate, not of
+	// one clients verify for themselves.
+	tokenFingerprint := fingerprint
+	if d.cfg.Server.CrtFile != "" {
+		tokenFingerprint = ""
 	}
 
 	api := grpcapi.NewServer(grpcapi.Config{
-		Hypervisors: d.hypervisors,
-		Definitions: d.definitions,
-		APIAddress:  apiAddress,
-		Networks:    d.networks,
-		Instances:   d.instances,
-		Images:      d.images,
-		Kernels:     d.kernels,
-		Volumes:     d.volumes,
-		Events:      d.events,
-		HostSubnets: hostnet.Subnets,
-		DataDir:     d.cfg.DataDir,
-		Version:     version.Version,
+		Hypervisors:   d.hypervisors,
+		Definitions:   d.definitions,
+		ListenAddress: listenAddress,
+		HostAddresses: func() ([]netip.Addr, error) {
+			return d.hostNetwork.Addresses(d.definitions.Networks())
+		},
+		Fingerprint:      fingerprint,
+		TokenFingerprint: tokenFingerprint,
+		Networks:         d.networks,
+		Instances:        d.instances,
+		Images:           d.images,
+		Kernels:          d.kernels,
+		Volumes:          d.volumes,
+		Events:           d.events,
+		HostSubnets:      hostnet.Subnets,
+		DataDir:          d.cfg.DataDir,
+		Version:          version.Version,
 	})
 
 	listeners = make([]apiListener, 0, 2)
 	//nolint:contextcheck // interceptors run with each call's own context
 	listeners = append(listeners, apiListener{
 		transport: transportUnix,
-		address:   d.cfg.API.Socket.Path,
+		address:   d.cfg.Server.Socket.Path,
 		listener:  socket,
-		server:    d.newGRPCServer(api, grpc.Creds(unixPeerCredentials{})),
+		server:    d.newGRPCServer(api, nil, grpc.Creds(unixPeerCredentials{})),
 	})
 
 	if tcp == nil {
 		return listeners, nil
 	}
 
-	credentialOptions, err := d.apiCredentials()
-	if err != nil {
-		_ = tcp.Close()
-		return listeners, err
-	}
+	d.logger.Info("the API is served over TCP, to clients with a token",
+		"listen", listenAddress, "fingerprint", fingerprint, "tokens", len(d.definitions.Tokens()))
 
+	authentication := grpcapi.NewAuthentication(d.definitions, d.logger)
 	return append(listeners, apiListener{
 		transport: transportTCP,
-		address:   tcp.Addr().String(),
+		address:   listenAddress,
 		listener:  tcp,
-		server:    d.newGRPCServer(api, credentialOptions...), //nolint:contextcheck // interceptors run with each call's own context
+		server:    d.newGRPCServer(api, authentication, grpc.Creds(credentials.NewTLS(tlsConfig))), //nolint:contextcheck // interceptors run with each call's own context
 	}), nil
 }
 
-// apiCredentials returns the network listener's credentials and logs how
-// callers are authenticated.
-func (d *daemon) apiCredentials() ([]grpc.ServerOption, error) {
-	tcp := d.cfg.API.TCP
-
-	if !tcp.TLS.Enabled() {
-		d.logger.Warn("the API is served over the network with no TLS and no authentication; "+
-			"anyone who can reach it has full control of this host",
-			"listen", tcp.Listen)
-		return nil, nil
-	}
-
-	tlsConfig, err := serverTLSConfig(tcp.TLS, d.logger)
-	if err != nil {
-		return nil, err
-	}
-
-	if tcp.TLS.RequiresClientCert() {
-		d.logger.Info("the API is served over the network with TLS, and requires a client certificate",
-			"listen", tcp.Listen, "client_ca_file", tcp.TLS.ClientCAFile)
-	} else {
-		d.logger.Warn("the API is served over the network with TLS but no client authentication; "+
-			"anyone who can reach it has full control of this host",
-			"listen", tcp.Listen)
-	}
-
-	return []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}, nil
-}
-
 // newGRPCServer builds an API server with metrics and audit interceptors,
-// which see the status each call ends with, and innermost the conversion of
-// handlers' errors to statuses. It keeps connections alive as
-// api.keepalive says.
-func (d *daemon) newGRPCServer(api *grpcapi.Server, opts ...grpc.ServerOption) *grpc.Server {
+// which see the status each call ends with, and inside them the conversion
+// of handlers' errors to statuses. With authentication, only calls with a
+// token reach the audit, and innermost the token's scopes must allow the
+// call, so that a refused call is audited too. It keeps connections alive
+// as server.keepalive says.
+func (d *daemon) newGRPCServer(
+	api *grpcapi.Server, authentication *grpcapi.Authentication, opts ...grpc.ServerOption,
+) *grpc.Server {
 	audit := grpcapi.NewAudit(d.logger)
 
-	opts = append(opts, keepaliveOptions(d.cfg.API.Keepalive)...)
+	unary := []grpc.UnaryServerInterceptor{d.metrics.UnaryServerInterceptor()}
+	stream := []grpc.StreamServerInterceptor{d.metrics.StreamServerInterceptor()}
+	if authentication != nil {
+		unary = append(unary, authentication.UnaryInterceptor())
+		stream = append(stream, authentication.StreamInterceptor())
+	}
+	unary = append(unary, audit.UnaryInterceptor(), grpcapi.UnaryStatusInterceptor)
+	stream = append(stream, audit.StreamInterceptor(), grpcapi.StreamStatusInterceptor)
+	if authentication != nil {
+		unary = append(unary, grpcapi.UnaryAuthorizationInterceptor)
+		stream = append(stream, grpcapi.StreamAuthorizationInterceptor)
+	}
+
+	opts = append(opts, keepaliveOptions(d.cfg.Server.Keepalive)...)
 	s := grpc.NewServer(append(opts,
-		grpc.ChainUnaryInterceptor(
-			d.metrics.UnaryServerInterceptor(),
-			audit.UnaryInterceptor(),
-			grpcapi.UnaryStatusInterceptor,
-		),
-		grpc.ChainStreamInterceptor(
-			d.metrics.StreamServerInterceptor(),
-			audit.StreamInterceptor(),
-			grpcapi.StreamStatusInterceptor,
-		),
+		grpc.ChainUnaryInterceptor(unary...),
+		grpc.ChainStreamInterceptor(stream...),
 	)...)
 	api.Register(s)
 

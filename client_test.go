@@ -5,10 +5,17 @@ package dicer
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
 	"io"
+	"math/big"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -16,10 +23,14 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
+	"github.com/konradasb/dicer/internal/token"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -82,18 +93,20 @@ func TestNewClientDefaultsToTheLocalDaemon(t *testing.T) {
 // TestNewClientOverTCP checks that a TCP address is connected to lazily, so
 // a client is made without a daemon there.
 func TestNewClientOverTCP(t *testing.T) {
+	secret := token.NewSecret()
+	pinned := token.Format(secret, strings.Repeat("ab", 32))
+	unpinned := token.Format(secret, "")
+
 	tests := []struct {
 		name string
 		opts []Option
 	}{
-		{"plain", []Option{WithAddress("192.0.2.1:7443")}},
-		{"TLS", []Option{
-			WithAddress("dns:///dicer.example.com:7443"),
-			WithTLS(&tls.Config{MinVersion: tls.VersionTLS13}),
-		}},
-		{"dial options", []Option{
+		{"a token with a fingerprint", []Option{WithAddress("192.0.2.1:7443"), WithToken(pinned)}},
+		{"a token without one", []Option{WithAddress("dns:///dicer.example.com:7443"), WithToken(unpinned)}},
+		{"a token and TLS", []Option{
 			WithAddress("192.0.2.1:7443"),
-			WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+			WithToken(unpinned),
+			WithTLS(&tls.Config{MinVersion: tls.VersionTLS13}),
 		}},
 	}
 	for _, tt := range tests {
@@ -107,6 +120,83 @@ func TestNewClientOverTCP(t *testing.T) {
 	}
 }
 
+// TestNewClientRefusesWhatCannotWork checks that a client that could only be
+// refused, or could only send its token in the clear, is not made.
+func TestNewClientRefusesWhatCannotWork(t *testing.T) {
+	// NewClient only looks for the socket, so a file will do.
+	socket := filepath.Join(t.TempDir(), "dicer.sock")
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	valid := token.Format(token.NewSecret(), "")
+
+	tests := []struct {
+		name string
+		opts []Option
+		want string
+	}{
+		{"TCP without a token", []Option{WithAddress("192.0.2.1:7443")}, "needs a token"},
+		{"TCP with TLS but no token", []Option{
+			WithAddress("192.0.2.1:7443"), WithTLS(&tls.Config{MinVersion: tls.VersionTLS13}),
+		}, "needs a token"},
+		{"a token that is not one", []Option{WithAddress("192.0.2.1:7443"), WithToken("ghp_abc")}, "invalid token"},
+		{"a token for a socket", []Option{WithAddress("unix://" + socket), WithToken(valid)}, "not its socket"},
+		{"a token and the default address", []Option{WithToken(valid)}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := NewClient(tt.opts...)
+			if err == nil {
+				_ = c.Close()
+				t.Fatal("NewClient succeeded")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("NewClient = %v, want it to say %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestTokenIsSentToTheDaemonItWasMadeFor checks both halves of a token: the
+// client sends it with every call, and sends nothing to a daemon whose
+// certificate is not the one its fingerprint pins.
+func TestTokenIsSentToTheDaemonItWasMadeFor(t *testing.T) {
+	daemon := &fakeDaemon{}
+	address, value := serve(t, daemon)
+
+	c, err := NewClient(WithAddress(address), WithToken(value))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if _, err := c.Instances.Get(t.Context(), "web"); !errors.Is(err, ErrUnimplemented) {
+		t.Errorf("a call with the token = %v, want the daemon's answer", err)
+	}
+
+	// The same secret, pinned to another daemon.
+	secret, _, _ := token.Parse(value)
+	impostor, err := NewClient(WithAddress(address), WithToken(token.Format(secret, strings.Repeat("ab", 32))))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = impostor.Close() })
+	_, err = impostor.Instances.Get(t.Context(), "web")
+	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "certificate fingerprint mismatch") {
+		t.Errorf("a call to a daemon of another fingerprint = %v, want ErrUnavailable saying why", err)
+	}
+
+	// A token the daemon does not know is refused by it.
+	stranger, err := NewClient(WithAddress(address), WithToken(token.Format(token.NewSecret(), daemon.fingerprint)))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = stranger.Close() })
+	if _, err := stranger.Instances.Get(t.Context(), "web"); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("a call with another token = %v, want ErrUnauthenticated", err)
+	}
+}
+
 // TestKeepaliveGivesUpOnADaemonThatStopsAnswering checks that a call in
 // flight fails once the daemon stops answering without closing the
 // connection, rather than waiting for as long as its context lets it.
@@ -116,9 +206,10 @@ func TestKeepaliveGivesUpOnADaemonThatStopsAnswering(t *testing.T) {
 	}
 
 	daemon := &stuckDaemon{called: make(chan struct{})}
-	blackhole := newBlackhole(t, serve(t, daemon))
+	address, value := serve(t, daemon)
+	blackhole := newBlackhole(t, address)
 
-	c, err := NewClient(WithAddress(blackhole.address()), WithKeepalive(10*time.Second, time.Second))
+	c, err := NewClient(WithAddress(blackhole.address()), WithToken(value), WithKeepalive(10*time.Second, time.Second))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -161,21 +252,80 @@ func (d *stuckDaemon) GetHostInfo(ctx context.Context, _ *dicerdv1.GetHostInfoRe
 	return nil, ctx.Err()
 }
 
-// serve serves the daemon over TCP on loopback and returns its address.
-func serve(t *testing.T, daemon dicerdv1.DaemonServiceServer) string {
+// serve serves daemon on loopback as a daemon's TCP listener does: over TLS
+// with a certificate of its own, to calls with its token. It returns the
+// address to reach it at and the token's value. A daemon that wants to know
+// its fingerprint, as fakeDaemon does, is told it.
+func serve(t *testing.T, daemon dicerdv1.DaemonServiceServer) (address, value string) {
 	t.Helper()
+
+	cert, fingerprint := newTestCertificate(t)
+	if d, ok := daemon.(*fakeDaemon); ok {
+		d.fingerprint = fingerprint
+	}
+	value = token.Format(token.NewSecret(), fingerprint)
 
 	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	server := grpc.NewServer()
+	checkToken := func(ctx context.Context) error {
+		md, _ := metadata.FromIncomingContext(ctx)
+		if got := md.Get("authorization"); len(got) != 1 || got[0] != "Bearer "+value {
+			return status.Error(codes.Unauthenticated, "no such token")
+		}
+		return nil
+	}
+	server := grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}})),
+		grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			if err := checkToken(ctx); err != nil {
+				return nil, err
+			}
+			return handler(ctx, req)
+		}),
+		grpc.StreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			if err := checkToken(ss.Context()); err != nil {
+				return err
+			}
+			return handler(srv, ss)
+		}),
+	)
 	dicerdv1.RegisterDaemonServiceServer(server, daemon)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)
 
-	return listener.Addr().String()
+	return listener.Addr().String(), value
+}
+
+// newTestCertificate makes a certificate like the one a daemon makes for
+// itself, and returns it with its fingerprint.
+func newTestCertificate(t *testing.T) (tls.Certificate, string) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "dicerd"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf}, token.Fingerprint(leaf)
 }
 
 // blackhole forwards TCP connections to a target until told to drop, after

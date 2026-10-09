@@ -130,6 +130,7 @@ func NewCommand() *cobra.Command {
 		newNetworkCommand(),
 		newVolumeCommand(),
 		newKernelCommand(),
+		newTokenCommand(),
 		newRemoteCommand(),
 		newComposeCommand(),
 	)

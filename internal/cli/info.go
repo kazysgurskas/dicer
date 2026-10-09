@@ -98,7 +98,7 @@ func newInfoCommand() *cobra.Command {
 //	└───────┘
 //
 //	         Remote: local (unix:///run/dicer/dicer.sock)
-//	    Network API: 192.0.2.1:7443
+//	       Listener: 192.0.2.1:7443
 //	    ...
 //	           vCPU: ████░░░░░░░░░░░░░░░░  4 of 16         25%
 //	                 4 CPUs, 4× overcommit
@@ -110,7 +110,7 @@ func writeInfo(
 	v := &statusView{headline: infoHeadline(host, instances, p)}
 	v.block(
 		field{"Remote", oneLine(t.String())},
-		field{"Network API", networkAPILines(host)},
+		field{"Listener", listenerLines(host)},
 	)
 	v.block(
 		field{"Hypervisors", hypervisorLines(host.Hypervisors)},
@@ -170,13 +170,18 @@ func paintLogoRow(row string, p palette) string {
 	return strings.Join(parts, p.bold(logoPip))
 }
 
-// networkAPILines describe whether the API is served over TCP, and where.
-func networkAPILines(host dicer.HostInfo) []string {
-	if len(host.APIAddresses) == 0 {
-		return []string{"off (set api.tcp.listen to serve it over the network)"}
+// listenerLines describe whether the API is served over TCP, where, by
+// which certificate, and with which token this client calls it.
+func listenerLines(host dicer.HostInfo) []string {
+	if len(host.ListenerAddresses) == 0 {
+		return []string{"off (set server.listen to serve the API over TCP)"}
 	}
 
-	return []string{strings.Join(host.APIAddresses, ", ")}
+	lines := []string{strings.Join(host.ListenerAddresses, ", "), "fingerprint " + host.Fingerprint}
+	if host.Token != "" {
+		lines = append(lines, "token "+host.Token)
+	}
+	return lines
 }
 
 // hypervisorLines describe what an instance may be started with, one

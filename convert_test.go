@@ -68,6 +68,8 @@ var fromProtoConversions = []fromProtoConversion{
 	conversion(pullProgressFromProto, "image"),
 	conversion(pruneResultFromProto),
 	conversion(kernelFromProto),
+	conversion(tokenFromProto),
+	conversion(issuedTokenFromProto),
 	conversion(hostInfoFromProto),
 	conversion(hypervisorInfoFromProto),
 	conversion(resourcesFromProto),
@@ -238,6 +240,11 @@ var sentByName = map[protoreflect.Name][]protoreflect.Name{
 	"ListKernelsRequest":            {},
 	"GetKernelRequest":              {"name"},
 	"DeleteKernelRequest":           {"name"},
+	"CreateTokenRequest":            {"name", "scopes", "secret"},
+	"ListTokensRequest":             {},
+	"GetTokenRequest":               {"name"},
+	"RotateTokenRequest":            {"name", "secret"},
+	"DeleteTokenRequest":            {"name"},
 	"GetHostInfoRequest":            {},
 	"GetResourcesRequest":           {},
 }
@@ -258,6 +265,7 @@ var returnedAsTheyAre = map[protoreflect.Name][]protoreflect.Name{
 	"ListVolumesResponse":            {"volumes"},
 	"ListImagesResponse":             {"images"},
 	"ListKernelsResponse":            {"kernels"},
+	"ListTokensResponse":             {"tokens"},
 }
 
 // TestEveryCallIsCovered checks that each call's request and response is
