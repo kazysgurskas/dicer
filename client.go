@@ -45,13 +45,26 @@ const (
 //
 // A Client is safe for concurrent use and should be closed when done.
 type Client struct {
+	// Instances are the calls about instances.
 	Instances *Instances
+
+	// Snapshots are the calls about snapshots.
 	Snapshots *Snapshots
-	Networks  *Networks
-	Volumes   *Volumes
-	Images    *Images
-	Kernels   *Kernels
-	Tokens    *Tokens
+
+	// Networks are the calls about networks.
+	Networks *Networks
+
+	// Volumes are the calls about volumes.
+	Volumes *Volumes
+
+	// Images are the calls about images.
+	Images *Images
+
+	// Kernels are the calls about kernels.
+	Kernels *Kernels
+
+	// Tokens are the calls about tokens.
+	Tokens *Tokens
 
 	api  dicerdv1.DaemonServiceClient
 	conn *grpc.ClientConn

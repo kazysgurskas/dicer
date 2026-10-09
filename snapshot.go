@@ -19,24 +19,38 @@ type Snapshots struct {
 // Snapshot is an instance frozen to disk. It outlives the instance it was
 // taken of, and never holds the instance's volumes.
 type Snapshot struct {
-	ID   string       `json:"id,omitzero"`
-	Name string       `json:"name,omitzero"`
+	// ID is the snapshot's ID.
+	ID string `json:"id,omitzero"`
+
+	// Name is the snapshot's name.
+	Name string `json:"name,omitzero"`
+
+	// Kind is what the snapshot holds: the guest's memory and disks, or its
+	// disks alone.
 	Kind SnapshotKind `json:"kind,omitzero"`
 
-	// InstanceID and InstanceName are the instance it was taken of: its
-	// name now, or, if it has been deleted, its name then.
-	InstanceID   string `json:"instance_id,omitzero"`
+	// InstanceID is the ID of the instance the snapshot was taken of.
+	InstanceID string `json:"instance_id,omitzero"`
+
+	// InstanceName is that instance's name now, or, if it has been deleted,
+	// its name then.
 	InstanceName string `json:"instance_name,omitzero"`
 
-	// HypervisorType and HypervisorVersion are what took a memory snapshot.
-	// Only the same version can restore it. They are empty for a disk
-	// snapshot.
-	HypervisorType    HypervisorType `json:"hypervisor_type,omitzero"`
-	HypervisorVersion string         `json:"hypervisor_version,omitzero"`
+	// HypervisorType is the hypervisor that took a memory snapshot. It is
+	// empty for a disk snapshot.
+	HypervisorType HypervisorType `json:"hypervisor_type,omitzero"`
 
-	// VCPUs and MemoryBytes are what a memory snapshot's guest had. They
-	// are zero for a disk snapshot.
-	VCPUs       int   `json:"vcpus,omitzero"`
+	// HypervisorVersion is the version of the hypervisor that took a memory
+	// snapshot. Only the same version can restore it. It is empty for a disk
+	// snapshot.
+	HypervisorVersion string `json:"hypervisor_version,omitzero"`
+
+	// VCPUs is how many vCPUs a memory snapshot's guest had. It is zero for a
+	// disk snapshot.
+	VCPUs int `json:"vcpus,omitzero"`
+
+	// MemoryBytes is how much memory a memory snapshot's guest had. It is
+	// zero for a disk snapshot.
 	MemoryBytes int64 `json:"memory_bytes,omitzero"`
 
 	// SizeBytes is what the snapshot occupies on disk, which on a
@@ -44,6 +58,7 @@ type Snapshot struct {
 	// disk together.
 	SizeBytes int64 `json:"size_bytes,omitzero"`
 
+	// CreateTime is when the snapshot was taken.
 	CreateTime time.Time `json:"create_time,omitzero"`
 }
 

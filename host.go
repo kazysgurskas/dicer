@@ -12,7 +12,10 @@ import (
 // HostInfo is what a daemon is: its version, the hypervisors it carries, and
 // how it is reached.
 type HostInfo struct {
-	Version  string `json:"version,omitzero"`
+	// Version is the daemon's version.
+	Version string `json:"version,omitzero"`
+
+	// Hostname is the host's name.
 	Hostname string `json:"hostname,omitzero"`
 
 	// Hypervisors are the hypervisors the daemon can start instances with.
@@ -37,6 +40,7 @@ type HostInfo struct {
 // HypervisorInfo is a hypervisor the daemon carries, and the versions of it
 // an instance may name.
 type HypervisorInfo struct {
+	// Type is the hypervisor.
 	Type HypervisorType `json:"type,omitzero"`
 
 	// Versions are the versions available, the one an instance gets by
@@ -56,8 +60,10 @@ type HypervisorInfo struct {
 // Resources are how much CPU and memory instances may be given, how much is
 // committed to them, and how full the data directory's disk is.
 type Resources struct {
-	// CPU is counted in vCPUs, and Memory in bytes.
-	CPU    ResourceCapacity `json:"cpu,omitzero"`
+	// CPU is how the host's CPUs are shared out, counted in vCPUs.
+	CPU ResourceCapacity `json:"cpu,omitzero"`
+
+	// Memory is how the host's memory is shared out, in bytes.
 	Memory ResourceCapacity `json:"memory,omitzero"`
 
 	// Disk is the filesystem holding the data directory. Its use is
@@ -101,8 +107,10 @@ type ResourceCapacity struct {
 // guests fill them.
 type DiskUsage struct {
 	// Path is the data directory.
-	Path       string `json:"path,omitzero"`
-	TotalBytes int64  `json:"total_bytes,omitzero"`
+	Path string `json:"path,omitzero"`
+
+	// TotalBytes is the filesystem's size.
+	TotalBytes int64 `json:"total_bytes,omitzero"`
 
 	// FreeBytes is what can still be written.
 	FreeBytes int64 `json:"free_bytes,omitzero"`
@@ -114,10 +122,17 @@ type DiskUsage struct {
 
 // InstanceResources are what is committed to one instance.
 type InstanceResources struct {
-	Name        string        `json:"name,omitzero"`
-	State       InstanceState `json:"state,omitzero"`
-	VCPUs       int           `json:"vcpus,omitzero"`
-	MemoryBytes int64         `json:"memory_bytes,omitzero"`
+	// Name is the instance's name.
+	Name string `json:"name,omitzero"`
+
+	// State is the instance's state: starting, running or paused.
+	State InstanceState `json:"state,omitzero"`
+
+	// VCPUs is how many vCPUs are committed to the instance.
+	VCPUs int `json:"vcpus,omitzero"`
+
+	// MemoryBytes is how much memory is committed to the instance.
+	MemoryBytes int64 `json:"memory_bytes,omitzero"`
 }
 
 // HostInfo returns what the daemon is.

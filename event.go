@@ -14,15 +14,21 @@ import (
 
 // Event is one thing that happened to one resource on the host.
 type Event struct {
+	// Time is when it happened.
 	Time time.Time `json:"time,omitzero"`
+
+	// Kind is the kind of resource it happened to.
 	Kind EventKind `json:"kind,omitzero"`
 
 	// ID is the resource's ID, which tells apart resources that had the
 	// same name at different times. It is empty for a resource known only
 	// by its name, such as an image.
-	ID   string `json:"id,omitzero"`
+	ID string `json:"id,omitzero"`
+
+	// Name is the resource's name.
 	Name string `json:"name,omitzero"`
 
+	// Action is what happened to the resource, such as EventActionStarted.
 	Action EventAction `json:"action,omitzero"`
 
 	// Message says what happened, in a line, for a person.
@@ -138,10 +144,12 @@ type EventOptions struct {
 	// Kind picks one kind of resource. Empty picks every kind.
 	Kind EventKind
 
-	// ID and Name pick one resource. An image's name may be given as it is
-	// pulled: busybox:latest picks the events about
+	// ID picks one resource, by its ID.
+	ID string
+
+	// Name picks one resource, by its name. An image's name may be given as
+	// it is pulled: busybox:latest picks the events about
 	// docker.io/library/busybox:latest.
-	ID   string
 	Name string
 
 	// Since picks only the events at or after it.
@@ -157,6 +165,7 @@ type EventOptions struct {
 
 // EventBatch is a batch of events, oldest first.
 type EventBatch struct {
+	// Events are the batch's events, oldest first.
 	Events []Event `json:"events,omitzero"`
 
 	// CaughtUp is set on the last batch of the history, which is sent even

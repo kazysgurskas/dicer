@@ -1,6 +1,6 @@
 ---
 title: Files and environment
-weight: 7
+weight: 8
 description: "Where Dicer keeps things on the host and the client, and the environment variables it reads."
 icon: folder-open
 ---

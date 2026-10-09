@@ -14,11 +14,18 @@ import (
 // the guest by its agent, and when to run it. Unset timings take the
 // defaults: every 10s, a 5s timeout, no start period and 3 retries.
 type HealthCheck struct {
-	// Exactly one probe is set, unless the check is Disabled. Exec is
-	// healthy when the command exits 0.
-	Exec []string   `json:"exec,omitzero"`
+	// Exec is a command run in the guest. The instance is healthy when it
+	// exits 0. Exactly one of Exec, HTTP and TCP is set, unless the check is
+	// Disabled.
+	Exec []string `json:"exec,omitzero"`
+
+	// HTTP is a probe that sends a GET to the guest's loopback address. The
+	// instance is healthy when it answers with a 2xx or 3xx status.
 	HTTP *HTTPProbe `json:"http,omitzero"`
-	TCP  *TCPProbe  `json:"tcp,omitzero"`
+
+	// TCP is a probe that connects to the guest's loopback address. The
+	// instance is healthy when the connection opens.
+	TCP *TCPProbe `json:"tcp,omitzero"`
 
 	// Interval is the time between the end of one probe and the start of
 	// the next.
@@ -41,6 +48,7 @@ type HealthCheck struct {
 // HTTPProbe checks health by asking for a path on the guest's loopback
 // address, which is healthy if it answers 2xx or 3xx.
 type HTTPProbe struct {
+	// Port is the guest port the GET is sent to.
 	Port int `json:"port,omitzero"`
 
 	// Path defaults to /.
@@ -50,6 +58,7 @@ type HTTPProbe struct {
 // TCPProbe checks health by opening a connection to the guest's loopback
 // address, which is healthy if it is accepted.
 type TCPProbe struct {
+	// Port is the guest port connected to.
 	Port int `json:"port,omitzero"`
 }
 
@@ -75,11 +84,13 @@ func (c HealthCheck) Validate() error {
 
 // Health is what an instance's health check has found.
 type Health struct {
+	// Status is whether the instance is healthy.
 	Status HealthStatus `json:"status,omitzero"`
 
 	// FailingStreak is how many probes in a row have failed.
 	FailingStreak int `json:"failing_streak,omitzero"`
 
+	// LastCheckTime is when the last probe ran.
 	LastCheckTime time.Time `json:"last_check_time,omitzero"`
 
 	// LastOutput is what the last probe said, truncated.

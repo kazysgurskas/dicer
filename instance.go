@@ -24,23 +24,42 @@ type Instances struct {
 // Instance is a virtual machine: its definition, and what it is doing now.
 // The fields after UpdateTime are empty while it is not running.
 type Instance struct {
+	// ID is the instance's ID.
 	ID string `json:"id,omitzero"`
 
 	InstanceSpec
 
+	// CreateTime is when the instance was defined.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the instance's definition was last changed, such as
+	// by Instances.Update or Instances.Resize.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 
+	// State is what the instance is doing.
 	State InstanceState `json:"state,omitzero"`
 
 	// StateError says why the last operation failed, for a Failed instance.
 	StateError string `json:"state_error,omitzero"`
 
-	HypervisorPID int       `json:"hypervisor_pid,omitzero"`
-	VsockCID      int64     `json:"vsock_cid,omitzero"`
-	IP            string    `json:"ip,omitzero"`
-	MAC           string    `json:"mac,omitzero"`
-	StartTime     time.Time `json:"start_time,omitzero"`
+	// HypervisorPID is the host PID of the instance's hypervisor process, or
+	// 0 while there is none.
+	HypervisorPID int `json:"hypervisor_pid,omitzero"`
+
+	// VsockCID is the guest's vsock context ID, by which the host reaches its
+	// agent. It is set once the instance has started.
+	VsockCID int64 `json:"vsock_cid,omitzero"`
+
+	// IP is the instance's address on its network, held for as long as the
+	// instance is defined.
+	IP string `json:"ip,omitzero"`
+
+	// MAC is the guest's MAC address on its network.
+	MAC string `json:"mac,omitzero"`
+
+	// StartTime is when the instance last started. It is zero while the
+	// instance is stopped.
+	StartTime time.Time `json:"start_time,omitzero"`
 
 	// ExitCode is the exit code the guest reported when it last ended on its
 	// own: its workload's, or 0 for a guest that powered itself off. It is
@@ -64,10 +83,17 @@ type Instance struct {
 }
 
 // InstanceSpec is the definition of an instance: what it boots, and with
-// what. Empty fields take the daemon's defaults.
+// what. Name, ImageRef, VCPUs, MemoryBytes and DiskBytes must be set. Other
+// empty fields take the daemon's defaults.
 type InstanceSpec struct {
-	Name     string `json:"name,omitzero"`
+	// Name is the instance's name: letters, digits and hyphens, in
+	// dot-separated parts that each start and end with a letter or digit.
+	Name string `json:"name,omitzero"`
+
+	// Hostname is the guest's hostname. Empty means the instance's name.
 	Hostname string `json:"hostname,omitzero"`
+
+	// ImageRef is the image the instance boots from, such as nginx:1.27.
 	ImageRef string `json:"image_ref,omitzero"`
 
 	// HypervisorType is the hypervisor the instance runs on. Empty means
@@ -80,27 +106,46 @@ type InstanceSpec struct {
 
 	// KernelName is the kernel the guest boots. Empty means "default".
 	KernelName string `json:"kernel_name,omitzero"`
+
+	// KernelArgs is the kernel's command line. Empty means the hypervisor's
+	// default.
 	KernelArgs string `json:"kernel_args,omitzero"`
 
-	VCPUs       int   `json:"vcpus,omitzero"`
+	// VCPUs is how many virtual CPUs the guest has. It must be at least 1.
+	VCPUs int `json:"vcpus,omitzero"`
+
+	// MemoryBytes is the guest's memory. It must be more than 0.
 	MemoryBytes int64 `json:"memory_bytes,omitzero"`
 
-	// MaxVCPUs and MaxMemoryBytes are the most Instances.Resize can give the
-	// running instance: it boots with room for them, which costs the host
-	// nothing until it is used. Zero leaves no room. Firecracker cannot add
-	// vCPUs to a running guest, so MaxVCPUs is Cloud Hypervisor's only.
-	MaxVCPUs       int   `json:"max_vcpus,omitzero"`
+	// MaxVCPUs is the most vCPUs Instances.Resize can give the running
+	// instance. It boots with room for them, which costs the host nothing
+	// until they are used. Zero leaves no room. Firecracker cannot add vCPUs
+	// to a running guest, so it is Cloud Hypervisor's only.
+	MaxVCPUs int `json:"max_vcpus,omitzero"`
+
+	// MaxMemoryBytes is the most memory Instances.Resize can give the running
+	// instance. It boots with room for it, which costs the host nothing until
+	// it is used. Zero leaves no room.
 	MaxMemoryBytes int64 `json:"max_memory_bytes,omitzero"`
 
+	// DiskBytes is the size of the overlay disk, which holds what the guest
+	// writes over its image. It must be more than 0.
 	DiskBytes int64 `json:"disk_bytes,omitzero"`
 
-	// DiskBytesPerSecond and DiskIOPS limit how fast each of the instance's
-	// disks is read and written. UploadBytesPerSecond and
-	// DownloadBytesPerSecond limit what the guest sends and receives on its
-	// network. Zero is unlimited.
-	DiskBytesPerSecond     int64 `json:"disk_bytes_per_second,omitzero"`
-	DiskIOPS               int64 `json:"disk_iops,omitzero"`
-	UploadBytesPerSecond   int64 `json:"upload_bytes_per_second,omitzero"`
+	// DiskBytesPerSecond limits how many bytes a second each of the
+	// instance's disks is read and written at. Zero is unlimited.
+	DiskBytesPerSecond int64 `json:"disk_bytes_per_second,omitzero"`
+
+	// DiskIOPS limits how many operations a second each of the instance's
+	// disks is read and written at. Zero is unlimited.
+	DiskIOPS int64 `json:"disk_iops,omitzero"`
+
+	// UploadBytesPerSecond limits how many bytes a second the guest sends on
+	// its network. Zero is unlimited.
+	UploadBytesPerSecond int64 `json:"upload_bytes_per_second,omitzero"`
+
+	// DownloadBytesPerSecond limits how many bytes a second the guest
+	// receives on its network. Zero is unlimited.
 	DownloadBytesPerSecond int64 `json:"download_bytes_per_second,omitzero"`
 
 	// StandbyAfter is how long the instance may be idle before it is put on
@@ -109,13 +154,28 @@ type InstanceSpec struct {
 
 	// NetworkName is the network the instance joins. Empty means "default".
 	NetworkName string `json:"network_name,omitzero"`
-	StaticIP    string `json:"static_ip,omitzero"`
 
-	Mounts []Mount           `json:"mounts,omitzero"`
-	Env    map[string]string `json:"env,omitzero"`
-	Cmd    []string          `json:"cmd,omitzero"`
+	// StaticIP is the instance's address on its network. Empty means one is
+	// assigned from the subnet.
+	StaticIP string `json:"static_ip,omitzero"`
+
+	// Mounts are the volumes, files and tmpfs filesystems mounted in the
+	// guest.
+	Mounts []Mount `json:"mounts,omitzero"`
+
+	// Env is added to the image's environment, replacing a variable the image
+	// sets.
+	Env map[string]string `json:"env,omitzero"`
+
+	// Cmd replaces the image's entrypoint and command. Empty runs the
+	// image's.
+	Cmd []string `json:"cmd,omitzero"`
+
+	// Labels are keys and values of your own, to group and find instances by.
 	Labels map[string]string `json:"labels,omitzero"`
 
+	// RestartPolicy is when the instance is started again after its guest
+	// ends on its own. Empty means never.
 	RestartPolicy RestartPolicy `json:"restart_policy,omitzero"`
 
 	// HealthCheck is how the instance's health is checked, overriding its
@@ -262,6 +322,7 @@ var restartModes = enum[RestartMode, dicerdv1.RestartMode]{"restart mode", map[R
 
 // Mount attaches a volume, a file or a tmpfs at Target in the guest.
 type Mount struct {
+	// Type is what is mounted: a volume, a file or a tmpfs.
 	Type MountType `json:"type,omitzero"`
 
 	// Source is the volume's name for a volume. A file and a tmpfs have
@@ -334,9 +395,13 @@ var mountTypes = enum[MountType, dicerdv1.MountType]{"mount type", map[MountType
 type PortMapping struct {
 	// HostIP is the host address to publish on. Empty means every address
 	// the host has.
-	HostIP    string `json:"host_ip,omitzero"`
-	HostPort  int    `json:"host_port,omitzero"`
-	GuestPort int    `json:"guest_port,omitzero"`
+	HostIP string `json:"host_ip,omitzero"`
+
+	// HostPort is the host port to publish on.
+	HostPort int `json:"host_port,omitzero"`
+
+	// GuestPort is the guest port that HostPort reaches.
+	GuestPort int `json:"guest_port,omitzero"`
 
 	// Protocol is the transport published. Empty means TCP.
 	Protocol Protocol `json:"protocol,omitzero"`
@@ -373,44 +438,94 @@ type CreateOptions struct {
 //
 //	update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4), Labels: map[string]string{"tier": "web"}}
 type InstanceUpdate struct {
-	ImageRef          *string
-	HypervisorType    HypervisorType
-	HypervisorVersion *string
-	KernelName        *string
-	KernelArgs        *string
-	VCPUs             *int
-	MemoryBytes       *int64
+	// ImageRef replaces the image the instance boots from.
+	ImageRef *string
 
-	// MaxVCPUs and MaxMemoryBytes of zero remove the maximum.
-	MaxVCPUs       *int
+	// HypervisorType replaces the hypervisor the instance runs on.
+	HypervisorType HypervisorType
+
+	// HypervisorVersion replaces the hypervisor's version.
+	HypervisorVersion *string
+
+	// KernelName replaces the kernel the guest boots.
+	KernelName *string
+
+	// KernelArgs replaces the kernel's command line.
+	KernelArgs *string
+
+	// VCPUs replaces how many vCPUs the guest has.
+	VCPUs *int
+
+	// MemoryBytes replaces the guest's memory.
+	MemoryBytes *int64
+
+	// MaxVCPUs replaces the most vCPUs Instances.Resize can give the running
+	// instance. Zero removes the maximum.
+	MaxVCPUs *int
+
+	// MaxMemoryBytes replaces the most memory Instances.Resize can give the
+	// running instance. Zero removes the maximum.
 	MaxMemoryBytes *int64
 
 	// DiskBytes grows the overlay disk at the instance's next start. It
 	// cannot shrink, so a size smaller than the overlay disk is refused.
 	DiskBytes *int64
 
-	// The rate limits, of which zero removes the limit.
-	DiskBytesPerSecond     *int64
-	DiskIOPS               *int64
-	UploadBytesPerSecond   *int64
+	// DiskBytesPerSecond replaces the disks' limit of bytes a second. Zero
+	// removes the limit.
+	DiskBytesPerSecond *int64
+
+	// DiskIOPS replaces the disks' limit of operations a second. Zero removes
+	// the limit.
+	DiskIOPS *int64
+
+	// UploadBytesPerSecond replaces the limit on the bytes a second the guest
+	// sends. Zero removes the limit.
+	UploadBytesPerSecond *int64
+
+	// DownloadBytesPerSecond replaces the limit on the bytes a second the
+	// guest receives. Zero removes the limit.
 	DownloadBytesPerSecond *int64
 
-	// StandbyAfter of zero is never.
+	// StandbyAfter replaces how long the instance may be idle before it is
+	// put on standby. Zero is never.
 	StandbyAfter *time.Duration
 
-	NetworkName   *string
-	StaticIP      *string
-	Hostname      *string
-	RestartPolicy *RestartPolicy
-	HealthCheck   *HealthCheck
-	InitMode      InitMode
-	RemoveOnExit  *bool
+	// NetworkName replaces the network the instance joins.
+	NetworkName *string
 
+	// StaticIP replaces the instance's address on its network.
+	StaticIP *string
+
+	// Hostname replaces the guest's hostname.
+	Hostname *string
+
+	// RestartPolicy replaces when the instance is started again.
+	RestartPolicy *RestartPolicy
+
+	// HealthCheck replaces the instance's health check.
+	HealthCheck *HealthCheck
+
+	// InitMode replaces how the guest starts the command.
+	InitMode InitMode
+
+	// RemoveOnExit replaces whether the instance is deleted once it stops.
+	RemoveOnExit *bool
+
+	// Mounts replace the instance's mounts.
 	Mounts []Mount
-	Env    map[string]string
-	Cmd    []string
+
+	// Env replaces the variables added to the image's environment.
+	Env map[string]string
+
+	// Cmd replaces the command the guest runs.
+	Cmd []string
+
+	// Labels replace the instance's labels.
 	Labels map[string]string
-	Ports  []PortMapping
+
+	// Ports replace the guest ports published on the host.
+	Ports []PortMapping
 }
 
 // ForkOptions are the identity a fork is given, by Instances.Fork and
@@ -419,11 +534,13 @@ type ForkOptions struct {
 	// Name is the new instance's name.
 	Name string
 
-	// NetworkName and StaticIP are the network the new instance joins, and
-	// its address on it. Empty means the original's network, and an address
-	// it assigns.
+	// NetworkName is the network the new instance joins. Empty means the
+	// original's network.
 	NetworkName string
-	StaticIP    string
+
+	// StaticIP is the new instance's address on its network. Empty means one
+	// is assigned.
+	StaticIP string
 
 	// Ports are the host ports the new instance publishes. The original's
 	// are not copied: two instances cannot publish the same host port.
@@ -441,13 +558,19 @@ type DeleteOptions struct {
 // ResizeOptions are what Instances.Resize gives a running instance. A field
 // left zero stays as it is, and at least one must be set.
 type ResizeOptions struct {
-	VCPUs       int
+	// VCPUs is how many vCPUs to give the instance.
+	VCPUs int
+
+	// MemoryBytes is how much memory to give the instance.
 	MemoryBytes int64
 }
 
 // Process is a process running in an instance's guest.
 type Process struct {
-	PID  int `json:"pid,omitzero"`
+	// PID is the process's ID in the guest.
+	PID int `json:"pid,omitzero"`
+
+	// PPID is the ID of the process's parent.
 	PPID int `json:"ppid,omitzero"`
 
 	// User is the user the process runs as, by name, or by UID if the guest
@@ -471,6 +594,7 @@ type Process struct {
 	// CPUTime is the CPU time used in total, in user and kernel mode.
 	CPUTime time.Duration `json:"cpu_time,omitzero"`
 
+	// ResidentMemoryBytes is the process's resident memory in the guest.
 	ResidentMemoryBytes int64 `json:"resident_memory_bytes,omitzero"`
 }
 

@@ -17,25 +17,45 @@ type Networks struct {
 
 // Network is a host-local bridge with NAT to the uplink.
 type Network struct {
+	// ID is the network's ID.
 	ID string `json:"id,omitzero"`
 
 	NetworkSpec
 
-	Bridge   string `json:"bridge,omitzero"`
-	TotalIPs int64  `json:"total_ips,omitzero"`
-	FreeIPs  int64  `json:"free_ips,omitzero"`
+	// Bridge is the name of the network's bridge device on the host.
+	Bridge string `json:"bridge,omitzero"`
 
+	// TotalIPs is how many addresses the subnet has for instances: all but
+	// its network, gateway and broadcast addresses.
+	TotalIPs int64 `json:"total_ips,omitzero"`
+
+	// FreeIPs is how many of those addresses are not assigned to an instance.
+	FreeIPs int64 `json:"free_ips,omitzero"`
+
+	// CreateTime is when the network was created.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the network was last changed.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 }
 
 // NetworkSpec is the definition of a network. Empty fields take the
 // daemon's defaults.
 type NetworkSpec struct {
-	Name    string `json:"name,omitzero"`
-	Subnet  string `json:"subnet,omitzero"`
+	// Name is the network's name, which an instance gives as its NetworkName.
+	Name string `json:"name,omitzero"`
+
+	// Subnet is the network's IPv4 subnet, such as 172.20.0.0/16. It is
+	// required.
+	Subnet string `json:"subnet,omitzero"`
+
+	// Gateway is the host's address on the network. Empty means the subnet's
+	// first address.
 	Gateway string `json:"gateway,omitzero"`
-	MTU     int    `json:"mtu,omitzero"`
+
+	// MTU is the largest packet the network carries, in bytes. Zero means
+	// 1500.
+	MTU int `json:"mtu,omitzero"`
 
 	// Nameservers are the upstream nameservers the network's instances are
 	// given. An internal network takes none.
@@ -53,11 +73,21 @@ type NetworkSpec struct {
 
 // NetworkAllocation is an address assigned to an instance.
 type NetworkAllocation struct {
-	InstanceID   string `json:"instance_id,omitzero"`
+	// InstanceID is the ID of the instance the address is assigned to.
+	InstanceID string `json:"instance_id,omitzero"`
+
+	// InstanceName is that instance's name.
 	InstanceName string `json:"instance_name,omitzero"`
-	IP           string `json:"ip,omitzero"`
-	MAC          string `json:"mac,omitzero"`
-	TapDevice    string `json:"tap_device,omitzero"`
+
+	// IP is the address.
+	IP string `json:"ip,omitzero"`
+
+	// MAC is the guest's MAC address on the network.
+	MAC string `json:"mac,omitzero"`
+
+	// TapDevice is the name of the TAP device that connects the guest to the
+	// network's bridge.
+	TapDevice string `json:"tap_device,omitzero"`
 }
 
 // Create defines a network. Its bridge is brought up when the first instance

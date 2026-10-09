@@ -17,11 +17,19 @@ type Volumes struct {
 
 // Volume is a persistent block device that outlives the instances using it.
 type Volume struct {
-	ID        string `json:"id,omitzero"`
-	Name      string `json:"name,omitzero"`
-	SizeBytes int64  `json:"size_bytes,omitzero"`
+	// ID is the volume's ID.
+	ID string `json:"id,omitzero"`
 
+	// Name is the volume's name, which a mount gives as its Source.
+	Name string `json:"name,omitzero"`
+
+	// SizeBytes is the volume's size.
+	SizeBytes int64 `json:"size_bytes,omitzero"`
+
+	// CreateTime is when the volume was created.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the volume was last changed.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 }
 

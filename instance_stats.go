@@ -17,8 +17,11 @@ import (
 // threads emulating its devices are counted together, and totals are since
 // the process started: each start of the instance begins them again.
 type InstanceStats struct {
+	// Name is the instance's name.
 	Name string `json:"name,omitzero"`
-	ID   string `json:"id,omitzero"`
+
+	// ID is the instance's ID.
+	ID string `json:"id,omitzero"`
 
 	// CPUPercent is the CPU used over the last second, as a percentage of
 	// one host CPU: 200 is two CPUs kept busy.
@@ -27,36 +30,56 @@ type InstanceStats struct {
 	// CPUTime is the CPU time used in total.
 	CPUTime time.Duration `json:"cpu_time,omitzero"`
 
-	// VCPUs and MemoryBytes are what is committed to the instance.
-	VCPUs       int   `json:"vcpus,omitzero"`
+	// VCPUs is how many vCPUs are committed to the instance.
+	VCPUs int `json:"vcpus,omitzero"`
+
+	// MemoryBytes is how much memory is committed to the instance.
 	MemoryBytes int64 `json:"memory_bytes,omitzero"`
 
-	// ResidentMemoryBytes is the process's resident host memory: the guest
-	// memory backed so far, and the hypervisor's own. Memory a guest frees
-	// stays resident.
+	// ResidentMemoryBytes is the resident host memory of the instance's
+	// hypervisor process: the guest memory backed so far, and the
+	// hypervisor's own. Memory a guest frees stays resident.
 	ResidentMemoryBytes int64 `json:"resident_memory_bytes,omitzero"`
 
-	// DiskReadBytes and DiskWrittenBytes are what the process read from and
-	// wrote to storage. Reads served from the host's page cache are not
-	// counted.
-	DiskReadBytes    int64 `json:"disk_read_bytes,omitzero"`
+	// DiskReadBytes is how many bytes the hypervisor process read from
+	// storage. Reads served from the host's page cache are not counted.
+	DiskReadBytes int64 `json:"disk_read_bytes,omitzero"`
+
+	// DiskWrittenBytes is how many bytes the hypervisor process wrote to
+	// storage.
 	DiskWrittenBytes int64 `json:"disk_written_bytes,omitzero"`
 
-	// What the guest received and transmitted on its network interface.
-	NetworkReceiveBytes    int64 `json:"network_receive_bytes,omitzero"`
-	NetworkTransmitBytes   int64 `json:"network_transmit_bytes,omitzero"`
-	NetworkReceivePackets  int64 `json:"network_receive_packets,omitzero"`
+	// NetworkReceiveBytes is how many bytes the guest received on its network
+	// interface.
+	NetworkReceiveBytes int64 `json:"network_receive_bytes,omitzero"`
+
+	// NetworkTransmitBytes is how many bytes the guest transmitted on its
+	// network interface.
+	NetworkTransmitBytes int64 `json:"network_transmit_bytes,omitzero"`
+
+	// NetworkReceivePackets is how many packets the guest received on its
+	// network interface.
+	NetworkReceivePackets int64 `json:"network_receive_packets,omitzero"`
+
+	// NetworkTransmitPackets is how many packets the guest transmitted on its
+	// network interface.
 	NetworkTransmitPackets int64 `json:"network_transmit_packets,omitzero"`
 
-	// NetworkReceiveDrops and NetworkTransmitDrops are packets dropped on
-	// their way to and from the guest. Receive drops mostly mean the guest
-	// does not take packets as fast as they come.
-	NetworkReceiveDrops  int64 `json:"network_receive_drops,omitzero"`
+	// NetworkReceiveDrops is how many packets were dropped on their way to
+	// the guest. They mostly mean the guest does not take packets as fast as
+	// they come.
+	NetworkReceiveDrops int64 `json:"network_receive_drops,omitzero"`
+
+	// NetworkTransmitDrops is how many packets were dropped on their way from
+	// the guest.
 	NetworkTransmitDrops int64 `json:"network_transmit_drops,omitzero"`
 
-	// NetworkReceiveErrors and NetworkTransmitErrors are packets to and
-	// from the guest that failed with an error.
-	NetworkReceiveErrors  int64 `json:"network_receive_errors,omitzero"`
+	// NetworkReceiveErrors is how many packets to the guest failed with an
+	// error.
+	NetworkReceiveErrors int64 `json:"network_receive_errors,omitzero"`
+
+	// NetworkTransmitErrors is how many packets from the guest failed with an
+	// error.
 	NetworkTransmitErrors int64 `json:"network_transmit_errors,omitzero"`
 }
 

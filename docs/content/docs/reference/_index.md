@@ -1,7 +1,7 @@
 ---
 title: Reference
 weight: 5
-description: "The command line, the API, the configuration, the compose file, the metrics and the events, in full."
+description: "The command line, the API, the Go client, the configuration, the compose file, the metrics and the events, in full."
 icon: document-text
 cascade:
   - params:
@@ -9,8 +9,8 @@ cascade:
         open: true
 ---
 
-Everything there is to look up. The command line, the API, the
-configuration, the compose file and the metrics are generated from the code,
-so they cannot drift from it.
+Everything there is to look up. The command line, the API, the Go client,
+the configuration, the compose file and the metrics are generated from the
+code, so they cannot drift from it.
 
 {{< section-cards >}}

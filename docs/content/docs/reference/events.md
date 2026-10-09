@@ -1,6 +1,6 @@
 ---
 title: Events
-weight: 6
+weight: 7
 description: "Every event Dicer records of instances, snapshots, images, networks, volumes and kernels, with its attributes."
 icon: bell
 ---

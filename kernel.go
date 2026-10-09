@@ -19,17 +19,25 @@ type Kernels struct {
 
 // Kernel is a guest kernel instances can boot.
 type Kernel struct {
+	// ID is the kernel's ID.
 	ID string `json:"id,omitzero"`
 
 	KernelSpec
 
+	// CreateTime is when the kernel was added to the host.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the kernel was last changed. Only the default kernel
+	// changes: it is updated to the version each release of Dicer carries.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 }
 
 // KernelSpec is what a kernel is.
 type KernelSpec struct {
-	Name         string       `json:"name,omitzero"`
+	// Name is the kernel's name, which an instance gives as its KernelName.
+	Name string `json:"name,omitzero"`
+
+	// Architecture is the CPU architecture the kernel is built for.
 	Architecture Architecture `json:"architecture,omitzero"`
 
 	// SHA256 is the SHA-256 of the kernel, hex-encoded. An import verifies

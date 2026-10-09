@@ -249,8 +249,8 @@ update-hypervisor-spec: ## Download the newest Cloud Hypervisor version's OpenAP
 DOCS_DIR := $(CURDIR)/docs
 
 # The reference pages generated from the code: the command line, the
-# configuration, the compose file and the metrics by tools/docgen, the API by protoc-gen-doc
-# with its template.
+# configuration, the compose file, the Go client and the metrics by
+# tools/docgen, and the API by protoc-gen-doc with its template.
 # They are committed, and CI checks they are current. tools/docgen reads the
 # metrics from the packages that serve them, and the kernel package embeds
 # the default kernel, so that has to be downloaded first.

@@ -20,11 +20,16 @@ type Tokens struct {
 // WithToken takes it. Its value is returned only when the token is created
 // or rotated: the daemon keeps only the SHA-256 of its secret.
 type Token struct {
+	// ID is the token's ID.
 	ID string `json:"id,omitzero"`
 
 	TokenSpec
 
+	// CreateTime is when the token was made.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the token was last rotated, or made if it has not
+	// been.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// LastUseTime is when the token last made a call, to the minute. It is
@@ -34,6 +39,7 @@ type Token struct {
 
 // TokenSpec is what a token is.
 type TokenSpec struct {
+	// Name is the token's name.
 	Name string `json:"name,omitzero"`
 
 	// Scopes are what the token allows. Empty is ScopeAll. A call the

@@ -122,9 +122,8 @@ holds the status.
 | Pull images, with progress | `c.Images.Pull` |
 | Follow what happens on the host | `c.Events` |
 
-The [package documentation](https://pkg.go.dev/github.com/konradasb/dicer)
-lists every call. A `dicer.Client` is safe for concurrent use; make one and
-share it.
+The [Go client reference](../../reference/go-client) lists every call. A
+`dicer.Client` is safe for concurrent use; make one and share it.
 
 For a daemon's TCP listener, give its address and a token, which
 `dicer token create` makes on the daemon's host (see

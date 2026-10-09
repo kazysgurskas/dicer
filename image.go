@@ -21,11 +21,20 @@ type Images struct {
 
 // Image is a pulled image, converted to a root filesystem a guest can boot.
 type Image struct {
-	Name      string `json:"name,omitzero"`
-	Digest    string `json:"digest,omitzero"`
-	SizeBytes int64  `json:"size_bytes,omitzero"`
+	// Name is the image's reference, in full, such as
+	// docker.io/library/nginx:1.27.
+	Name string `json:"name,omitzero"`
 
+	// Digest is the digest of the image's manifest.
+	Digest string `json:"digest,omitzero"`
+
+	// SizeBytes is the size of the image's disk.
+	SizeBytes int64 `json:"size_bytes,omitzero"`
+
+	// CreateTime is when the image was pulled.
 	CreateTime time.Time `json:"create_time,omitzero"`
+
+	// UpdateTime is when the image was last changed.
 	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// LastUsedTime is when the image was last pulled or in use: by an
@@ -65,14 +74,17 @@ var pullPolicies = enum[PullPolicy, dicerdv1.PullPolicy]{"pull policy", map[Pull
 
 // PullProgress is how far a pull has got.
 type PullProgress struct {
+	// Stage is the step the pull is at.
 	Stage PullStage `json:"stage,omitzero"`
 
-	// DownloadedBytes and TotalBytes are the compressed layer bytes fetched
-	// and expected. Both are zero outside the downloading stage, and the
-	// total counts only what is actually fetched: a layer already held is
-	// not downloaded again.
+	// DownloadedBytes is how many compressed layer bytes have been fetched.
+	// It is zero outside the downloading stage.
 	DownloadedBytes int64 `json:"downloaded_bytes,omitzero"`
-	TotalBytes      int64 `json:"total_bytes,omitzero"`
+
+	// TotalBytes is how many compressed layer bytes are to be fetched. It
+	// counts only what is actually fetched: a layer already held is not
+	// downloaded again. It is zero outside the downloading stage.
+	TotalBytes int64 `json:"total_bytes,omitzero"`
 }
 
 // PullStage is the part of a pull that is working.
@@ -105,6 +117,7 @@ var pullStages = enum[PullStage, dicerdv1.PullStage]{"pull stage", map[PullStage
 
 // PruneResult is what Images.Prune removed.
 type PruneResult struct {
+	// Images are the images deleted.
 	Images []Image `json:"images,omitzero"`
 
 	// ReclaimedBytes is the disk space their disks and cached layers gave

@@ -139,7 +139,7 @@ func writeMetrics(dir string) error {
 	}
 
 	return writePage(filepath.Join(dir, "metrics.md"), frontMatter{
-		title: "Metrics", weight: 5, icon: "chart-bar",
+		title: "Metrics", weight: 6, icon: "chart-bar",
 		description: "Every Prometheus metric the daemon serves, with its labels.",
 	}, body.Bytes())
 }

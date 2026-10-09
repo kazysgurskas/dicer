@@ -45,10 +45,15 @@ type Cmd struct {
 	// no limit.
 	Timeout time.Duration
 
-	// TTY runs the command on a pseudo-terminal, Rows by Columns in size if
-	// they are set. Its standard error then arrives on Stdout.
-	TTY     bool
-	Rows    int
+	// TTY runs the command on a pseudo-terminal. Its standard error then
+	// arrives on Stdout.
+	TTY bool
+
+	// Rows is the pseudo-terminal's height. Zero leaves the guest's default.
+	Rows int
+
+	// Columns is the pseudo-terminal's width. Zero leaves the guest's
+	// default.
 	Columns int
 
 	// Stdin is the command's standard input. Nil gives it none: it reads
@@ -58,9 +63,11 @@ type Cmd struct {
 	// own.
 	Stdin io.Reader
 
-	// Stdout and Stderr receive the command's standard output and error.
-	// Nil discards them.
+	// Stdout receives the command's standard output. Nil discards it.
 	Stdout io.Writer
+
+	// Stderr receives the command's standard error. Nil discards it, except
+	// that Output collects it into the *ExitError it returns.
 	Stderr io.Writer
 
 	api    dicerdv1.DaemonServiceClient
@@ -78,6 +85,7 @@ type Cmd struct {
 
 // ExitError reports a command that exited with a status other than 0.
 type ExitError struct {
+	// Code is the command's exit status.
 	Code int
 
 	// Stderr is the command's standard error, if Output collected it.

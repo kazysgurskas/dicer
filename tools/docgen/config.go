@@ -56,7 +56,7 @@ func writeConfiguration(root, dir string) error {
 		{
 			path: filepath.Join(dir, "configuration.md"),
 			frontMatter: frontMatter{
-				title: "Daemon configuration", weight: 3, icon: "cog",
+				title: "Daemon configuration", weight: 4, icon: "cog",
 				description: "Every key of dicerd's configuration file, with its default.",
 			},
 			sections: []configurationSection{{
@@ -84,7 +84,7 @@ func writeConfiguration(root, dir string) error {
 		{
 			path: filepath.Join(dir, "compose-file.md"),
 			frontMatter: frontMatter{
-				title: "Compose file", weight: 4, icon: "template",
+				title: "Compose file", weight: 5, icon: "template",
 				description: "Every key of the file dicer compose reads, with its default.",
 				related:     []string{"/docs/guides/compose", "/docs/reference/cli/dicer_compose"},
 			},
