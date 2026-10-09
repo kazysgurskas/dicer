@@ -19,9 +19,9 @@ import (
 
 // imageHandler handles image-related RPCs.
 type imageHandler struct {
-	store     *filestore.Store
-	instances *instance.Manager
-	images    *imagepkg.Manager
+	store           *filestore.Store
+	instanceManager *instance.Manager
+	imageManager    *imagepkg.Manager
 }
 
 // PullImage pulls an image, streaming progress and finally the image.
@@ -42,7 +42,7 @@ func (h *imageHandler) PullImage(
 		})
 	}
 
-	image, err := h.images.Pull(stream.Context(), req.GetRef(), onProgress)
+	image, err := h.imageManager.Pull(stream.Context(), req.GetRef(), onProgress)
 	if err != nil {
 		return imageError(err)
 	}
@@ -57,7 +57,7 @@ func (h *imageHandler) PullImage(
 func (h *imageHandler) ListImages(
 	_ context.Context, _ *dicerdv1.ListImagesRequest,
 ) (*dicerdv1.ListImagesResponse, error) {
-	images := h.images.List()
+	images := h.imageManager.List()
 
 	resp := &dicerdv1.ListImagesResponse{
 		Images: make([]*dicerdv1.Image, 0, len(images)),
@@ -73,7 +73,7 @@ func (h *imageHandler) ListImages(
 func (h *imageHandler) GetImage(
 	_ context.Context, req *dicerdv1.GetImageRequest,
 ) (*dicerdv1.Image, error) {
-	image, err := h.images.Image(req.GetRef())
+	image, err := h.imageManager.Image(req.GetRef())
 	if err != nil {
 		return nil, imageError(err)
 	}
@@ -85,7 +85,7 @@ func (h *imageHandler) GetImage(
 func (h *imageHandler) DeleteImage(
 	_ context.Context, req *dicerdv1.DeleteImageRequest,
 ) (*emptypb.Empty, error) {
-	image, err := h.images.Image(req.GetRef())
+	image, err := h.imageManager.Image(req.GetRef())
 	if err != nil {
 		return nil, imageError(err)
 	}
@@ -96,7 +96,7 @@ func (h *imageHandler) DeleteImage(
 				"image %q is in use by instance %q", req.GetRef(), users[0])
 		}
 
-		inUse, err := h.instances.ImagesInUse()
+		inUse, err := h.instanceManager.ImagesInUse()
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +106,7 @@ func (h *imageHandler) DeleteImage(
 		}
 	}
 
-	if err := h.images.Delete(req.GetRef()); err != nil {
+	if err := h.imageManager.Delete(req.GetRef()); err != nil {
 		return nil, imageError(err)
 	}
 
@@ -117,12 +117,12 @@ func (h *imageHandler) DeleteImage(
 func (h *imageHandler) PruneImages(
 	_ context.Context, _ *dicerdv1.PruneImagesRequest,
 ) (*dicerdv1.PruneImagesResponse, error) {
-	keep, err := h.instances.ImagesInUse()
+	keep, err := h.instanceManager.ImagesInUse()
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := h.images.Prune(keep)
+	result, err := h.imageManager.Prune(keep)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (h *imageHandler) PruneImages(
 func (h *imageHandler) instancesUsing(digest string) []string {
 	var users []string
 	for _, instance := range h.store.Instances() {
-		image, err := h.images.Image(instance.ImageRef)
+		image, err := h.imageManager.Image(instance.ImageRef)
 		if err == nil && image.Digest == digest {
 			users = append(users, instance.Name)
 		}

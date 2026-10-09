@@ -28,14 +28,14 @@ import (
 
 // Config holds the dependencies for creating a Server.
 type Config struct {
-	Store     *filestore.Store
-	Networks  *network.Manager
-	Instances *instance.Manager
+	Store           *filestore.Store
+	NetworkManager  *network.Manager
+	InstanceManager *instance.Manager
 
-	Hypervisors map[hypervisor.Type][]hypervisor.Starter
-	Images      *image.Manager
-	Kernels     *kernel.Manager
-	Volumes     *volume.Manager
+	Starters      map[hypervisor.Type][]hypervisor.Starter
+	ImageManager  *image.Manager
+	KernelManager *kernel.Manager
+	VolumeManager *volume.Manager
 
 	// Events is the event log GetEvents reads and the handlers record to.
 	// Nil records nothing.
@@ -108,27 +108,27 @@ type Server struct {
 func NewServer(cfg Config) *Server {
 	return &Server{
 		instanceHandler: instanceHandler{
-			store:     cfg.Store,
-			instances: cfg.Instances,
+			store:           cfg.Store,
+			instanceManager: cfg.InstanceManager,
 
 			statsInterval: instanceStatsInterval,
 		},
-		snapshotHandler: snapshotHandler{store: cfg.Store, instances: cfg.Instances},
+		snapshotHandler: snapshotHandler{store: cfg.Store, instanceManager: cfg.InstanceManager},
 		networkHandler: networkHandler{
-			store:       cfg.Store,
-			networks:    cfg.Networks,
-			hostSubnets: cfg.HostSubnets,
-			events:      recorderOf(cfg.Events),
+			store:          cfg.Store,
+			networkManager: cfg.NetworkManager,
+			hostSubnets:    cfg.HostSubnets,
+			events:         recorderOf(cfg.Events),
 		},
 		volumeHandler: volumeHandler{
-			store:   cfg.Store,
-			volumes: cfg.Volumes,
-			events:  recorderOf(cfg.Events),
+			store:         cfg.Store,
+			volumeManager: cfg.VolumeManager,
+			events:        recorderOf(cfg.Events),
 		},
 		kernelHandler: kernelHandler{
-			store:   cfg.Store,
-			kernels: cfg.Kernels,
-			events:  recorderOf(cfg.Events),
+			store:         cfg.Store,
+			kernelManager: cfg.KernelManager,
+			events:        recorderOf(cfg.Events),
 		},
 		tokenHandler: tokenHandler{
 			store:       cfg.Store,
@@ -136,18 +136,18 @@ func NewServer(cfg Config) *Server {
 			fingerprint: cfg.TokenFingerprint,
 		},
 		imageHandler: imageHandler{
-			store:     cfg.Store,
-			instances: cfg.Instances,
-			images:    cfg.Images,
+			store:           cfg.Store,
+			instanceManager: cfg.InstanceManager,
+			imageManager:    cfg.ImageManager,
 		},
 		resourceHandler: resourceHandler{
-			store:     cfg.Store,
-			instances: cfg.Instances,
-			dataDir:   cfg.DataDir,
+			store:           cfg.Store,
+			instanceManager: cfg.InstanceManager,
+			dataDir:         cfg.DataDir,
 		},
 		hostHandler: hostHandler{
 			version:       cfg.Version,
-			hypervisors:   cfg.Hypervisors,
+			starters:      cfg.Starters,
 			listenAddress: cfg.ListenAddress,
 			hostAddresses: cfg.HostAddresses,
 			fingerprint:   cfg.Fingerprint,

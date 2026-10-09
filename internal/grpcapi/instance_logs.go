@@ -37,7 +37,7 @@ func (h *instanceHandler) GetInstanceLogs(
 		Follow:    req.GetFollow(),
 	}
 
-	return h.instances.StreamLogs(stream.Context(), spec, options, logChunkWriter{stream: stream})
+	return h.instanceManager.StreamLogs(stream.Context(), spec, options, logChunkWriter{stream: stream})
 }
 
 // logChunkWriter is the io.Writer StreamLogs writes a log into, sending each

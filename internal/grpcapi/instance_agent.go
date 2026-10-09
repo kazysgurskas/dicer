@@ -22,7 +22,7 @@ func (h *instanceHandler) agent(ctx context.Context, nameOrID string) (diceragen
 		return nil, nil, err
 	}
 
-	return h.instances.Agent(ctx, instance)
+	return h.instanceManager.Agent(ctx, instance)
 }
 
 // agentError passes a guest agent's status through, explaining an

@@ -56,17 +56,17 @@ func newTestServer(t *testing.T) (*Server, *filestore.Store) {
 		t.Fatal(err)
 	}
 
-	networks, err := network.NewManager(network.Config{Dir: filepath.Join(dataDir, "allocations"), Logger: logger})
+	networkManager, err := network.NewManager(network.Config{Dir: filepath.Join(dataDir, "allocations"), Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	kernels, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Logger: logger})
+	kernelManager, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	instances := instance.NewManager(instance.Config{
+	instanceManager := instance.NewManager(instance.Config{
 		Store:    store,
 		RunDir:   filepath.Join(t.TempDir(), "run"),
 		Capacity: testCapacity,
@@ -74,11 +74,11 @@ func newTestServer(t *testing.T) (*Server, *filestore.Store) {
 	})
 
 	return NewServer(Config{
-		Store:     store,
-		Networks:  networks,
-		Instances: instances,
-		Volumes:   volume.NewManager(volume.Config{DataDir: dataDir, Logger: logger}),
-		Kernels:   kernels,
-		DataDir:   dataDir,
+		Store:           store,
+		NetworkManager:  networkManager,
+		InstanceManager: instanceManager,
+		VolumeManager:   volume.NewManager(volume.Config{DataDir: dataDir, Logger: logger}),
+		KernelManager:   kernelManager,
+		DataDir:         dataDir,
 	}), store
 }

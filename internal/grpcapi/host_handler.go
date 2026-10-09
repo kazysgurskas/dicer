@@ -15,7 +15,7 @@ import (
 // hostHandler reports the daemon's version, hypervisors and addresses.
 type hostHandler struct {
 	version       string
-	hypervisors   map[hypervisor.Type][]hypervisor.Starter
+	starters      map[hypervisor.Type][]hypervisor.Starter
 	listenAddress string
 	hostAddresses func() ([]netip.Addr, error)
 	fingerprint   string
@@ -42,10 +42,10 @@ func (h *hostHandler) GetHostInfo(
 
 // hypervisorInfos describes the available hypervisors, the default first.
 func (h *hostHandler) hypervisorInfos() []*dicerdv1.HypervisorInfo {
-	out := make([]*dicerdv1.HypervisorInfo, 0, len(h.hypervisors))
+	out := make([]*dicerdv1.HypervisorInfo, 0, len(h.starters))
 
 	for i, hypervisorType := range hypervisor.Types() {
-		starters, ok := h.hypervisors[hypervisorType]
+		starters, ok := h.starters[hypervisorType]
 		if !ok {
 			continue
 		}

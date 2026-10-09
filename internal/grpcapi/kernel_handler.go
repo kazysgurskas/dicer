@@ -24,9 +24,9 @@ import (
 
 // kernelHandler handles kernel-related RPCs.
 type kernelHandler struct {
-	store   *filestore.Store
-	kernels *kernel.Manager
-	events  recorder
+	store         *filestore.Store
+	kernelManager *kernel.Manager
+	events        recorder
 }
 
 // ImportKernel puts a kernel the client sends on the host, and records it
@@ -62,13 +62,13 @@ func (h *kernelHandler) ImportKernel(
 
 	// The SHA-256 is kept whether or not the client gave one, so that the
 	// kernel is checked each time an instance boots it.
-	k.SHA256, err = h.kernels.Import(k.ID, &importKernelReader{stream: stream}, k.SHA256)
+	k.SHA256, err = h.kernelManager.Import(k.ID, &importKernelReader{stream: stream}, k.SHA256)
 	if err != nil {
-		_ = h.kernels.Delete(k.ID)
+		_ = h.kernelManager.Delete(k.ID)
 		return err
 	}
 	if err := h.store.CreateKernel(k); err != nil {
-		_ = h.kernels.Delete(k.ID)
+		_ = h.kernelManager.Delete(k.ID)
 		return err
 	}
 
@@ -77,7 +77,7 @@ func (h *kernelHandler) ImportKernel(
 		verified = "no checksum given to verify it by"
 	}
 	h.record(k, events.ActionImported, fmt.Sprintf("Imported kernel for %s: %s, %s",
-		k.Architecture, humanize.Bytes(h.kernels.DiskBytes(k.ID)), verified))
+		k.Architecture, humanize.Bytes(h.kernelManager.DiskBytes(k.ID)), verified))
 
 	return stream.SendAndClose(kernelToProto(k))
 }
@@ -171,7 +171,7 @@ func (h *kernelHandler) DeleteKernel(
 	}
 	h.record(k, events.ActionDeleted, "Deleted kernel and its copy on the host")
 
-	if err := h.kernels.Delete(k.ID); err != nil {
+	if err := h.kernelManager.Delete(k.ID); err != nil {
 		return nil, fmt.Errorf("remove kernel binary: %w", err)
 	}
 

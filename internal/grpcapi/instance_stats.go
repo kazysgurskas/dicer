@@ -65,7 +65,7 @@ func (h *instanceHandler) GetInstanceStats(
 // readStats reads the stats of the instances in wanted, by instance ID, or
 // of every instance if wanted is nil.
 func (h *instanceHandler) readStats(wanted map[string]bool) []instance.Stats {
-	stats := h.instances.Stats()
+	stats := h.instanceManager.Stats()
 	if wanted == nil {
 		return stats
 	}

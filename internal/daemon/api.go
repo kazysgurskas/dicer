@@ -85,7 +85,7 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 	}
 
 	api := grpcapi.NewServer(grpcapi.Config{
-		Hypervisors:   d.hypervisors,
+		Starters:      d.starters,
 		Store:         d.store,
 		ListenAddress: listenAddress,
 		HostAddresses: func() ([]netip.Addr, error) {
@@ -93,11 +93,11 @@ func (d *daemon) listenAPI(ctx context.Context) (listeners []apiListener, err er
 		},
 		Fingerprint:      fingerprint,
 		TokenFingerprint: tokenFingerprint,
-		Networks:         d.networks,
-		Instances:        d.instances,
-		Images:           d.images,
-		Kernels:          d.kernels,
-		Volumes:          d.volumes,
+		NetworkManager:   d.networkManager,
+		InstanceManager:  d.instanceManager,
+		ImageManager:     d.imageManager,
+		KernelManager:    d.kernelManager,
+		VolumeManager:    d.volumeManager,
 		Events:           d.events,
 		HostSubnets:      hostnet.Subnets,
 		DataDir:          d.cfg.DataDir,

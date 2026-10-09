@@ -145,7 +145,7 @@ func TestImportKernelKeepsAKernelTheClientSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := s.kernels.Path(stored)
+	path, err := s.kernelManager.Path(stored)
 	if err != nil {
 		t.Fatalf("Path: %v", err)
 	}

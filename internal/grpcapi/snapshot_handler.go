@@ -16,8 +16,8 @@ import (
 
 // snapshotHandler handles snapshot-related RPCs.
 type snapshotHandler struct {
-	store     *filestore.Store
-	instances *instance.Manager
+	store           *filestore.Store
+	instanceManager *instance.Manager
 }
 
 // CreateSnapshot snapshots an instance.
@@ -32,7 +32,7 @@ func (h *snapshotHandler) CreateSnapshot(
 		return nil, err
 	}
 
-	snapshot, err := h.instances.CreateSnapshot(ctx, instance, req.GetName())
+	snapshot, err := h.instanceManager.CreateSnapshot(ctx, instance, req.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (h *snapshotHandler) ListSnapshots(
 	}
 
 	resp := &dicerdv1.ListSnapshotsResponse{}
-	for _, snapshot := range h.instances.Snapshots() {
+	for _, snapshot := range h.instanceManager.Snapshots() {
 		if instanceID == "" || snapshot.Instance.ID == instanceID {
 			resp.Snapshots = append(resp.Snapshots, snapshotToProto(snapshot, h.instanceName(snapshot)))
 		}
@@ -84,7 +84,7 @@ func (h *snapshotHandler) DeleteSnapshot(
 		return nil, err
 	}
 
-	if err := h.instances.DeleteSnapshot(ctx, snapshot); err != nil {
+	if err := h.instanceManager.DeleteSnapshot(ctx, snapshot); err != nil {
 		return nil, err
 	}
 
@@ -100,12 +100,12 @@ func (h *snapshotHandler) RestoreSnapshot(
 		return nil, err
 	}
 
-	instance, err := h.instances.RestoreSnapshot(ctx, snapshot)
+	instance, err := h.instanceManager.RestoreSnapshot(ctx, snapshot)
 	if err != nil {
 		return nil, err
 	}
 
-	return viewInstance(h.instances, instance)
+	return viewInstance(h.instanceManager, instance)
 }
 
 // ForkSnapshot creates an instance as a copy of the one a snapshot was taken
@@ -122,16 +122,16 @@ func (h *snapshotHandler) ForkSnapshot(
 		return nil, err
 	}
 	// What a created instance is checked for applies to a fork as much.
-	creation := instanceHandler{store: h.store, instances: h.instances}
+	creation := instanceHandler{store: h.store, instanceManager: h.instanceManager}
 	if err := creation.checkCanStart(fork); err != nil {
 		return nil, err
 	}
 
-	if err := h.instances.ForkSnapshot(ctx, snapshot, fork); err != nil {
+	if err := h.instanceManager.ForkSnapshot(ctx, snapshot, fork); err != nil {
 		return nil, err
 	}
 
-	return viewInstance(h.instances, fork)
+	return viewInstance(h.instanceManager, fork)
 }
 
 // snapshot resolves the snapshot a request names.
@@ -140,7 +140,7 @@ func (h *snapshotHandler) snapshot(nameOrID string) (instance.Snapshot, error) {
 		return instance.Snapshot{}, errdefs.InvalidArgument("snapshot name is required")
 	}
 
-	return h.instances.Snapshot(nameOrID)
+	return h.instanceManager.Snapshot(nameOrID)
 }
 
 // instanceName returns the name a snapshot's instance has now, or, if it

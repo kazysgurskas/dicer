@@ -54,11 +54,11 @@ func (d *daemon) newMetrics() *metrics.Metrics {
 // instanceSummary reads the current instance counts for a scrape. It reports
 // nothing before the instance manager exists.
 func (d *daemon) instanceSummary() metrics.InstanceSummary {
-	if d.instances == nil {
+	if d.instanceManager == nil {
 		return metrics.InstanceSummary{}
 	}
 
-	usage := d.instances.Usage()
+	usage := d.instanceManager.Usage()
 
 	byState := make(map[string]int, len(usage.ByState))
 	for state, n := range usage.ByState {
@@ -84,17 +84,17 @@ func (d *daemon) instanceSummary() metrics.InstanceSummary {
 // instanceStats reads what each instance uses of the host for a scrape. It
 // reports nothing before the instance manager exists.
 func (d *daemon) instanceStats() []instance.Stats {
-	if d.instances == nil {
+	if d.instanceManager == nil {
 		return nil
 	}
 
-	return d.instances.Stats()
+	return d.instanceManager.Stats()
 }
 
 // networkSummaries reads each network's address pool usage for a scrape. A
 // network whose allocations cannot be read is skipped.
 func (d *daemon) networkSummaries() []metrics.NetworkSummary {
-	if d.store == nil || d.networks == nil {
+	if d.store == nil || d.networkManager == nil {
 		return nil
 	}
 
@@ -102,7 +102,7 @@ func (d *daemon) networkSummaries() []metrics.NetworkSummary {
 
 	summaries := make([]metrics.NetworkSummary, 0, len(networks))
 	for _, network := range networks {
-		allocations, err := d.networks.List(network.Name)
+		allocations, err := d.networkManager.List(network.Name)
 		if err != nil {
 			d.logger.Warn("cannot read allocations for metrics",
 				"network", network.Name, "error", err)
@@ -123,11 +123,11 @@ func (d *daemon) networkSummaries() []metrics.NetworkSummary {
 // imageSummary counts the images pulled, and sums their sizes, for a scrape.
 // It reports nothing before the image manager exists.
 func (d *daemon) imageSummary() metrics.ImageSummary {
-	if d.images == nil {
+	if d.imageManager == nil {
 		return metrics.ImageSummary{}
 	}
 
-	images := d.images.List()
+	images := d.imageManager.List()
 
 	summary := metrics.ImageSummary{Count: len(images)}
 	for _, image := range images {
@@ -140,7 +140,7 @@ func (d *daemon) imageSummary() metrics.ImageSummary {
 // kernelSummary counts the kernels defined, and sums what they hold on disk,
 // for a scrape. It reports nothing before the kernel manager exists.
 func (d *daemon) kernelSummary() metrics.KernelSummary {
-	if d.store == nil || d.kernels == nil {
+	if d.store == nil || d.kernelManager == nil {
 		return metrics.KernelSummary{}
 	}
 
@@ -148,7 +148,7 @@ func (d *daemon) kernelSummary() metrics.KernelSummary {
 
 	summary := metrics.KernelSummary{Count: len(kernels)}
 	for _, k := range kernels {
-		summary.DiskBytes += d.kernels.DiskBytes(k.ID)
+		summary.DiskBytes += d.kernelManager.DiskBytes(k.ID)
 	}
 
 	return summary
@@ -158,7 +158,7 @@ func (d *daemon) kernelSummary() metrics.KernelSummary {
 // they take up on disk, for a scrape. It reports nothing before the volume
 // manager exists.
 func (d *daemon) volumeSummary() metrics.VolumeSummary {
-	if d.store == nil || d.volumes == nil {
+	if d.store == nil || d.volumeManager == nil {
 		return metrics.VolumeSummary{}
 	}
 
@@ -167,7 +167,7 @@ func (d *daemon) volumeSummary() metrics.VolumeSummary {
 	summary := metrics.VolumeSummary{Count: len(volumes)}
 	for _, v := range volumes {
 		summary.SizeBytes += v.SizeBytes
-		summary.DiskBytes += d.volumes.DiskBytes(v.ID)
+		summary.DiskBytes += d.volumeManager.DiskBytes(v.ID)
 	}
 
 	return summary

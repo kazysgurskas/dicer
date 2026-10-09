@@ -75,22 +75,22 @@ func (d *daemon) ensureDefaultKernel() error {
 	case errors.Is(err, errdefs.ErrNotFound):
 		now := time.Now()
 		want.ID, want.CreatedAt, want.UpdatedAt = cuid2.Generate(), now, now
-		if err := d.kernels.ExtractDefault(want.ID); err != nil {
+		if err := d.kernelManager.ExtractDefault(want.ID); err != nil {
 			return err
 		}
 		if err := d.store.CreateKernel(want); err != nil {
 			return fmt.Errorf("define the default kernel: %w", err)
 		}
 		record(want, events.ActionImported, fmt.Sprintf("Imported the default kernel for %s, version %s: %s",
-			want.Architecture, kernel.DefaultVersion, humanize.Bytes(d.kernels.DiskBytes(want.ID))))
+			want.Architecture, kernel.DefaultVersion, humanize.Bytes(d.kernelManager.DiskBytes(want.ID))))
 		return nil
 	case err != nil:
 		return fmt.Errorf("define the default kernel: %w", err)
 	case k.Architecture == want.Architecture && k.SHA256 == want.SHA256:
-		if _, err := d.kernels.Path(k); err == nil {
+		if _, err := d.kernelManager.Path(k); err == nil {
 			return nil
 		}
-		if err := d.kernels.ExtractDefault(k.ID); err != nil {
+		if err := d.kernelManager.ExtractDefault(k.ID); err != nil {
 			return err
 		}
 		record(k, events.ActionImported,
@@ -98,7 +98,7 @@ func (d *daemon) ensureDefaultKernel() error {
 		return nil
 	}
 
-	if err := d.kernels.ExtractDefault(k.ID); err != nil {
+	if err := d.kernelManager.ExtractDefault(k.ID); err != nil {
 		return err
 	}
 	k.Architecture, k.SHA256, k.UpdatedAt = want.Architecture, want.SHA256, time.Now()

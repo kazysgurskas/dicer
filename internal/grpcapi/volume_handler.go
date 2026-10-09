@@ -22,9 +22,9 @@ import (
 
 // volumeHandler handles volume-related RPCs.
 type volumeHandler struct {
-	store   *filestore.Store
-	volumes *volumepkg.Manager
-	events  recorder
+	store         *filestore.Store
+	volumeManager *volumepkg.Manager
+	events        recorder
 }
 
 // CreateVolume creates and formats a volume.
@@ -42,14 +42,14 @@ func (h *volumeHandler) CreateVolume(
 		return nil, errdefs.Exists("volume %q already exists", req.GetName())
 	}
 
-	volume, err := h.volumes.Create(ctx, req.GetName(), req.GetSizeBytes())
+	volume, err := h.volumeManager.Create(ctx, req.GetName(), req.GetSizeBytes())
 	if err != nil {
 		return nil, fmt.Errorf("create volume: %w", err)
 	}
 
 	if err := h.store.CreateVolume(*volume); err != nil {
 		// Roll back the backing disk so a failed create leaves nothing behind.
-		_ = h.volumes.Delete(volume.ID)
+		_ = h.volumeManager.Delete(volume.ID)
 		return nil, err
 	}
 	h.record(*volume, events.ActionCreated, "Created volume of "+humanize.Bytes(volume.SizeBytes)+", formatted ext4")
@@ -108,7 +108,7 @@ func (h *volumeHandler) DeleteVolume(
 	}
 	h.record(volume, events.ActionDeleted, "Deleted volume of "+humanize.Bytes(volume.SizeBytes)+" and its data")
 
-	if err := h.volumes.Delete(volume.ID); err != nil {
+	if err := h.volumeManager.Delete(volume.ID); err != nil {
 		return nil, fmt.Errorf("remove volume disk: %w", err)
 	}
 

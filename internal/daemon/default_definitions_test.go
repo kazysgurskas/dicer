@@ -33,7 +33,7 @@ func newDefinitionsDaemon(t *testing.T) *daemon {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kernels, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Logger: logger})
+	kernelManager, err := kernel.NewManager(kernel.Config{DataDir: dataDir, Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func newDefinitionsDaemon(t *testing.T) *daemon {
 	cfg.DataDir = dataDir
 	cfg.Network.DefaultSubnet = "10.250.0.0/16"
 
-	return &daemon{cfg: &cfg, logger: logger, store: store, kernels: kernels, events: log}
+	return &daemon{cfg: &cfg, logger: logger, store: store, kernelManager: kernelManager, events: log}
 }
 
 func TestDefaultNetworkIsCreatedOnce(t *testing.T) {
@@ -110,7 +110,7 @@ func TestDefaultKernelIsExtractedBeforeItIsDefined(t *testing.T) {
 	if err != nil || k.SHA256 != kernel.Default().SHA256 {
 		t.Fatalf("default kernel = %+v, %v; want the one this binary carries", k, err)
 	}
-	if _, err := d.kernels.Path(k); err != nil {
+	if _, err := d.kernelManager.Path(k); err != nil {
 		t.Errorf("the default kernel is not on the host: %v", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestDefaultKernelIsExtractedAgainIfItsCopyIsGoneOrDamaged(t *testing.T) {
 			if again, _ := defaultKernelBinary(t, d); again != path {
 				t.Errorf("the default kernel moved from %s to %s", path, again)
 			}
-			if _, err := d.kernels.Path(k); err != nil {
+			if _, err := d.kernelManager.Path(k); err != nil {
 				t.Errorf("the default kernel is not on the host again: %v", err)
 			}
 		})
@@ -177,7 +177,7 @@ func TestDefaultKernelAnOlderVersionCarriedIsReplaced(t *testing.T) {
 	if updated.ID != k.ID || updated.SHA256 != kernel.Default().SHA256 {
 		t.Errorf("default kernel = %+v, want the one this binary carries under the same ID", updated)
 	}
-	if _, err := d.kernels.Path(updated); err != nil {
+	if _, err := d.kernelManager.Path(updated); err != nil {
 		t.Errorf("the new default kernel is not on the host: %v", err)
 	}
 }

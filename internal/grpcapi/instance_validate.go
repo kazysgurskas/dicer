@@ -24,7 +24,7 @@ func (h *instanceHandler) checkCanStart(instance instance.Spec) error {
 	if err := h.checkMounts(instance.Mounts); err != nil {
 		return err
 	}
-	return h.instances.CheckResources(instance.MaxResources())
+	return h.instanceManager.CheckResources(instance.MaxResources())
 }
 
 // checkStaticIP checks that a network exists and that ip, if set, is an

@@ -24,8 +24,8 @@ import (
 
 // instanceHandler handles instance-related RPCs.
 type instanceHandler struct {
-	store     *filestore.Store
-	instances *instance.Manager
+	store           *filestore.Store
+	instanceManager *instance.Manager
 
 	// statsInterval is how often GetInstanceStats reads stats.
 	statsInterval time.Duration
@@ -46,12 +46,12 @@ func (h *instanceHandler) CreateInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Create(ctx, instance, pull); err != nil {
+	if err := h.instanceManager.Create(ctx, instance, pull); err != nil {
 		return nil, err
 	}
 
 	if req.GetStart() {
-		if err := h.instances.Start(ctx, instance); err != nil {
+		if err := h.instanceManager.Start(ctx, instance); err != nil {
 			return nil, fmt.Errorf("instance %q was created, but did not start: %w", instance.Name, err)
 		}
 	}
@@ -190,7 +190,7 @@ func (h *instanceHandler) UpdateInstance(
 	}
 
 	instance.UpdatedAt = time.Now()
-	if err := h.instances.Update(ctx, instance); err != nil {
+	if err := h.instanceManager.Update(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -291,7 +291,7 @@ func (h *instanceHandler) StartInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Start(ctx, instance); err != nil {
+	if err := h.instanceManager.Start(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -307,7 +307,7 @@ func (h *instanceHandler) StopInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Stop(ctx, instance); err != nil {
+	if err := h.instanceManager.Stop(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -323,7 +323,7 @@ func (h *instanceHandler) PauseInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Pause(ctx, instance); err != nil {
+	if err := h.instanceManager.Pause(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -340,7 +340,7 @@ func (h *instanceHandler) StandbyInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Standby(ctx, instance); err != nil {
+	if err := h.instanceManager.Standby(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -372,7 +372,7 @@ func (h *instanceHandler) ResizeInstance(
 		return nil, errdefs.InvalidArgument("an instance needs more than 0 bytes of memory")
 	}
 
-	if err := h.instances.Resize(ctx, instance, want); err != nil {
+	if err := h.instanceManager.Resize(ctx, instance, want); err != nil {
 		return nil, err
 	}
 
@@ -389,7 +389,7 @@ func (h *instanceHandler) ResumeInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Resume(ctx, instance); err != nil {
+	if err := h.instanceManager.Resume(ctx, instance); err != nil {
 		return nil, err
 	}
 
@@ -405,7 +405,7 @@ func (h *instanceHandler) RenameInstance(
 		return nil, err
 	}
 
-	renamed, err := h.instances.Rename(ctx, instance, req.GetNewName())
+	renamed, err := h.instanceManager.Rename(ctx, instance, req.GetNewName())
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +423,7 @@ func (h *instanceHandler) DeleteInstance(
 		return nil, err
 	}
 
-	if err := h.instances.Delete(ctx, instance, req.GetForce()); err != nil {
+	if err := h.instanceManager.Delete(ctx, instance, req.GetForce()); err != nil {
 		return nil, err
 	}
 
@@ -464,20 +464,20 @@ func (h *instanceHandler) ListInstances(
 
 // view assembles the API representation of an instance.
 func (h *instanceHandler) view(instance instance.Spec) (*dicerdv1.Instance, error) {
-	return viewInstance(h.instances, instance)
+	return viewInstance(h.instanceManager, instance)
 }
 
 // viewInstance assembles an instance's spec, status, address and health.
-func viewInstance(instances *instance.Manager, spec instance.Spec) (*dicerdv1.Instance, error) {
-	status, err := instances.Status(spec)
+func viewInstance(instanceManager *instance.Manager, spec instance.Spec) (*dicerdv1.Instance, error) {
+	status, err := instanceManager.Status(spec)
 	if err != nil {
 		return nil, err
 	}
 
-	if allocation, err := instances.Allocation(spec); err == nil {
+	if allocation, err := instanceManager.Allocation(spec); err == nil {
 		status.IP, status.MAC = allocation.IP, allocation.MAC
 	}
-	if check, health, ok := instances.Health(spec); ok {
+	if check, health, ok := instanceManager.Health(spec); ok {
 		status.HealthCheck, status.Health = &check, &health
 	}
 

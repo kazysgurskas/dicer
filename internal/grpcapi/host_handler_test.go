@@ -43,7 +43,7 @@ func (f fakeStarter) Connect(string) (hypervisor.Hypervisor, error) {
 }
 
 func TestHypervisorInfosPutTheDefaultFirst(t *testing.T) {
-	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+	h := &hostHandler{starters: map[hypervisor.Type][]hypervisor.Starter{
 		hypervisor.TypeFirecracker:     {fakeStarter{version: "v1.17.0"}},
 		hypervisor.TypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}, fakeStarter{version: "v48.0.0"}},
 	}}
@@ -69,7 +69,7 @@ func TestHypervisorInfosPutTheDefaultFirst(t *testing.T) {
 // TestHypervisorInfosDeprecateAllButTheDefault covers the deprecation
 // policy: every version but a hypervisor's default is deprecated.
 func TestHypervisorInfosDeprecateAllButTheDefault(t *testing.T) {
-	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+	h := &hostHandler{starters: map[hypervisor.Type][]hypervisor.Starter{
 		hypervisor.TypeCloudHypervisor: {
 			fakeStarter{version: "v53.0.0"}, fakeStarter{version: "v49.0.0"}, fakeStarter{version: "v48.0.0"},
 		},
@@ -91,7 +91,7 @@ func TestHypervisorInfosDeprecateAllButTheDefault(t *testing.T) {
 // TestHypervisorInfosOmitMissingDrivers covers a daemon that could not build
 // a starter: what it cannot start must not be advertised.
 func TestHypervisorInfosOmitMissingDrivers(t *testing.T) {
-	h := &hostHandler{hypervisors: map[hypervisor.Type][]hypervisor.Starter{
+	h := &hostHandler{starters: map[hypervisor.Type][]hypervisor.Starter{
 		hypervisor.TypeCloudHypervisor: {fakeStarter{version: "v49.0.0"}},
 	}}
 

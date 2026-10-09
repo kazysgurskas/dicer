@@ -20,10 +20,10 @@ import (
 
 // networkHandler handles network-related RPCs.
 type networkHandler struct {
-	store       *filestore.Store
-	networks    *network.Manager
-	hostSubnets func() ([]netip.Prefix, error)
-	events      recorder
+	store          *filestore.Store
+	networkManager *network.Manager
+	hostSubnets    func() ([]netip.Prefix, error)
+	events         recorder
 }
 
 // CreateNetwork records a network, refusing a subnet another network or
@@ -82,7 +82,7 @@ func (h *networkHandler) ListNetworks(
 		Networks: make([]*dicerdv1.Network, 0, len(networks)),
 	}
 	for _, n := range networks {
-		allocations, err := h.networks.List(n.Name)
+		allocations, err := h.networkManager.List(n.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (h *networkHandler) GetNetwork(
 		return nil, err
 	}
 
-	allocations, err := h.networks.List(n.Name)
+	allocations, err := h.networkManager.List(n.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (h *networkHandler) DeleteNetwork(
 	}
 	h.record(n, events.ActionDeleted, "Deleted network with subnet "+n.Subnet)
 
-	if err := h.networks.Forget(n.Name); err != nil {
+	if err := h.networkManager.Forget(n.Name); err != nil {
 		return nil, fmt.Errorf("discard allocations: %w", err)
 	}
 
@@ -161,7 +161,7 @@ func (h *networkHandler) ListNetworkAllocations(
 		return nil, err
 	}
 
-	allocations, err := h.networks.List(n.Name)
+	allocations, err := h.networkManager.List(n.Name)
 	if err != nil {
 		return nil, err
 	}

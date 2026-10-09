@@ -31,7 +31,7 @@ func (h *instanceHandler) ForkInstance(
 		return nil, err
 	}
 
-	if err := h.instances.ForkInstance(ctx, source, fork); err != nil {
+	if err := h.instanceManager.ForkInstance(ctx, source, fork); err != nil {
 		return nil, err
 	}
 

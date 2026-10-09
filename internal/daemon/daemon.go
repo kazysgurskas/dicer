@@ -41,20 +41,21 @@ type daemon struct {
 	cfg    *Config
 	logger *slog.Logger
 
-	store       *filestore.Store
-	networks    *network.Manager
-	instances   *instance.Manager
-	hostNetwork *hostnet.Host
+	store           *filestore.Store
+	networkManager  *network.Manager
+	instanceManager *instance.Manager
+	hostNetwork     *hostnet.Host
 	// dnsServers serves each network's guests their nameserver. Nil if
 	// the configuration turns it off.
-	dnsServers *dns.Servers
-	images     *image.Manager
-	kernels    *kernel.Manager
-	volumes    *volume.Manager
-	initrds    *initrd.Manager
+	dnsServers    *dns.Servers
+	imageManager  *image.Manager
+	kernelManager *kernel.Manager
+	volumeManager *volume.Manager
+	initrdManager *initrd.Manager
 
-	// hypervisors are the starters for every VMM this daemon carries.
-	hypervisors map[hypervisor.Type][]hypervisor.Starter
+	// starters launch VMMs, one for each hypervisor version this daemon
+	// carries, by type with the default version first.
+	starters map[hypervisor.Type][]hypervisor.Starter
 
 	metrics *metrics.Metrics
 	events  *events.Log
@@ -108,9 +109,9 @@ func (d *daemon) Run(ctx context.Context) error {
 	}
 
 	// Reconcile recorded state with what is running before serving.
-	d.instances.Recover(ctx)
-	defer d.instances.Close()
-	d.instances.WarnDeprecatedHypervisorVersions(ctx)
+	d.instanceManager.Recover(ctx)
+	defer d.instanceManager.Close()
+	d.instanceManager.WarnDeprecatedHypervisorVersions(ctx)
 
 	// Created before serving, so that no request finds either missing.
 	if err := d.ensureDefaultNetwork(); err != nil {
@@ -152,14 +153,12 @@ func (d *daemon) Run(ctx context.Context) error {
 	background.Go(func() { d.hostNetwork.WatchFirewalld(ctx) })
 
 	// Started after the API is up so slow boots do not delay it.
-	background.Go(func() { d.instances.StartOnBoot(ctx) })
-	background.Go(func() { d.instances.StandbyIdle(ctx) })
+	background.Go(func() { d.instanceManager.StartOnBoot(ctx) })
+	background.Go(func() { d.instanceManager.StandbyIdle(ctx) })
 
 	// Garbage collection needs recovery to know which images are in use.
 	if policy := d.cfg.Images.gcPolicy(); policy.Enabled() {
-		background.Go(func() {
-			d.images.RunGC(ctx, policy, d.cfg.Images.GCInterval, d.instances.ImagesInUse)
-		})
+		background.Go(func() { d.imageManager.RunGC(ctx, policy, d.cfg.Images.GCInterval, d.instanceManager.ImagesInUse) })
 	}
 
 	select {
@@ -226,7 +225,7 @@ func (d *daemon) openStore() error {
 // allocations.
 func (d *daemon) openNetworks() error {
 	var err error
-	d.networks, err = network.NewManager(network.Config{
+	d.networkManager, err = network.NewManager(network.Config{
 		Dir:    filepath.Join(d.cfg.DataDir, "allocations"),
 		Logger: d.logger,
 	})
@@ -264,7 +263,7 @@ func (d *daemon) initServices() error {
 		return fmt.Errorf("create registry client: %w", err)
 	}
 
-	d.images, err = image.NewManager(image.Config{
+	d.imageManager, err = image.NewManager(image.Config{
 		DataDir:            d.cfg.DataDir,
 		MaxConcurrentPulls: 1,
 		Registry:           registryClient,
@@ -284,7 +283,7 @@ func (d *daemon) initServices() error {
 		Logger:                  d.logger,
 	})
 
-	d.kernels, err = kernel.NewManager(kernel.Config{
+	d.kernelManager, err = kernel.NewManager(kernel.Config{
 		DataDir: d.cfg.DataDir,
 		Logger:  d.logger,
 	})
@@ -292,7 +291,7 @@ func (d *daemon) initServices() error {
 		return fmt.Errorf("create kernel manager: %w", err)
 	}
 
-	d.initrds, err = initrd.NewManager(initrd.Config{
+	d.initrdManager, err = initrd.NewManager(initrd.Config{
 		Puller:  registryClient,
 		DataDir: d.cfg.DataDir,
 		Logger:  d.logger,
@@ -301,12 +300,12 @@ func (d *daemon) initServices() error {
 		return fmt.Errorf("create initrd manager: %w", err)
 	}
 
-	d.volumes = volume.NewManager(volume.Config{
+	d.volumeManager = volume.NewManager(volume.Config{
 		DataDir: d.cfg.DataDir,
 		Logger:  d.logger,
 	})
 
-	d.hypervisors, err = buildStarters(d.cfg.DataDir)
+	d.starters, err = buildStarters(d.cfg.DataDir)
 	if err != nil {
 		return fmt.Errorf("build hypervisor starters: %w", err)
 	}
@@ -318,14 +317,14 @@ func (d *daemon) initServices() error {
 
 	instanceCfg := instance.Config{
 		Store:       d.store,
-		Networks:    d.networks,
+		Networks:    d.networkManager,
 		RunDir:      d.cfg.RunDir,
-		Images:      d.images,
-		Kernels:     d.kernels,
-		Volumes:     d.volumes,
-		Initrds:     d.initrds,
+		Images:      d.imageManager,
+		Kernels:     d.kernelManager,
+		Volumes:     d.volumeManager,
+		Initrds:     d.initrdManager,
 		HostNetwork: d.hostNetwork,
-		Starters:    d.hypervisors,
+		Starters:    d.starters,
 		Capacity:    capacity,
 		Metrics:     d.metrics,
 		Events:      d.events,
@@ -340,9 +339,10 @@ func (d *daemon) initServices() error {
 			DefaultNameservers: []string{network.DefaultNameserver},
 			Logger:             d.logger,
 		})
+
 		instanceCfg.DNSServers = d.dnsServers
 	}
-	d.instances = instance.NewManager(instanceCfg)
+	d.instanceManager = instance.NewManager(instanceCfg)
 
 	return nil
 }
@@ -353,12 +353,12 @@ type instanceNames struct{ d *daemon }
 
 // LookupHost asks the instance manager.
 func (n instanceNames) LookupHost(network, name string) []netip.Addr {
-	return n.d.instances.LookupHost(network, name)
+	return n.d.instanceManager.LookupHost(network, name)
 }
 
 // LookupAddr asks the instance manager.
 func (n instanceNames) LookupAddr(network string, addr netip.Addr) []string {
-	return n.d.instances.LookupAddr(network, addr)
+	return n.d.instanceManager.LookupAddr(network, addr)
 }
 
 // hostCapacity reads the host's CPUs and memory once and works out what

@@ -15,9 +15,9 @@ import (
 // resourceHandler reports how much of the host is in use. CPU and memory are
 // what admission sees; disk is informational.
 type resourceHandler struct {
-	store     *filestore.Store
-	instances *instance.Manager
-	dataDir   string
+	store           *filestore.Store
+	instanceManager *instance.Manager
+	dataDir         string
 }
 
 // GetResources reports the host's CPU, memory and disk, and what the
@@ -25,7 +25,7 @@ type resourceHandler struct {
 func (h *resourceHandler) GetResources(
 	_ context.Context, _ *dicerdv1.GetResourcesRequest,
 ) (*dicerdv1.GetResourcesResponse, error) {
-	usage := h.instances.Usage()
+	usage := h.instanceManager.Usage()
 	allocatable := usage.Capacity.Allocatable()
 	available := usage.Available()
 
