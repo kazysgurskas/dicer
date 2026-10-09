@@ -15,7 +15,7 @@ import (
 )
 
 // ForkInstance creates an instance as a copy of another. See
-// vm.Manager.ForkInstance.
+// instance.Manager.ForkInstance.
 func (h *instanceHandler) ForkInstance(
 	ctx context.Context, req *dicerdv1.ForkInstanceRequest,
 ) (*dicerdv1.Instance, error) {

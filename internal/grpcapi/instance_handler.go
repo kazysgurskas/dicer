@@ -15,15 +15,15 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/image/reference"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // instanceHandler handles instance-related RPCs.
 type instanceHandler struct {
 	definitions *filestore.Manager
-	instances   *vm.Manager
+	instances   *instance.Manager
 
 	// statsInterval is how often GetInstanceStats reads stats.
 	statsInterval time.Duration
@@ -142,7 +142,8 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (type
 	return instance, nil
 }
 
-// UpdateInstance modifies an instance's definition. See vm.Manager.Update.
+// UpdateInstance modifies an instance's definition. See
+// instance.Manager.Update.
 func (h *instanceHandler) UpdateInstance(
 	ctx context.Context, req *dicerdv1.UpdateInstanceRequest,
 ) (*dicerdv1.Instance, error) {
@@ -328,7 +329,7 @@ func (h *instanceHandler) PauseInstance(
 }
 
 // StandbyInstance freezes a running or paused instance to disk. See
-// vm.Manager.Standby.
+// instance.Manager.Standby.
 func (h *instanceHandler) StandbyInstance(
 	ctx context.Context, req *dicerdv1.StandbyInstanceRequest,
 ) (*dicerdv1.Instance, error) {
@@ -345,7 +346,7 @@ func (h *instanceHandler) StandbyInstance(
 }
 
 // ResizeInstance changes a running instance's vCPUs and memory. See
-// vm.Manager.Resize.
+// instance.Manager.Resize.
 func (h *instanceHandler) ResizeInstance(
 	ctx context.Context, req *dicerdv1.ResizeInstanceRequest,
 ) (*dicerdv1.Instance, error) {
@@ -465,7 +466,7 @@ func (h *instanceHandler) view(instance types.InstanceSpec) (*dicerdv1.Instance,
 }
 
 // viewInstance assembles an instance's spec, status, address and health.
-func viewInstance(instances *vm.Manager, spec types.InstanceSpec) (*dicerdv1.Instance, error) {
+func viewInstance(instances *instance.Manager, spec types.InstanceSpec) (*dicerdv1.Instance, error) {
 	status, err := instances.Status(spec)
 	if err != nil {
 		return nil, err

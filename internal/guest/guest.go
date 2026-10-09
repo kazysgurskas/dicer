@@ -39,8 +39,8 @@ const (
 const ConfigFile = "config.json"
 
 // Config is the configuration passed to the guest init binary via ConfigFile.
-// It is serialised by the host (internal/vm) and deserialised by the guest
-// init binary (internal/guest/boot).
+// It is serialised by the host (internal/instance) and deserialised by the
+// guest init binary (internal/guest/boot).
 type Config struct {
 	Entrypoint        []string          `json:"entrypoint"`
 	Cmd               []string          `json:"cmd"`

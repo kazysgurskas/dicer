@@ -11,10 +11,10 @@ import (
 
 	"github.com/konradasb/dicer/internal/events"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	"github.com/konradasb/dicer/internal/volume"
 )
 
@@ -67,7 +67,7 @@ func newTestServer(t *testing.T) (*Server, *filestore.Manager) {
 		t.Fatal(err)
 	}
 
-	instances := vm.NewManager(vm.Config{
+	instances := instance.NewManager(instance.Config{
 		Definitions: definitions,
 		RunDir:      filepath.Join(t.TempDir(), "run"),
 		Capacity:    testCapacity,

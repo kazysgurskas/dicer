@@ -1,0 +1,91 @@
+// Copyright 2026 Dicer Authors
+// SPDX-License-Identifier: MIT
+
+package instance
+
+import (
+	"testing"
+
+	"github.com/konradasb/dicer/internal/types"
+)
+
+func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
+	h := newHarness(t)
+	h.running(t)
+	if _, err := h.manager.CreateSnapshot(t.Context(), h.instance, "kept"); err != nil {
+		t.Fatalf("CreateSnapshot: %v", err)
+	}
+
+	inUse, err := h.manager.ImagesInUse()
+	if err != nil {
+		t.Fatalf("ImagesInUse: %v", err)
+	}
+	if _, ok := inUse["sha256:aaaa"]; !ok {
+		t.Errorf("in use = %v, want the running guest's image", inUse)
+	}
+
+	// Stopped, the guest no longer needs its image, but its snapshot does.
+	if err := h.manager.removeRuntimeDir(h.instance.ID); err != nil {
+		t.Fatal(err)
+	}
+	if inUse, err = h.manager.ImagesInUse(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := inUse["sha256:aaaa"]; !ok {
+		t.Errorf("in use = %v, want the snapshot's image kept", inUse)
+	}
+}
+
+// A stopped instance keeps the image its reference resolves to here: it is
+// what it boots from next. A reference to an image this host does not hold
+// keeps nothing.
+func TestImagesInUseKeepsWhatDefinitionsName(t *testing.T) {
+	h := newHarness(t)
+	images, ok := h.manager.images.(*fakeImages)
+	if !ok {
+		t.Fatalf("images is %T", h.manager.images)
+	}
+
+	inUse, err := h.manager.ImagesInUse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inUse) != 0 {
+		t.Errorf("in use = %v, want nothing while the image is not held", inUse)
+	}
+
+	images.held = &types.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
+	if inUse, err = h.manager.ImagesInUse(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := inUse["sha256:bbbb"]; !ok {
+		t.Errorf("in use = %v, want the image the definition names", inUse)
+	}
+}
+
+// TestImagesInUseKeepsWhatStandbyNeeds checks that an instance on standby
+// keeps the image its frozen guest booted from, even once its reference
+// resolves to a newer image: resuming it needs the old one.
+func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
+	h := newHarness(t)
+	h.start(t)
+	if err := h.manager.Standby(t.Context(), h.instance); err != nil {
+		t.Fatalf("Standby: %v", err)
+	}
+
+	images, ok := h.manager.images.(*fakeImages)
+	if !ok {
+		t.Fatalf("images is %T", h.manager.images)
+	}
+	images.held = &types.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
+
+	inUse, err := h.manager.ImagesInUse()
+	if err != nil {
+		t.Fatalf("ImagesInUse: %v", err)
+	}
+	for _, digest := range []string{"sha256:aaaa", "sha256:bbbb"} {
+		if _, ok := inUse[digest]; !ok {
+			t.Errorf("in use = %v, want %s", inUse, digest)
+		}
+	}
+}

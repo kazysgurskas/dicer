@@ -34,7 +34,7 @@ type Config struct {
 }
 
 // Manager holds the definitions, backed by YAML files. It implements
-// vm.Definitions and is safe for concurrent use.
+// instance.Definitions and is safe for concurrent use.
 //
 // Every lookup takes a name or an ID and returns an errdefs.ErrNotFound error
 // if there is no such definition.

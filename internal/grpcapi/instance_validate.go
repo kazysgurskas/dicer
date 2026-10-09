@@ -7,9 +7,9 @@ import (
 	"net"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 )
 
 // checkCanStart rejects a definition that could never start: a missing
@@ -65,9 +65,9 @@ func (h *instanceHandler) checkMounts(mounts []types.Mount) error {
 			return errdefs.InvalidArgument("%v", err)
 		}
 	}
-	if volumes > vm.MaxVolumeMounts {
+	if volumes > instance.MaxVolumeMounts {
 		return errdefs.InvalidArgument(
-			"%d volumes given: an instance can mount at most %d", volumes, vm.MaxVolumeMounts)
+			"%d volumes given: an instance can mount at most %d", volumes, instance.MaxVolumeMounts)
 	}
 	return nil
 }

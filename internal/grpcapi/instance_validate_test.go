@@ -12,8 +12,8 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -49,7 +49,7 @@ func TestCheckMounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range vm.MaxVolumeMounts + 1 {
+	for i := range instance.MaxVolumeMounts + 1 {
 		name := fmt.Sprintf("v%d", i)
 		if err := definitions.CreateVolume(types.Volume{ID: "id-" + name, Name: name}); err != nil {
 			t.Fatal(err)
@@ -65,7 +65,7 @@ func TestCheckMounts(t *testing.T) {
 		t.Errorf("checkMounts = %v, want nil", err)
 	}
 
-	tooMany := make([]types.Mount, vm.MaxVolumeMounts+1)
+	tooMany := make([]types.Mount, instance.MaxVolumeMounts+1)
 	for i := range tooMany {
 		tooMany[i] = types.Mount{Type: types.MountTypeVolume, Source: fmt.Sprintf("v%d", i), Target: fmt.Sprintf("/v%d", i)}
 	}

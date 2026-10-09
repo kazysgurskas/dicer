@@ -13,15 +13,15 @@ import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
 	imagepkg "github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // imageHandler handles image-related RPCs.
 type imageHandler struct {
 	definitions *filestore.Manager
-	instances   *vm.Manager
+	instances   *instance.Manager
 	images      *imagepkg.Manager
 }
 

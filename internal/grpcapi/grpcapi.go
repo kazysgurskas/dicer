@@ -19,10 +19,10 @@ import (
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	"github.com/konradasb/dicer/internal/volume"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -31,7 +31,7 @@ import (
 type Config struct {
 	Definitions *filestore.Manager
 	Networks    *network.Manager
-	Instances   *vm.Manager
+	Instances   *instance.Manager
 
 	Hypervisors map[types.HypervisorType][]hypervisor.Starter
 	Images      *image.Manager

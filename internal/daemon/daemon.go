@@ -27,13 +27,13 @@ import (
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/initrd"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/metrics"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/registry"
 	"github.com/konradasb/dicer/internal/types"
 	"github.com/konradasb/dicer/internal/version"
-	"github.com/konradasb/dicer/internal/vm"
 	"github.com/konradasb/dicer/internal/volume"
 )
 
@@ -44,7 +44,7 @@ type daemon struct {
 
 	definitions *filestore.Manager
 	networks    *network.Manager
-	instances   *vm.Manager
+	instances   *instance.Manager
 	hostNetwork *hostnet.Host
 	// dnsServers serves each network's guests their nameserver. Nil if
 	// the configuration turns it off.
@@ -308,7 +308,7 @@ func (d *daemon) initServices() error {
 		return err
 	}
 
-	vmCfg := vm.Config{
+	instanceCfg := instance.Config{
 		Definitions: d.definitions,
 		Networks:    d.networks,
 		RunDir:      d.cfg.RunDir,
@@ -332,9 +332,9 @@ func (d *daemon) initServices() error {
 			DefaultNameservers: []string{network.DefaultNameserver},
 			Logger:             d.logger,
 		})
-		vmCfg.DNSServers = d.dnsServers
+		instanceCfg.DNSServers = d.dnsServers
 	}
-	d.instances = vm.NewManager(vmCfg)
+	d.instances = instance.NewManager(instanceCfg)
 
 	return nil
 }

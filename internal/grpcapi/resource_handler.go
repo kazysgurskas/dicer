@@ -8,7 +8,7 @@ import (
 
 	"github.com/konradasb/dicer/internal/filestore"
 	"github.com/konradasb/dicer/internal/hostinfo"
-	"github.com/konradasb/dicer/internal/vm"
+	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -16,7 +16,7 @@ import (
 // what admission sees; disk is informational.
 type resourceHandler struct {
 	definitions *filestore.Manager
-	instances   *vm.Manager
+	instances   *instance.Manager
 	dataDir     string
 }
 

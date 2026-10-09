@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/errdefs"
-	"github.com/konradasb/dicer/internal/vm"
+	"github.com/konradasb/dicer/internal/instance"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -18,7 +18,7 @@ func (h *instanceHandler) GetInstanceLogs(
 	req *dicerdv1.GetInstanceLogsRequest,
 	stream grpc.ServerStreamingServer[dicerdv1.InstanceLogChunk],
 ) error {
-	instance, err := h.definitions.Instance(req.GetName())
+	spec, err := h.definitions.Instance(req.GetName())
 	if err != nil {
 		return err
 	}
@@ -31,13 +31,13 @@ func (h *instanceHandler) GetInstanceLogs(
 		return errdefs.InvalidArgument("tail_lines cannot be negative")
 	}
 
-	options := vm.LogOptions{
+	options := instance.LogOptions{
 		Source:    source,
 		TailLines: int(req.GetTailLines()),
 		Follow:    req.GetFollow(),
 	}
 
-	return h.instances.StreamLogs(stream.Context(), instance, options, logChunkWriter{stream: stream})
+	return h.instances.StreamLogs(stream.Context(), spec, options, logChunkWriter{stream: stream})
 }
 
 // logChunkWriter is the io.Writer StreamLogs writes a log into, sending each

@@ -122,7 +122,7 @@ internal/
   cli/                  the command line, dicer compose included
   compose/              compose files: reading them, and the requests they make
   grpcapi/              the API's handlers
-  vm/                   instance lifecycle: starting, stopping, supervising
+  instance/             instance lifecycle: starting, stopping, supervising
   filestore/            resource definitions, as YAML on disk
   network/ hostnet/     networks and addresses; bridges, TAP devices, iptables
   dns/                  each network's nameserver: guests' names, and forwarding

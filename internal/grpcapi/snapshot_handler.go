@@ -10,15 +10,15 @@ import (
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/filestore"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
 // snapshotHandler handles snapshot-related RPCs.
 type snapshotHandler struct {
 	definitions *filestore.Manager
-	instances   *vm.Manager
+	instances   *instance.Manager
 }
 
 // CreateSnapshot snapshots an instance.

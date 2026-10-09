@@ -49,7 +49,7 @@ Follow [Effective Go](https://go.dev/doc/effective_go),
 - A name's scope is where it can be called from, not how long its body is:
   a package-level function, or a method on a large type such as a manager,
   is wide, and needs a name that says what it is for there. `relay` or
-  `acceptConnections` on the VM manager could mean anything;
+  `acceptConnections` on the instance manager could mean anything;
   `relayToGuest` and `serveWakeListener` cannot.
 - Use Go's idioms for common shapes: `Serve` for a loop accepting
   connections from a listener, `newX` for a constructor, `Close` to release.

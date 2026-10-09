@@ -6,8 +6,8 @@ package grpcapi
 import (
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/events"
+	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/types"
-	"github.com/konradasb/dicer/internal/vm"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -134,9 +134,9 @@ var eventActions = enum[events.Action, dicerdv1.EventAction]{"event action", map
 	events.ActionImported:         dicerdv1.EventAction_EVENT_ACTION_IMPORTED,
 }}
 
-var logSources = enum[vm.LogSource, dicerdv1.LogSource]{"log source", map[vm.LogSource]dicerdv1.LogSource{
-	vm.LogSourceGuest:      dicerdv1.LogSource_LOG_SOURCE_GUEST,
-	vm.LogSourceHypervisor: dicerdv1.LogSource_LOG_SOURCE_HYPERVISOR,
+var logSources = enum[instance.LogSource, dicerdv1.LogSource]{"log source", map[instance.LogSource]dicerdv1.LogSource{
+	instance.LogSourceGuest:      dicerdv1.LogSource_LOG_SOURCE_GUEST,
+	instance.LogSourceHypervisor: dicerdv1.LogSource_LOG_SOURCE_HYPERVISOR,
 }}
 
 var pullStages = enum[types.PullStage, dicerdv1.PullStage]{"pull stage", map[types.PullStage]dicerdv1.PullStage{
