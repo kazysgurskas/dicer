@@ -825,6 +825,14 @@ message ExecInstanceStart {
   uint32 cols = 7;
   // Environment variables added to the command's environment.
   map<string, string> env = 8;
+  // The user to run the command as, as user, uid, user:group or uid:gid,
+  // looked up in the guest's /etc/passwd and /etc/group. Empty means root.
+  // An unknown user fails the command with INVALID_ARGUMENT. So that a
+  // command never runs as root by mistake, an instance whose guest agent
+  // cannot switch users fails it with FAILED_PRECONDITION. Its agent is
+  // that old if it has run since before the daemon was upgraded, or was
+  // restored from a snapshot taken before then.
+  string user = 9;
 }
 
 // ExecInstanceResize resizes the remote terminal window.

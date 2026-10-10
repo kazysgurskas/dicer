@@ -40,6 +40,14 @@ type Cmd struct {
 	// guest's default.
 	Dir string
 
+	// User is who the command runs as: user, uid, user:group or uid:gid, as
+	// the guest's /etc/passwd and /etc/group define them. The command gets
+	// the user's groups, and its home directory as HOME unless Env sets it.
+	// Empty is root. An unknown user fails with ErrInvalidArgument. A guest
+	// whose agent is too old to switch users fails with
+	// ErrFailedPrecondition until the instance is restarted.
+	User string
+
 	// Timeout kills the command if it runs for longer, and it then exits
 	// with status 124. It is counted in whole seconds, rounded up. Zero is
 	// no limit.
@@ -217,6 +225,7 @@ func execInstanceStart(c *Cmd) (*dicerdv1.ExecInstanceStart, error) {
 		Rows:           uint32(c.Rows),
 		Cols:           uint32(c.Columns),
 		Env:            c.Env,
+		User:           c.User,
 	}, nil
 }
 

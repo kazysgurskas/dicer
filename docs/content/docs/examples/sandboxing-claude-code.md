@@ -44,10 +44,10 @@ Go, add a user for Claude, and install Claude Code as that user:
 
 ```console
 $ dicer run -d --name claude-base --vcpus 2 --memory 2GiB golang:1.25 sleep infinity
-$ dicer exec claude-base sh -c 'useradd -m claude &&
-    runuser -u claude -- sh -c "curl -fsSL https://claude.ai/install.sh | bash"'
+$ dicer exec claude-base useradd -m claude
+$ dicer exec -u claude claude-base sh -c 'curl -fsSL https://claude.ai/install.sh | bash'
 $ dicer snapshot create claude-base claude-base
-Snapshot claude-base of instance claude-base created in 2.3s (memory, 2.7 GiB)
+Snapshot claude-base of instance claude-base created in 2.4s (memory, 2.7 GiB)
 $ dicer rm -f claude-base
 ```
 
@@ -102,17 +102,17 @@ Give Claude the task:
 
 ```console
 $ claude-sandbox "make the failing tests in ./slug pass"
-Claude is working in claude-sfm26t
-The failing tests in `./slug` now pass; I ran `go test ./...` and it reports `ok`.
+Claude is working in claude-base-49c6
+The failing tests in `./slug` now pass. I ran `go test ./...` and it reports `ok`.
 
-The fix is in `slug/slug.go`. `Make` had two bugs:
-- **Separators:** every space became its own hyphen, so leading, trailing and repeated spaces gave `--espresso-cups--` and `milk--frother`. Any run of non-alphanumeric characters now becomes a single hyphen, and none are added at the start or end. This also keeps `Moka Pot (6 cups)` at `moka-pot-6-cups`.
-- **Accents:** accented letters were dropped, so `Crème Brûlée` became `crme-brle`. I added a small table that maps common accented Latin letters to ASCII, plus `ß`, `æ` and `œ`.
+The three failures had two causes, and I fixed both in `slug/slug.go`:
+- **Extra hyphens:** `Make` turned every space into a hyphen. That left leading and trailing hyphens on `"  Espresso Cups  "` and a double hyphen in `"Milk  Frother"`. Now any run of non-alphanumeric characters becomes a single hyphen, and none is written at the start or end.
+- **Accents:** `"Crème Brûlée"` lost its accented letters entirely. I added a small table that folds common accented Latin letters to ASCII, such as `è` to `e` and `ß` to `ss`. I used a table rather than an external package, so letters outside it, like Cyrillic or CJK, are still dropped.
 
-The table covers common Western European letters only, because the module has no dependencies and I didn't add one. Other scripts and Latin letters outside the table, such as `ł` or `ş`, are treated as separators. For wider coverage you could switch to `golang.org/x/text` with NFD normalization.
+Punctuation now acts as a word separator, so `"Moka Pot (6 cups)"` still gives `moka-pot-6-cups`.
 ```
 
-Fifty-two seconds later, the fix is in the working tree, ready to review
+Forty-one seconds later, the fix is in the working tree, ready to review
 with `git diff` and to keep or discard as you would your own:
 
 ```console
@@ -129,23 +129,22 @@ while Claude works:
 
 ```console
 $ dicer ps --wide
-NAME           IMAGE                           STATE    STATUS         VCPU  MEMORY   DISK    NETWORK  IP              PORTS  CREATED
-claude-sfm26t  docker.io/library/golang:1.25   Running  Up 12 seconds  2     2 GiB    10 GiB  default  172.20.86.242   -      13 seconds ago
+NAME              IMAGE                          STATE    STATUS         VCPU  MEMORY  DISK    NETWORK  IP            PORTS  CREATED
+claude-base-49c6  docker.io/library/golang:1.25  Running  Up 20 seconds  2     2 GiB   10 GiB  default  172.20.40.72  -      22 seconds ago
 ```
 
 Inside it, Claude runs as `claude`, and is building the tests:
 
 ```console
-$ dicer top claude-sfm26t
+$ dicer top claude-base-49c6
 PID   PPID  USER    STATE  STARTED         CPUTIME  RSS        COMMAND
-1     0     root    S      30 seconds ago  410ms    18.6 MiB   /init
-644   1     root    S      29 seconds ago  70ms     15 MiB     /usr/local/bin/dicer-agent
-650   1     root    S      29 seconds ago  0s       1.4 MiB    sleep infinity
-726   644   root    S      12 seconds ago  0s       3.3 MiB    runuser -u claude -- /home/claude/.local/bin/claude -p make the failing tests in ./slug pass --dangerously-skip-permissions
-727   726   claude  S      12 seconds ago  2.96s    231.3 MiB  /home/claude/.local/bin/claude -p make the failing tests in ./slug pass --dangerously-skip-permissions
+1     0     root    S      38 seconds ago  410ms    20 MiB     /init
+642   1     root    S      38 seconds ago  90ms     15.4 MiB   /usr/local/bin/dicer-agent
+648   1     root    S      38 seconds ago  0s       1.3 MiB    sleep infinity
+723   642   claude  S      21 seconds ago  3.61s    235.8 MiB  /home/claude/.local/bin/claude -p make the failing tests in ./slug pass --dangerously-skip-permissions
 …
-784   782   claude  S      6 seconds ago   870ms    21.2 MiB   go test ./...
-1047  784   claude  R      5 seconds ago   6.67s    209.7 MiB  /usr/local/go/pkg/tool/linux_amd64/compile -o /tmp/go-build471559153/b010/_pkg_.a …
+783   781   claude  S      14 seconds ago  2.22s    21.2 MiB   go test ./...
+1368  783   claude  R      1 second ago    340ms    57.4 MiB   /usr/local/go/pkg/tool/linux_amd64/compile -o /tmp/go-build4188076265/b061/_pkg_.a …
 ```
 
 Once Claude is done, the sandbox is gone.
@@ -167,7 +166,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"fmt"
 	"log"
 	"os"
@@ -199,12 +197,12 @@ func run(ctx context.Context, task string) error {
 	}
 	defer client.Close()
 
-	name := "claude-" + strings.ToLower(rand.Text()[:6])
-	if _, err := client.Snapshots.Fork(ctx, "claude-base", dicer.ForkOptions{Name: name}); err != nil {
+	sandbox, err := client.Snapshots.Fork(ctx, "claude-base", dicer.ForkOptions{})
+	if err != nil {
 		return err
 	}
-	defer client.Instances.Delete(context.WithoutCancel(ctx), name, dicer.DeleteOptions{Force: true})
-	log.Printf("Claude is working in %s", name)
+	defer client.Instances.Delete(context.WithoutCancel(ctx), sandbox.Name, dicer.DeleteOptions{Force: true})
+	log.Printf("Claude is working in %s", sandbox.Name)
 
 	// The sandbox gets the last commit's files, in a repository of its own
 	// whose one commit is tagged base.
@@ -212,10 +210,10 @@ func run(ctx context.Context, task string) error {
 	if err != nil {
 		return fmt.Errorf("git archive: %w", err)
 	}
-	if err := client.Instances.CopyArchiveTo(ctx, name, "/home/claude", bytes.NewReader(files)); err != nil {
+	if err := client.Instances.CopyArchiveTo(ctx, sandbox.Name, "/home/claude", bytes.NewReader(files)); err != nil {
 		return err
 	}
-	setup := client.Instances.Command(name, "sh", "-c",
+	setup := client.Instances.Command(sandbox.Name, "sh", "-c",
 		"git init -q && git add -A && git -c user.name=sandbox -c user.email=sandbox@localhost commit -qm base && "+
 			"git tag base && chown -R claude: .")
 	setup.Dir = "/home/claude/work"
@@ -224,8 +222,9 @@ func run(ctx context.Context, task string) error {
 	}
 
 	// Claude Code skips permissions only for a user other than root.
-	claude := client.Instances.Command(name, "runuser", "-u", "claude", "--",
+	claude := client.Instances.Command(sandbox.Name,
 		"/home/claude/.local/bin/claude", "-p", task, "--dangerously-skip-permissions")
+	claude.User = "claude"
 	claude.Dir = "/home/claude/work"
 	claude.Env = map[string]string{}
 	for _, key := range []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"} {
@@ -239,8 +238,8 @@ func run(ctx context.Context, task string) error {
 	}
 
 	// Claude's changes are what differs from base, its commits included.
-	diff := client.Instances.Command(name, "runuser", "-u", "claude", "--",
-		"sh", "-c", "git add -A && git diff --cached --binary base")
+	diff := client.Instances.Command(sandbox.Name, "sh", "-c", "git add -A && git diff --cached --binary base")
+	diff.User = "claude"
 	diff.Dir = "/home/claude/work"
 	patch, err := diff.Output(ctx)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -50,8 +51,17 @@ func (s *server) Exec(stream diceragentv1.AgentService_ExecServer) error {
 	if len(command) == 0 {
 		command = []string{"/bin/sh"}
 	}
+	var user *execUser
+	if start.GetUser() != "" {
+		u, err := execUserNamed(start.GetUser())
+		if err != nil {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
+		user = &u
+	}
 
-	slog.Info("exec", "command", command, "tty", start.GetTty(), "workdir", start.GetCwd(), "timeout", start.GetTimeoutSeconds())
+	slog.Info("exec", "command", command, "user", start.GetUser(), "tty", start.GetTty(),
+		"workdir", start.GetCwd(), "timeout", start.GetTimeoutSeconds())
 
 	ctx := stream.Context()
 	if start.GetTimeoutSeconds() > 0 {
@@ -60,10 +70,33 @@ func (s *server) Exec(stream diceragentv1.AgentService_ExecServer) error {
 		defer cancel()
 	}
 
+	cmd := execCommand(ctx, start, command, user)
 	if start.GetTty() {
-		return execTerminal(ctx, stream, start, command)
+		return execTerminal(ctx, stream, cmd, start.GetRows(), start.GetCols())
 	}
-	return execPlain(ctx, stream, start, command)
+	return execPlain(ctx, stream, cmd)
+}
+
+// execCommand returns the command an ExecStart asks for, to run as user, or
+// as root if user is nil. A user's HOME is its own unless the start sets it.
+func execCommand(ctx context.Context, start *diceragentv1.ExecStart, command []string, user *execUser) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	cmd.Dir = start.GetCwd()
+
+	env := start.GetEnv()
+	if user != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: user.credential}
+		if _, ok := env["HOME"]; !ok {
+			env = maps.Clone(env)
+			if env == nil {
+				env = make(map[string]string, 1)
+			}
+			env["HOME"] = user.home
+		}
+	}
+	cmd.Env = execEnv(env, start.GetTty())
+
+	return cmd
 }
 
 // sender serialises writes to an exec stream: gRPC allows one concurrent
@@ -114,14 +147,9 @@ func (o execOutput) Write(p []byte) (int, error) {
 
 // execPlain runs a command without a terminal, streaming stdout and stderr
 // separately and finishing with the exit status.
-func execPlain(
-	ctx context.Context, stream diceragentv1.AgentService_ExecServer, start *diceragentv1.ExecStart, command []string,
-) error {
+func execPlain(ctx context.Context, stream diceragentv1.AgentService_ExecServer, cmd *exec.Cmd) error {
 	s := &sender{stream: stream}
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	cmd.Env = execEnv(start.GetEnv(), false)
-	cmd.Dir = start.GetCwd()
 	cmd.Stdout = execOutput{sender: s}
 	cmd.Stderr = execOutput{sender: s, stderr: true}
 
@@ -141,18 +169,14 @@ func execPlain(
 	return s.sendExitCode(exitCodeOf(ctx, cmd, cmd.Wait()))
 }
 
-// execTerminal runs a command on a pseudo-terminal. A terminal has one
-// output stream, so everything arrives as stdout.
+// execTerminal runs a command on a pseudo-terminal of rows and cols, 24 by
+// 80 if they are zero. A terminal has one output stream, so everything
+// arrives as stdout.
 func execTerminal(
-	ctx context.Context, stream diceragentv1.AgentService_ExecServer, start *diceragentv1.ExecStart, command []string,
+	ctx context.Context, stream diceragentv1.AgentService_ExecServer, cmd *exec.Cmd, rows, cols uint32,
 ) error {
 	s := &sender{stream: stream}
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	cmd.Env = execEnv(start.GetEnv(), true)
-	cmd.Dir = start.GetCwd()
-
-	rows, cols := start.GetRows(), start.GetCols()
 	if rows == 0 {
 		rows = 24
 	}

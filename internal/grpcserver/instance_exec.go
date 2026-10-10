@@ -4,11 +4,15 @@
 package grpcserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer/internal/errdefs"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
@@ -35,6 +39,17 @@ func (h *instanceHandler) ExecInstance(stream execClientStream) error {
 	}
 	defer closeAgent()
 
+	if start.GetUser() != "" {
+		supported, err := agentSupports(ctx, agent, diceragentv1.AgentFeature_AGENT_FEATURE_EXEC_USER)
+		if err != nil {
+			return err
+		}
+		if !supported {
+			return errdefs.InvalidState("instance %q runs a guest agent too old to run a command as another user; "+
+				"restart the instance to update it", start.GetName())
+		}
+	}
+
 	agentStream, err := agent.Exec(ctx)
 	if err != nil {
 		return errdefs.Unavailable("open guest exec stream: %v", err)
@@ -50,6 +65,7 @@ func (h *instanceHandler) ExecInstance(stream execClientStream) error {
 				Rows:           start.GetRows(),
 				Cols:           start.GetCols(),
 				Env:            start.GetEnv(),
+				User:           start.GetUser(),
 			},
 		},
 	})
@@ -58,6 +74,19 @@ func (h *instanceHandler) ExecInstance(stream execClientStream) error {
 	}
 
 	return proxyExec(stream, agentStream)
+}
+
+// agentSupports reports whether agent supports feature. An agent older than
+// the Info call supports none.
+func agentSupports(ctx context.Context, agent diceragentv1.AgentServiceClient, feature diceragentv1.AgentFeature) (bool, error) {
+	info, err := agent.Info(ctx, &diceragentv1.InfoRequest{})
+	switch {
+	case status.Code(err) == codes.Unimplemented:
+		return false, nil
+	case err != nil:
+		return false, errdefs.Unavailable("ask the guest agent what it supports: %v", err)
+	}
+	return slices.Contains(info.GetFeatures(), feature), nil
 }
 
 type (

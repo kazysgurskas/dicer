@@ -336,6 +336,7 @@ ExecInstanceStart is the first message on an ExecInstance stream.
 | `rows` | `uint32` | The initial terminal size, when tty is set. |
 | `cols` | `uint32` |  |
 | `env` | repeated [`ExecInstanceStart.EnvEntry`](#execinstancestartenventry) | Environment variables added to the command's environment. |
+| `user` | `string` | The user to run the command as, as user, uid, user:group or uid:gid, looked up in the guest's /etc/passwd and /etc/group. Empty means root. An unknown user fails the command with INVALID_ARGUMENT. So that a command never runs as root by mistake, an instance whose guest agent cannot switch users fails it with FAILED_PRECONDITION. Its agent is that old if it has run since before the daemon was upgraded, or was restored from a snapshot taken before then. |
 
 ### ExecInstanceStart.EnvEntry
 

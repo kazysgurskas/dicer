@@ -36,13 +36,22 @@ command.
 
 A command runs:
 
-- as root, in `/`, unless `-w` gives another directory;
+- as root, unless `-u` gives another user;
+- in `/`, unless `-w` gives another directory;
 - with the instance's environment, plus any `-e KEY=VALUE` you give;
 - beside the workload, not inside it.
 
 ```console
 $ dicer exec -w /srv -e DEBUG=1 web ./check.sh
+$ dicer exec -u postgres db psql -c 'SELECT 1'
 ```
+
+`-u` takes a user or uid, with a group or gid after a colon if you like, as
+in `postgres:postgres`. They are looked up in the guest's own `/etc/passwd`
+and `/etc/group`. The command gets the user's groups, and the user's home
+directory as `HOME`. An instance started before Dicer was upgraded to a
+version that has `-u` refuses it until it is restarted. So does a fork of a
+snapshot taken before then.
 
 Running beside the workload means a command sees every process in the guest.
 In the [exec init mode](../../concepts/init-modes#exec), `dicer-init` is PID

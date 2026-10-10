@@ -53,6 +53,11 @@ service AgentService {
   // identity: its hostname, and its network interfaces' MAC addresses,
   // addresses and routes in place of the ones it was snapshotted with.
   rpc SetIdentity(SetIdentityRequest) returns (SetIdentityResponse);
+
+  // Info says what this agent supports. The host asks before using a
+  // feature that an older agent, left running in a guest or frozen in a
+  // snapshot, would ignore rather than refuse.
+  rpc Info(InfoRequest) returns (InfoResponse);
 }
 
 // ExecStart is the first message sent by the client to start a command.
@@ -70,6 +75,10 @@ message ExecStart {
   uint32 cols = 6;
   // Environment variables added to the command's environment.
   map<string, string> env = 7;
+  // The user to run the command as, as user, uid, user:group or uid:gid,
+  // looked up in the guest's /etc/passwd and /etc/group. Empty means root.
+  // An agent without AGENT_FEATURE_EXEC_USER ignores it.
+  string user = 8;
 }
 
 // ExecResize resizes the remote terminal window.
@@ -210,6 +219,19 @@ message SetIdentityRequest {
 }
 
 message SetIdentityResponse {}
+
+message InfoRequest {}
+
+message InfoResponse {
+  repeated AgentFeature features = 1;
+}
+
+// AgentFeature is something an agent supports that an older one does not.
+enum AgentFeature {
+  AGENT_FEATURE_UNSPECIFIED = 0;
+  // ExecStart's user.
+  AGENT_FEATURE_EXEC_USER = 1;
+}
 
 // NetworkInterface is one of the VM's interfaces as it is to be configured.
 // Its addresses replace every address it has.

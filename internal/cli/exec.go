@@ -25,11 +25,15 @@ func newInstanceExecCommand() *cobra.Command {
 			"stdout -- so a shell is interactive, and output piped elsewhere is not\n" +
 			"mangled by one. -t and -T force it on or off. Flags go before the name:\n" +
 			"everything after it is the command's.\n\n" +
+			"The command runs as root unless -u names one of the guest's users, as user,\n" +
+			"uid, user:group or uid:gid. It then gets the user's groups, and the user's\n" +
+			"home directory as HOME.\n\n" +
 			"If the instance is still booting, exec waits up to 30 seconds for its guest\n" +
 			"agent to answer.",
 		Example: "  dicer exec web\n" +
 			"  dicer exec web ls -la /srv\n" +
 			"  dicer exec -e DEBUG=1 -w /srv web ./check.sh\n" +
+			"  dicer exec -u postgres db psql\n" +
 			"  dicer exec -T web cat /var/log/app.log > app.log",
 		RunE: runInstanceExecCommand,
 		Args: oneThenCommand("an instance name"),
@@ -52,6 +56,7 @@ func newInstanceExecCommand() *cobra.Command {
 	cmd.Flags().StringArrayP("env", "e", nil,
 		"Environment variable as KEY=VALUE, or KEY to pass this shell's value (repeatable)")
 	cmd.Flags().StringP("workdir", "w", "", "Working directory inside the instance")
+	cmd.Flags().StringP("user", "u", "", "User to run as: user, uid, user:group or uid:gid (default: root)")
 	cmd.Flags().Duration("timeout", 0, "Kill the command after this long, e.g. 30s (0: no limit)")
 	cmd.MarkFlagsMutuallyExclusive("tty", "no-tty")
 
@@ -85,6 +90,7 @@ func runInstanceExecCommand(cmd *cobra.Command, args []string) error {
 
 	command := client.Instances.Command(args[0], execArgs(args)...)
 	command.TTY, command.Dir, command.Timeout, command.Env = opts.tty, opts.dir, opts.timeout, opts.env
+	command.User = opts.user
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if command.TTY {
 		if w, h, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
@@ -130,6 +136,7 @@ func runInstanceExecCommand(cmd *cobra.Command, args []string) error {
 type execOptions struct {
 	tty     bool
 	dir     string
+	user    string
 	timeout time.Duration
 	env     map[string]string
 }
@@ -142,6 +149,7 @@ func parseExecOptions(cmd *cobra.Command) (execOptions, error) {
 
 	var opts execOptions
 	opts.dir, _ = cmd.Flags().GetString("workdir")
+	opts.user, _ = cmd.Flags().GetString("user")
 	opts.timeout, _ = cmd.Flags().GetDuration("timeout")
 	if opts.timeout < 0 {
 		return opts, usagef(cmd, "invalid --timeout %s: it cannot be negative", opts.timeout)

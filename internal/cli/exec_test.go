@@ -18,3 +18,15 @@ func TestExecTimeoutNeedsAUnit(t *testing.T) {
 		t.Errorf("exec --timeout 30 = %v, want it to ask for a duration", err)
 	}
 }
+
+func TestExecUserIsPassedOn(t *testing.T) {
+	cmd := newInstanceExecCommand()
+	if err := cmd.ParseFlags([]string{"-u", "postgres:postgres", "db", "psql"}); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, err := parseExecOptions(cmd)
+	if err != nil || opts.user != "postgres:postgres" {
+		t.Errorf("parseExecOptions = %+v, %v; want user postgres:postgres", opts, err)
+	}
+}

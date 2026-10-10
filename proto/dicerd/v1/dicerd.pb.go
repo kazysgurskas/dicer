@@ -3299,7 +3299,15 @@ type ExecInstanceStart struct {
 	Rows uint32 `protobuf:"varint,6,opt,name=rows,proto3" json:"rows,omitempty"`
 	Cols uint32 `protobuf:"varint,7,opt,name=cols,proto3" json:"cols,omitempty"`
 	// Environment variables added to the command's environment.
-	Env           map[string]string `protobuf:"bytes,8,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Env map[string]string `protobuf:"bytes,8,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// The user to run the command as, as user, uid, user:group or uid:gid,
+	// looked up in the guest's /etc/passwd and /etc/group. Empty means root.
+	// An unknown user fails the command with INVALID_ARGUMENT. So that a
+	// command never runs as root by mistake, an instance whose guest agent
+	// cannot switch users fails it with FAILED_PRECONDITION. Its agent is
+	// that old if it has run since before the daemon was upgraded, or was
+	// restored from a snapshot taken before then.
+	User          string `protobuf:"bytes,9,opt,name=user,proto3" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3388,6 +3396,13 @@ func (x *ExecInstanceStart) GetEnv() map[string]string {
 		return x.Env
 	}
 	return nil
+}
+
+func (x *ExecInstanceStart) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
 }
 
 // ExecInstanceResize resizes the remote terminal window.
@@ -8236,7 +8251,7 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"_exit_code\"\x16\n" +
 	"\x14ListInstancesRequest\"J\n" +
 	"\x15ListInstancesResponse\x121\n" +
-	"\tinstances\x18\x01 \x03(\v2\x13.dicerd.v1.InstanceR\tinstances\"\xa7\x02\n" +
+	"\tinstances\x18\x01 \x03(\v2\x13.dicerd.v1.InstanceR\tinstances\"\xbb\x02\n" +
 	"\x11ExecInstanceStart\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x03(\tR\acommand\x12\x10\n" +
@@ -8245,7 +8260,8 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\x12\x12\n" +
 	"\x04rows\x18\x06 \x01(\rR\x04rows\x12\x12\n" +
 	"\x04cols\x18\a \x01(\rR\x04cols\x127\n" +
-	"\x03env\x18\b \x03(\v2%.dicerd.v1.ExecInstanceStart.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\b \x03(\v2%.dicerd.v1.ExecInstanceStart.EnvEntryR\x03env\x12\x12\n" +
+	"\x04user\x18\t \x01(\tR\x04user\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"<\n" +

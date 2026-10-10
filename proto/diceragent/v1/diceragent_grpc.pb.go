@@ -31,6 +31,7 @@ const (
 	AgentService_ListProcesses_FullMethodName = "/diceragent.v1.AgentService/ListProcesses"
 	AgentService_SetClock_FullMethodName      = "/diceragent.v1.AgentService/SetClock"
 	AgentService_SetIdentity_FullMethodName   = "/diceragent.v1.AgentService/SetIdentity"
+	AgentService_Info_FullMethodName          = "/diceragent.v1.AgentService/Info"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -72,6 +73,10 @@ type AgentServiceClient interface {
 	// identity: its hostname, and its network interfaces' MAC addresses,
 	// addresses and routes in place of the ones it was snapshotted with.
 	SetIdentity(ctx context.Context, in *SetIdentityRequest, opts ...grpc.CallOption) (*SetIdentityResponse, error)
+	// Info says what this agent supports. The host asks before using a
+	// feature that an older agent, left running in a guest or frozen in a
+	// snapshot, would ignore rather than refuse.
+	Info(ctx context.Context, in *InfoRequest, opts ...grpc.CallOption) (*InfoResponse, error)
 }
 
 type agentServiceClient struct {
@@ -187,6 +192,16 @@ func (c *agentServiceClient) SetIdentity(ctx context.Context, in *SetIdentityReq
 	return out, nil
 }
 
+func (c *agentServiceClient) Info(ctx context.Context, in *InfoRequest, opts ...grpc.CallOption) (*InfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InfoResponse)
+	err := c.cc.Invoke(ctx, AgentService_Info_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations should embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -226,6 +241,10 @@ type AgentServiceServer interface {
 	// identity: its hostname, and its network interfaces' MAC addresses,
 	// addresses and routes in place of the ones it was snapshotted with.
 	SetIdentity(context.Context, *SetIdentityRequest) (*SetIdentityResponse, error)
+	// Info says what this agent supports. The host asks before using a
+	// feature that an older agent, left running in a guest or frozen in a
+	// snapshot, would ignore rather than refuse.
+	Info(context.Context, *InfoRequest) (*InfoResponse, error)
 }
 
 // UnimplementedAgentServiceServer should be embedded to have
@@ -261,6 +280,9 @@ func (UnimplementedAgentServiceServer) SetClock(context.Context, *SetClockReques
 }
 func (UnimplementedAgentServiceServer) SetIdentity(context.Context, *SetIdentityRequest) (*SetIdentityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetIdentity not implemented")
+}
+func (UnimplementedAgentServiceServer) Info(context.Context, *InfoRequest) (*InfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Info not implemented")
 }
 func (UnimplementedAgentServiceServer) testEmbeddedByValue() {}
 
@@ -415,6 +437,24 @@ func _AgentService_SetIdentity_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_Info_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).Info(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_Info_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).Info(ctx, req.(*InfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -445,6 +485,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetIdentity",
 			Handler:    _AgentService_SetIdentity_Handler,
+		},
+		{
+			MethodName: "Info",
+			Handler:    _AgentService_Info_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -11,6 +11,10 @@ stdout -- so a shell is interactive, and output piped elsewhere is not
 mangled by one. -t and -T force it on or off. Flags go before the name:
 everything after it is the command's.
 
+The command runs as root unless -u names one of the guest's users, as user,
+uid, user:group or uid:gid. It then gets the user's groups, and the user's
+home directory as HOME.
+
 If the instance is still booting, exec waits up to 30 seconds for its guest
 agent to answer.
 
@@ -26,6 +30,7 @@ $ dicer exec [flags] NAME [COMMAND [ARG...]]
 $ dicer exec web
 $ dicer exec web ls -la /srv
 $ dicer exec -e DEBUG=1 -w /srv web ./check.sh
+$ dicer exec -u postgres db psql
 $ dicer exec -T web cat /var/log/app.log > app.log
 ```
 
@@ -37,6 +42,7 @@ $ dicer exec -T web cat /var/log/app.log > app.log
 | `-T`, `--no-tty` | Do not allocate a pseudo-TTY. |
 | `--timeout duration` | Kill the command after this long, e.g. 30s (0: no limit). |
 | `-t`, `--tty` | Allocate a pseudo-TTY (default: when stdin and stdout are a terminal). |
+| `-u`, `--user string` | User to run as: user, uid, user:group or uid:gid (default: root). |
 | `-w`, `--workdir string` | Working directory inside the instance. |
 
 ## Global flags

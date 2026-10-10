@@ -70,6 +70,7 @@ func TestCommandRunsWithInputAndOutput(t *testing.T) {
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	cmd.Dir = "/srv"
 	cmd.Env = map[string]string{"DEBUG": "1"}
+	cmd.User = "app:staff"
 	cmd.Timeout = 1500 * time.Millisecond
 
 	if err := cmd.Run(t.Context()); err != nil {
@@ -86,6 +87,8 @@ func TestCommandRunsWithInputAndOutput(t *testing.T) {
 		t.Errorf("ran %q", start.GetCommand())
 	case start.GetCwd() != "/srv" || start.GetEnv()["DEBUG"] != "1":
 		t.Errorf("ran in %q with %v", start.GetCwd(), start.GetEnv())
+	case start.GetUser() != "app:staff":
+		t.Errorf("ran as %q, want app:staff", start.GetUser())
 	case start.GetTimeoutSeconds() != 2:
 		t.Errorf("a timeout of 1.5s was sent as %ds, want it rounded up to 2s", start.GetTimeoutSeconds())
 	}
