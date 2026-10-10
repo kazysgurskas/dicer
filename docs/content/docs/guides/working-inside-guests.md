@@ -100,9 +100,10 @@ $ dicer exec web kill -HUP 215
 | `RSS` | The guest memory it has resident. |
 
 The column names are also the fields of a `--format` template, such as
-`{{.PID}}` and `{{.CPUTime}}`, and the keys of `--format json`. For what the
-instance as a whole uses of the host, see
-[Instance stats](../monitoring#instance-stats).
+`{{.PID}}` and `{{.CPUTime}}`. `--format json` gives each process's record
+instead, with its sizes and times as numbers, such as
+`resident_memory_bytes`. For what the instance as a whole uses of the host,
+see [Instance stats](../monitoring#instance-stats).
 
 ## Copy files
 

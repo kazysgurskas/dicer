@@ -78,8 +78,8 @@ func TestImagePruneRemovesUnusedImages(t *testing.T) {
 
 // imageView is a row of `dicer image show --format json`.
 type imageView struct {
-	Name   string `json:"Name"`
-	Digest string `json:"Digest"`
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
 }
 
 // imageDigest reads an image's manifest digest.

@@ -20,6 +20,8 @@ type printableProcess struct {
 	Processes []dicer.Process
 }
 
+func (p *printableProcess) Records() any { return p.Processes }
+
 func (p *printableProcess) Columns() []string {
 	return []string{"PID", "PPID", "User", "State", "Started", "CPUTime", "RSS", "Command"}
 }
@@ -58,8 +60,8 @@ func newInstanceTopCommand() *cobra.Command {
 			"the kernel's code for the process: R running, S sleeping, D waiting on I/O,\n" +
 			"Z zombie, T stopped. CPUTime is the CPU time used since the process started,\n" +
 			"and RSS the guest memory it has resident.\n\n" +
-			"The column names are also the fields of a --format template, and the keys of\n" +
-			"--format json.",
+			"The column names are also the fields of a --format template. --format json\n" +
+			"and yaml give each process's record instead, with times and sizes as numbers.",
 		Example: "  dicer top web\n" +
 			"  dicer top web --format '{{.PID}}\\t{{.Command}}'\n" +
 			"  dicer top web --format json",

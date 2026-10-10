@@ -143,9 +143,10 @@ host serves from its page cache. Writes are counted when the hypervisor
 makes them, before they reach the disk.
 
 NetIO and BlockIO are totals since the instance started. The column names
-are also the fields of a `--format` template and the keys of
-`--format json`. Name instances to watch only those, and use `--no-stream`
-to print the stats once, for scripts:
+are also the fields of a `--format` template. `--format json` gives each
+instance's record instead, with its counts as numbers, such as
+`cpu_percent` and `resident_memory_bytes`. Name instances to watch only
+those, and use `--no-stream` to print the stats once, for scripts:
 
 ```console
 $ dicer stats --no-stream --format json

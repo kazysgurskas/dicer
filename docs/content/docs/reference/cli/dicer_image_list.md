@@ -18,8 +18,8 @@ Also run as `dicer image ls`.
 
 | Flag | Description |
 |---|---|
-| `-c`, `--columns strings` | Columns to display, comma-separated and in any case (default: all). |
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `-c`, `--columns strings` | Columns of the table to display, comma-separated and in any case (default: all). |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 | `-q`, `--quiet` | Only display names, one a line. |
 
 ## Global flags

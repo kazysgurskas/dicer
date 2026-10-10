@@ -27,9 +27,9 @@ $ dicer ps --watch
 
 | Flag | Description |
 |---|---|
-| `-c`, `--columns strings` | Columns to display, comma-separated and in any case (default: all). |
+| `-c`, `--columns strings` | Columns of the table to display, comma-separated and in any case (default: all). |
 | `-f`, `--filter stringArray` | Show only instances that match, as KEY=VALUE (repeatable); keys are name, state, image, network, label. |
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 | `--interval duration` | How often `--watch` redraws. Default: `2s`. |
 | `-q`, `--quiet` | Only display names, one a line. |
 | `-w`, `--watch` | Keep the list on screen, redrawn as it changes, until Ctrl+C. |

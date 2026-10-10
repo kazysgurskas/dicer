@@ -6,9 +6,17 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 )
+
+// statsView is what the tests read of an instance's record in dicer stats
+// --format json.
+type statsView struct {
+	Name                string `json:"name"`
+	MemoryBytes         int64  `json:"memory_bytes"`
+	ResidentMemoryBytes int64  `json:"resident_memory_bytes"`
+	DiskWrittenBytes    int64  `json:"disk_written_bytes"`
+}
 
 // TestInstanceStatsFollowWhatTheGuestDoes makes a guest use CPU, disk and
 // network, and checks that what the host reads of its VMM
@@ -64,18 +72,15 @@ func TestInstanceStatsFollowWhatTheGuestDoes(t *testing.T) {
 	}
 
 	out := env.dicer(t, "stats", "--no-stream", "--format", "json", name)
-	stats := rows[map[string]string](t, out, "dicer stats")
-	if len(stats) != 1 || stats[0]["Name"] != name {
-		t.Fatalf("dicer stats %s = %v, want the one instance", name, stats)
+	stats := rows[statsView](t, out, "dicer stats")
+	if len(stats) != 1 || stats[0].Name != name {
+		t.Fatalf("dicer stats %s = %+v, want the one instance", name, stats)
 	}
-	if cpu := stats[0]["CPUPerc"]; !strings.HasSuffix(cpu, "%") {
-		t.Errorf("CPUPerc = %q, want a percentage", cpu)
+	if stats[0].MemoryBytes == 0 || stats[0].ResidentMemoryBytes == 0 {
+		t.Errorf("stats = %+v, want the guest's committed and resident memory", stats[0])
 	}
-	if memory := stats[0]["MemUsage"]; strings.HasPrefix(memory, "0 B") {
-		t.Errorf("MemUsage = %q, want the guest's resident memory", memory)
-	}
-	if block := stats[0]["BlockIO"]; block == "" || strings.HasSuffix(block, " / 0 B") {
-		t.Errorf("BlockIO = %q, want the 32MiB the guest wrote", block)
+	if stats[0].DiskWrittenBytes == 0 {
+		t.Error("disk written = 0 bytes, want the 32MiB the guest wrote counted")
 	}
 
 	env.dicer(t, "instance", "stop", name)

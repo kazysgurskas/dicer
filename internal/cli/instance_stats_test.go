@@ -69,9 +69,10 @@ func TestInstanceStatsRowsShowWhatIsUsedOfTheHost(t *testing.T) {
 	}
 }
 
-// TestStatsTemplatesAndJSONUseTheColumnNames checks that the column names
-// are a --format template's fields and JSON's keys.
-func TestStatsTemplatesAndJSONUseTheColumnNames(t *testing.T) {
+// TestStatsTemplatesUseTheColumnsAndJSONTheRecords checks that the column
+// names are a --format template's fields, and that JSON gives the records,
+// with their counts as numbers.
+func TestStatsTemplatesUseTheColumnsAndJSONTheRecords(t *testing.T) {
 	serveFakeDaemon(t, newFakeInstanceDaemon())
 
 	out, err := run(t, "stats", "--no-stream", "--format", "{{.Name}} {{.CPUPerc}} {{.MemPerc}}")
@@ -86,11 +87,12 @@ func TestStatsTemplatesAndJSONUseTheColumnNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stats --format json: %v\n%s", err, out)
 	}
-	var rows []map[string]string
-	if err := json.Unmarshal([]byte(out), &rows); err != nil {
-		t.Fatalf("output is not a JSON array: %v\n%s", err, out)
+	var records []dicer.InstanceStats
+	if err := json.Unmarshal([]byte(out), &records); err != nil {
+		t.Fatalf("output is not a JSON array of stats: %v\n%s", err, out)
 	}
-	if len(rows) != 2 || rows[1]["Name"] != "web" || rows[1]["NetIO"] != "1.5 KiB / 512 B" {
-		t.Errorf("JSON rows = %v, want web's NetIO under its column name", rows)
+	if len(records) != 2 || records[1].Name != "web" ||
+		records[1].NetworkReceiveBytes != 1536 || records[1].NetworkTransmitBytes != 512 {
+		t.Errorf("JSON records = %+v, want web's network counts in bytes", records)
 	}
 }

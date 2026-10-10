@@ -24,6 +24,27 @@ type namedRemote struct {
 	current bool
 }
 
+// remoteRecord is a remote as JSON and YAML show it, without its token.
+type remoteRecord struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+
+	// Auth is socket or token, or empty for neither.
+	Auth string `json:"auth,omitempty"`
+
+	Current bool `json:"current"`
+}
+
+func (p *printableRemote) Records() any {
+	records := make([]remoteRecord, 0, len(p.Remotes))
+	for _, r := range p.Remotes {
+		records = append(records, remoteRecord{
+			Name: r.name, Address: r.remote.Address, Auth: authSummary(r.remote), Current: r.current,
+		})
+	}
+	return records
+}
+
 func (p *printableRemote) Columns() []string {
 	return []string{"Name", "Address", "Auth", "Current"}
 }
@@ -38,7 +59,7 @@ func (p *printableRemote) Rows() []map[string]any {
 		rows = append(rows, map[string]any{
 			"Name":    r.name,
 			"Address": r.remote.Address,
-			"Auth":    authSummary(r.remote),
+			"Auth":    orDash(authSummary(r.remote)),
 			"Current": current,
 		})
 	}
@@ -46,7 +67,7 @@ func (p *printableRemote) Rows() []map[string]any {
 }
 
 // authSummary says in a word how a remote is let in: by the socket's file
-// permissions, or with a token.
+// permissions, or with a token. It is empty for neither.
 func authSummary(r remote.Remote) string {
 	switch {
 	case r.IsSocket():
@@ -54,7 +75,7 @@ func authSummary(r remote.Remote) string {
 	case r.Token != "":
 		return "token"
 	default:
-		return "-"
+		return ""
 	}
 }
 

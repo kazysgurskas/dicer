@@ -143,6 +143,8 @@ type printableService struct {
 	Instances []dicer.Instance
 }
 
+func (p *printableService) Records() any { return p.Instances }
+
 func (p *printableService) Columns() []string {
 	return []string{"Name", "Service", "Image", "State", "Status", "IP", "Ports"}
 }

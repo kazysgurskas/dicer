@@ -23,6 +23,8 @@ type printableInstance struct {
 	Instances []dicer.Instance
 }
 
+func (p *printableInstance) Records() any { return p.Instances }
+
 func (p *printableInstance) Columns() []string {
 	return []string{
 		"Name", "Image", "State", "Status", "VCPU", "Memory", "Disk", "Network", "IP", "Ports", "Created",
@@ -500,8 +502,8 @@ func newInstanceShowCommand() *cobra.Command {
 }
 
 // renderInstances shows instances in detail: as inspect lays them out for a
-// table, as full records for JSON or YAML, and as 'dicer ps' rows for
-// columns or a template.
+// table, and otherwise as 'dicer ps' does: full records for JSON or YAML,
+// and rows for columns or a template.
 func renderInstances(cmd *cobra.Command, client *dicer.Client, instances []dicer.Instance) error {
 	format, _ := cmd.Flags().GetString("format")
 	columns, _ := cmd.Flags().GetStringSlice("columns")
@@ -518,8 +520,6 @@ func renderInstances(cmd *cobra.Command, client *dicer.Client, instances []dicer
 		}
 
 		return writeInstanceDetails(cmd.OutOrStdout(), instances, recent)
-	case len(columns) == 0 && printer.IsStructured(format):
-		return writeRecords(cmd.OutOrStdout(), format, instances)
 	default:
 		return render(cmd, &printableInstance{Instances: instances})
 	}

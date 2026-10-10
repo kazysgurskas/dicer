@@ -246,10 +246,9 @@ func TestForkOfRunningInstanceKeepsNoSnapshot(t *testing.T) {
 
 // snapshotView is a row of `dicer snapshot list --format json`.
 type snapshotView struct {
-	Name     string `json:"Name"`
-	Kind     string `json:"Kind"`
-	Instance string `json:"Instance"`
-	Size     string `json:"Size"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Instance string `json:"instance_name"`
 }
 
 // snapshot shows one snapshot.

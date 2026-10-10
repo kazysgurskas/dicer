@@ -19,6 +19,8 @@ type printableVolume struct {
 	Volumes []dicer.Volume
 }
 
+func (p *printableVolume) Records() any { return p.Volumes }
+
 func (p *printableVolume) Columns() []string {
 	return []string{"Name", "Size", "Created"}
 }

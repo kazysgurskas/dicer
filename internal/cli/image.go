@@ -19,6 +19,8 @@ type printableImage struct {
 	Images []dicer.Image
 }
 
+func (p *printableImage) Records() any { return p.Images }
+
 func (p *printableImage) Columns() []string {
 	return []string{"Name", "Digest", "Size", "Created", "Last used"}
 }

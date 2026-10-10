@@ -19,6 +19,8 @@ type printableNetwork struct {
 	Networks []dicer.Network
 }
 
+func (p *printableNetwork) Records() any { return p.Networks }
+
 func (p *printableNetwork) Columns() []string {
 	return []string{"Name", "Subnet", "Gateway", "Bridge", "Nameservers", "MTU", "Isolated", "Internal", "Usage", "Created"}
 }
@@ -192,6 +194,8 @@ func newNetworkDeleteCommand() *cobra.Command {
 type printableNetworkAllocation struct {
 	Allocations []dicer.NetworkAllocation
 }
+
+func (p *printableNetworkAllocation) Records() any { return p.Allocations }
 
 func (p *printableNetworkAllocation) Columns() []string {
 	return []string{"Instance", "IP", "MAC", "TAP"}

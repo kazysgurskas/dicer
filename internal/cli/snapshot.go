@@ -18,6 +18,8 @@ type printableSnapshot struct {
 	Snapshots []dicer.Snapshot
 }
 
+func (p *printableSnapshot) Records() any { return p.Snapshots }
+
 func (p *printableSnapshot) Columns() []string {
 	return []string{"Name", "Kind", "Instance", "Hypervisor", "Memory", "Size", "Created"}
 }

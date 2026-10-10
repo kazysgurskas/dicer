@@ -5,7 +5,7 @@ package printer
 
 import (
 	"bytes"
-	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -24,6 +24,21 @@ func (fakeRows) Rows() []map[string]any {
 	}
 }
 
+func (fakeRows) Records() any {
+	return []fakeRecord{
+		{Name: "web", State: "running", IP: "10.0.0.5", MemoryBytes: 1 << 30},
+		{Name: "db", State: "stopped", MemoryBytes: 1 << 30},
+	}
+}
+
+// fakeRecord is what a row of fakeRows is made from.
+type fakeRecord struct {
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	IP          string `json:"ip,omitempty"`
+	MemoryBytes int64  `json:"memory_bytes"`
+}
+
 func TestPrintTable(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Print(fakeRows{}, &buf, Options{Format: "table"}); err != nil {
@@ -38,39 +53,51 @@ func TestPrintTable(t *testing.T) {
 	}
 }
 
-func TestPrintJSON(t *testing.T) {
-	var buf bytes.Buffer
-	if err := Print(fakeRows{}, &buf, Options{Format: "json"}); err != nil {
-		t.Fatalf("Print: %v", err)
-	}
+// TestPrintWritesRecordsAsJSONAndYAML checks that JSON and YAML show the
+// records rows are made from, with their raw values and JSON names, and
+// whole numbers whole.
+func TestPrintWritesRecordsAsJSONAndYAML(t *testing.T) {
+	for _, format := range []string{"json", "yaml"} {
+		t.Run(format, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := Print(fakeRows{}, &buf, Options{Format: format}); err != nil {
+				t.Fatalf("Print: %v", err)
+			}
 
-	var rows []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, buf.String())
+			var records []map[string]any
+			if err := yaml.Unmarshal(buf.Bytes(), &records); err != nil {
+				t.Fatalf("output is not valid %s: %v\n%s", format, err, buf.String())
+			}
+			if len(records) != 2 || records[0]["name"] != "web" || records[0]["memory_bytes"] != 1<<30 {
+				t.Errorf("records = %v, want the two records, as their JSON tags name them", records)
+			}
+			if _, ok := records[1]["ip"]; ok {
+				t.Errorf("records[1] = %v, want its empty IP left out", records[1])
+			}
+			if strings.Contains(buf.String(), "e+09") {
+				t.Errorf("output writes a whole number in floating point:\n%s", buf.String())
+			}
+		})
 	}
-	if len(rows) != 2 {
-		t.Fatalf("got %d rows, want 2", len(rows))
-	}
-	if rows[0]["Name"] != "web" {
-		t.Errorf("first row Name = %v, want web", rows[0]["Name"])
+}
+
+// TestPrintRefusesColumnsOfRecords checks that columns, which are a
+// table's, cannot be picked from whole records.
+func TestPrintRefusesColumnsOfRecords(t *testing.T) {
+	err := Print(fakeRows{}, &bytes.Buffer{}, Options{Format: "json", Columns: []string{"Name"}})
+	if !errors.Is(err, ErrColumnsOfRecords) {
+		t.Errorf("Print = %v, want ErrColumnsOfRecords", err)
 	}
 }
 
 func TestPrintShowsOnlySelectedColumns(t *testing.T) {
 	var buf bytes.Buffer
-	if err := Print(fakeRows{}, &buf, Options{Format: "json", Columns: []string{"Name"}}); err != nil {
+	if err := Print(fakeRows{}, &buf, Options{Format: "table", Columns: []string{"Name"}}); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
-	var rows []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		t.Fatalf("output is not valid JSON: %v", err)
-	}
-	if _, ok := rows[0]["State"]; ok {
-		t.Errorf("State should have been filtered out: %v", rows[0])
-	}
-	if rows[0]["Name"] != "web" {
-		t.Errorf("Name column missing: %v", rows[0])
+	if out := buf.String(); !strings.Contains(out, "web") || strings.Contains(out, "STATE") {
+		t.Errorf("table = %q, want the Name column alone", out)
 	}
 }
 
@@ -104,24 +131,6 @@ func TestPrintAcceptsFormatAliases(t *testing.T) {
 	}
 }
 
-func TestPrintYAML(t *testing.T) {
-	var buf bytes.Buffer
-	if err := Print(fakeRows{}, &buf, Options{Format: "yaml", Columns: []string{"Name", "IP"}}); err != nil {
-		t.Fatalf("Print: %v", err)
-	}
-
-	var rows []map[string]any
-	if err := yaml.Unmarshal(buf.Bytes(), &rows); err != nil {
-		t.Fatalf("output is not valid YAML: %v\n%s", err, buf.String())
-	}
-	if len(rows) != 2 || rows[1]["Name"] != "db" || rows[1]["IP"] != "-" {
-		t.Errorf("rows = %v", rows)
-	}
-	if _, ok := rows[0]["State"]; ok {
-		t.Errorf("State should have been filtered out: %v", rows[0])
-	}
-}
-
 func TestPrintTemplateRunsOncePerRow(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Print(fakeRows{}, &buf, Options{Format: "{{.Name}}={{.State | lower}}"}); err != nil {
@@ -142,17 +151,14 @@ func TestPrintRejectsMalformedTemplate(t *testing.T) {
 
 func TestPrintMatchesColumnsIgnoringCase(t *testing.T) {
 	var buf bytes.Buffer
-	if err := Print(fakeRows{}, &buf, Options{Format: "json", Columns: []string{"name", "ip"}}); err != nil {
+	if err := Print(fakeRows{}, &buf, Options{Format: "table", Columns: []string{"name", "ip"}}); err != nil {
 		t.Fatalf("Print: %v", err)
 	}
 
-	var rows []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &rows); err != nil {
-		t.Fatalf("output is not valid JSON: %v", err)
-	}
-	// The keys are spelled as the columns are, not as they were asked for.
-	if rows[0]["Name"] != "web" || rows[0]["IP"] != "10.0.0.5" {
-		t.Errorf("rows[0] = %v", rows[0])
+	// The headers are spelled as the columns are, not as they were asked
+	// for.
+	if out := buf.String(); !strings.HasPrefix(out, "NAME") || !strings.Contains(out, "10.0.0.5") {
+		t.Errorf("table = %q", out)
 	}
 }
 
@@ -186,6 +192,19 @@ func TestPrintStructuredWritesJSONOrYAML(t *testing.T) {
 	for _, format := range []string{"table", "{{.Name}}", "xml"} {
 		if err := PrintStructured(v, &bytes.Buffer{}, format); err == nil {
 			t.Errorf("PrintStructured(%s) succeeded, want only JSON and YAML", format)
+		}
+	}
+}
+
+func TestPrintStructuredWritesNoListAsAnEmptyOne(t *testing.T) {
+	var none []fakeRecord
+	for _, format := range []string{"json", "yaml"} {
+		var buf bytes.Buffer
+		if err := PrintStructured(none, &buf, format); err != nil {
+			t.Fatalf("PrintStructured(%s): %v", format, err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != "[]" {
+			t.Errorf("PrintStructured(%s) wrote %q, want []", format, got)
 		}
 	}
 }

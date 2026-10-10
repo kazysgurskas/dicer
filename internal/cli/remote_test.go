@@ -11,12 +11,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -160,6 +162,23 @@ func TestRemoteCreateAndCommandsUseIt(t *testing.T) {
 	}
 	if !strings.Contains(out, "token") {
 		t.Errorf("remote list = %q, want it to say prod is reached with a token", out)
+	}
+
+	// The records say how each remote is reached, and never with what.
+	out, err = run(t, "remote", "list", "--format", "json")
+	if err != nil {
+		t.Fatalf("remote list --format json: %v\n%s", err, out)
+	}
+	var records []remoteRecord
+	if err := json.Unmarshal([]byte(out), &records); err != nil {
+		t.Fatalf("not a JSON array of remotes: %v\n%s", err, out)
+	}
+	prod := slices.IndexFunc(records, func(r remoteRecord) bool { return r.Name == "prod" })
+	if prod < 0 || records[prod].Auth != "token" || !records[prod].Current || records[prod].Address != address {
+		t.Errorf("records = %+v, want prod, current, reached with a token", records)
+	}
+	if strings.Contains(out, value) {
+		t.Errorf("remote list --format json wrote the token:\n%s", out)
 	}
 }
 

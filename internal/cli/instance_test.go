@@ -327,21 +327,27 @@ func TestPsQuietAndFilters(t *testing.T) {
 	}
 }
 
-func TestPsYAMLAndColumns(t *testing.T) {
+// TestPsYAMLGivesTheRecords checks that YAML gives whole records, which
+// have no columns to pick.
+func TestPsYAMLGivesTheRecords(t *testing.T) {
 	serveFakeDaemon(t, newFakeInstanceDaemon(fakeInstances()...))
 
-	out, err := run(t, "ps", "--format", "yaml", "-c", "name,ip", "--filter", "name=web")
+	out, err := run(t, "ps", "--format", "yaml", "--filter", "name=web")
 	if err != nil {
 		t.Fatalf("ps: %v\n%s", err, out)
 	}
 
-	var rows []map[string]string
-	if err := yaml.Unmarshal([]byte(out), &rows); err != nil {
+	var records []map[string]any
+	if err := yaml.Unmarshal([]byte(out), &records); err != nil {
 		t.Fatalf("not YAML: %v\n%s", err, out)
 	}
-	if want := []map[string]string{{"Name": "web", "IP": "10.0.0.5"}}; len(rows) != 1 ||
-		rows[0]["Name"] != want[0]["Name"] || rows[0]["IP"] != want[0]["IP"] || len(rows[0]) != 2 {
-		t.Errorf("rows = %v, want %v", rows, want)
+	if len(records) != 1 || records[0]["name"] != "web" || records[0]["ip"] != "10.0.0.5" ||
+		records[0]["memory_bytes"] != 1<<30 {
+		t.Errorf("records = %v, want web's record, with its memory in bytes", records)
+	}
+
+	if out, err := run(t, "ps", "--format", "yaml", "-c", "name,ip"); err == nil {
+		t.Errorf("ps --format yaml -c succeeded, want columns refused for records:\n%s", out)
 	}
 }
 

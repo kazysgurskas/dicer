@@ -13,8 +13,8 @@ the kernel's code for the process: R running, S sleeping, D waiting on I/O,
 Z zombie, T stopped. CPUTime is the CPU time used since the process started,
 and RSS the guest memory it has resident.
 
-The column names are also the fields of a `--format` template, and the keys of
-`--format` json.
+The column names are also the fields of a `--format` template. `--format` json
+and yaml give each process's record instead, with times and sizes as numbers.
 
 ## Usage
 
@@ -34,8 +34,8 @@ $ dicer top web --format json
 
 | Flag | Description |
 |---|---|
-| `-c`, `--columns strings` | Columns to display, comma-separated and in any case (default: all). |
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `-c`, `--columns strings` | Columns of the table to display, comma-separated and in any case (default: all). |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 | `-q`, `--quiet` | Only display names, one a line. |
 
 ## Global flags

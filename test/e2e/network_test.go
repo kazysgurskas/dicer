@@ -163,9 +163,9 @@ func TestNetworkAddressIsReleasedOnDelete(t *testing.T) {
 
 // allocationView is a row of `dicer network allocation list --format json`.
 type allocationView struct {
-	Instance  string `json:"Instance"`
-	IP        string `json:"IP"`
-	TAPDevice string `json:"TAP"`
+	Instance  string `json:"instance_name"`
+	IP        string `json:"ip"`
+	TAPDevice string `json:"tap_device"`
 }
 
 // allocations lists the addresses handed out on a network.

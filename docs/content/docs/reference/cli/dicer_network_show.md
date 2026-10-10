@@ -18,7 +18,7 @@ Also run as `dicer network get`, `dicer network inspect`.
 
 | Flag | Description |
 |---|---|
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 
 ## Global flags
 

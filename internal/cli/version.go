@@ -73,7 +73,7 @@ func newVersionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().String("format", "table", "Output format: table, json or yaml")
-	_ = cmd.RegisterFlagCompletionFunc("format", completeFormats)
+	_ = cmd.RegisterFlagCompletionFunc("format", completeObjectFormats)
 
 	return cmd
 }

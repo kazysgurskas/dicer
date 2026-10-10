@@ -29,7 +29,7 @@ $ dicer inspect web --format '{{.IP}}'
 | Flag | Description |
 |---|---|
 | `-c`, `--columns strings` | Show a table of just these columns instead, comma-separated and in any case. |
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 
 ## Global flags
 

@@ -59,16 +59,7 @@ func newInfoCommand() *cobra.Command {
 				return err
 			}
 			if format, _ := cmd.Flags().GetString("format"); !printer.IsTable(format) {
-				hostRecord, err := record(host)
-				if err != nil {
-					return err
-				}
-				resourcesRecord, err := record(resources)
-				if err != nil {
-					return err
-				}
-				return writeStructured(cmd.OutOrStdout(), format,
-					map[string]any{"host": hostRecord, "resources": resourcesRecord})
+				return writeStructured(cmd.OutOrStdout(), format, map[string]any{"host": host, "resources": resources})
 			}
 			instances, err := client.Instances.List(cmd.Context())
 			if err != nil {
@@ -80,7 +71,7 @@ func newInfoCommand() *cobra.Command {
 	}
 
 	cmd.Flags().String("format", "table", "Output format: table, json or yaml")
-	_ = cmd.RegisterFlagCompletionFunc("format", completeFormats)
+	_ = cmd.RegisterFlagCompletionFunc("format", completeObjectFormats)
 
 	return cmd
 }

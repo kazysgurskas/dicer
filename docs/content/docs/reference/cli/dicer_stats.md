@@ -18,8 +18,8 @@ files, such as the serial console log and a snapshot's memory. Reads served
 from the host's page cache are not counted. Both are totals since the
 instance started.
 
-The column names are also the fields of a `--format` template, and the keys of
-`--format` json.
+The column names are also the fields of a `--format` template. `--format` json
+and yaml give each instance's record instead, with the counts as numbers.
 
 The view is redrawn every second until Ctrl+C. With `--no-stream` it is shown
 once, a second after asking, since CPU use is measured over that second.
@@ -43,8 +43,8 @@ $ dicer stats --no-stream --format json
 
 | Flag | Description |
 |---|---|
-| `-c`, `--columns strings` | Columns to display, comma-separated and in any case (default: all). |
-| `--format string` | Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\t{{.State}}'. Default: `table`. |
+| `-c`, `--columns strings` | Columns of the table to display, comma-separated and in any case (default: all). |
+| `--format string` | Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'. Default: `table`. |
 | `--no-stream` | Show the stats once rather than live. |
 | `-q`, `--quiet` | Only display names, one a line. |
 

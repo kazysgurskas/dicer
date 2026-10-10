@@ -17,6 +17,8 @@ type printableKernel struct {
 	Kernels []dicer.Kernel
 }
 
+func (p *printableKernel) Records() any { return p.Kernels }
+
 func (p *printableKernel) Columns() []string {
 	return []string{"Name", "Arch", "SHA256", "Created"}
 }

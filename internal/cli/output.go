@@ -5,7 +5,6 @@ package cli
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +19,7 @@ import (
 )
 
 // formatUsage describes --format.
-const formatUsage = "Output format: table, json, yaml, or a Go template, e.g. '{{.Name}}\\t{{.State}}'"
+const formatUsage = "Output format: table, json, yaml, or a Go template of the table's columns, e.g. '{{.Name}}'"
 
 // addOutputFlags adds --format, and --columns and --quiet when the output is
 // a table of several rows.
@@ -30,20 +29,30 @@ func addOutputFlags(cmd *cobra.Command, columns bool) {
 
 	if columns {
 		cmd.Flags().StringSliceP("columns", "c", nil,
-			"Columns to display, comma-separated and in any case (default: all)")
+			"Columns of the table to display, comma-separated and in any case (default: all)")
 		cmd.Flags().BoolP("quiet", "q", false, "Only display names, one a line")
 		cmd.MarkFlagsMutuallyExclusive("quiet", "columns")
 		cmd.MarkFlagsMutuallyExclusive("quiet", "format")
 	}
 }
 
-// completeFormats completes --format with the named formats. A template is
-// the user's to write.
+// completeFormats completes --format with the named formats of a command
+// that prints a list of records. A template is the user's to write.
 func completeFormats(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return []string{
 		"table\tAligned columns for reading",
-		"json\tA JSON array",
-		"yaml\tA YAML sequence",
+		"json\tThe records, as a JSON array",
+		"yaml\tThe records, as a YAML sequence",
+	}, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeObjectFormats completes --format for a command that prints one
+// record.
+func completeObjectFormats(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return []string{
+		"table\tLaid out for reading",
+		"json\tA JSON object",
+		"yaml\tA YAML mapping",
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -151,36 +160,6 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
-}
-
-// writeRecords writes values as a JSON or YAML array, each as record
-// renders it.
-func writeRecords[T any](w io.Writer, format string, values []T) error {
-	records := make([]any, 0, len(values))
-	for _, v := range values {
-		r, err := record(v)
-		if err != nil {
-			return err
-		}
-		records = append(records, r)
-	}
-
-	return writeStructured(w, format, records)
-}
-
-// record returns one of the client's values as JSON and YAML output show
-// it: its fields as its JSON names them, which YAML takes too.
-func record(v any) (any, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-
-	var r any
-	if err := json.Unmarshal(data, &r); err != nil {
-		return nil, err
-	}
-	return r, nil
 }
 
 // writeStructured writes v as JSON or YAML, as format asks, for a command

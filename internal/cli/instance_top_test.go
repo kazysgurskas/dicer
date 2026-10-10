@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/konradasb/dicer"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
@@ -73,9 +74,10 @@ func TestProcessRowsShowTheGuestsProcesses(t *testing.T) {
 	}
 }
 
-// TestTopTemplatesAndJSONUseTheColumnNames checks that the column names are
-// a --format template's fields and JSON's keys.
-func TestTopTemplatesAndJSONUseTheColumnNames(t *testing.T) {
+// TestTopTemplatesUseTheColumnsAndJSONTheRecords checks that the column
+// names are a --format template's fields, and that JSON gives the records,
+// with their sizes as numbers.
+func TestTopTemplatesUseTheColumnsAndJSONTheRecords(t *testing.T) {
 	serveFakeDaemon(t, newFakeInstanceDaemon())
 
 	out, err := run(t, "top", "web", "--format", "{{.PID}} {{.Command}}")
@@ -90,11 +92,11 @@ func TestTopTemplatesAndJSONUseTheColumnNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("top --format json: %v\n%s", err, out)
 	}
-	var rows []map[string]string
-	if err := json.Unmarshal([]byte(out), &rows); err != nil {
-		t.Fatalf("output is not a JSON array: %v\n%s", err, out)
+	var records []dicer.Process
+	if err := json.Unmarshal([]byte(out), &records); err != nil {
+		t.Fatalf("output is not a JSON array of processes: %v\n%s", err, out)
 	}
-	if len(rows) != 3 || rows[1]["User"] != "www-data" || rows[1]["RSS"] != "22 MiB" {
-		t.Errorf("JSON rows = %v, want nginx's User and RSS under their column names", rows)
+	if len(records) != 3 || records[1].User != "www-data" || records[1].ResidentMemoryBytes != 22<<20 {
+		t.Errorf("JSON records = %+v, want nginx's user and its resident memory in bytes", records)
 	}
 }

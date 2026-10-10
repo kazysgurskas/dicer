@@ -6,9 +6,12 @@
 package printer
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -32,14 +35,17 @@ const (
 
 // Printable is implemented by anything a command can print. Columns names
 // the columns in display order; Rows returns one map per row, keyed by
-// column.
+// column, for people: a table and a template show them. Records returns the
+// list of records the rows are made from, for programs: JSON and YAML show
+// them, with their raw values, as their JSON tags name them.
 //
 // A Printable with more columns than a table shows by default also has a
 // method DefaultColumns() []string. Asked for no columns in particular, a
-// table shows those; JSON, YAML and templates still have every column.
+// table shows those; a template still has every column.
 type Printable interface {
 	Columns() []string
 	Rows() []map[string]any
+	Records() any
 }
 
 // Options are how Print renders.
@@ -47,16 +53,20 @@ type Options struct {
 	// Format is table, json, yaml, or a Go template.
 	Format string
 
-	// Columns are those to show. Empty means the default ones for a table,
-	// and all of them otherwise.
+	// Columns are those a table shows. Empty means the default ones. JSON
+	// and YAML show whole records, so they take none.
 	Columns []string
 
 	// AllColumns shows every column in a table, not just the default ones.
 	AllColumns bool
 }
 
-// Print writes item to out as opts say: a table, JSON, YAML, or a Go
-// template such as '{{.Name}} {{.State}}' applied to each row.
+// ErrColumnsOfRecords is the error for columns picked from JSON or YAML,
+// which show whole records.
+var ErrColumnsOfRecords = errors.New("columns are picked for a table: json and yaml show whole records")
+
+// Print writes item to out as opts say: a table, JSON or YAML of its
+// records, or a Go template such as '{{.Name}}' applied to each row.
 func Print(item Printable, out io.Writer, opts Options) error {
 	f, err := parseFormat(opts.Format)
 	if err != nil {
@@ -64,10 +74,11 @@ func Print(item Printable, out io.Writer, opts Options) error {
 	}
 
 	switch f {
-	case jsonFormat:
-		return printJSON(item, out, opts.Columns)
-	case yamlFormat:
-		return printYAML(item, out, opts.Columns)
+	case jsonFormat, yamlFormat:
+		if len(opts.Columns) > 0 && opts.Columns[0] != "" {
+			return ErrColumnsOfRecords
+		}
+		return PrintStructured(item.Records(), out, opts.Format)
 	case templateFormat:
 		return printTemplate(item, out, opts.Format)
 	case tableFormat:
@@ -82,23 +93,72 @@ func Print(item Printable, out io.Writer, opts Options) error {
 	}
 }
 
-// PrintStructured writes v to out as JSON or YAML, as the format s names.
-// It is for what is not a Printable: a whole record rather than rows. Any
-// other format is an error.
+// PrintStructured writes v to out as JSON or YAML, as the format s names,
+// with v's fields named as their JSON tags name them in both. A nil list is
+// written as an empty one. Any other format is an error.
 func PrintStructured(v any, out io.Writer, s string) error {
 	f, err := parseFormat(s)
 	if err != nil {
 		return err
 	}
 
+	if value := reflect.ValueOf(v); value.Kind() == reflect.Slice && value.IsNil() {
+		v = []any{}
+	}
+
 	switch f {
 	case jsonFormat:
 		return encodeJSON(out, v)
 	case yamlFormat:
-		return encodeYAML(out, v)
+		plain, err := plainValue(v)
+		if err != nil {
+			return err
+		}
+		return encodeYAML(out, plain)
 	default:
 		return fmt.Errorf("unsupported format %q: want json or yaml", s)
 	}
+}
+
+// plainValue returns v as maps, lists and scalars, its fields named as their
+// JSON tags name them, which is how YAML is to show it too. Whole numbers
+// stay whole, rather than becoming floating point.
+func plainValue(v any) (any, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("encode JSON: %w", err)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var plain any
+	if err := decoder.Decode(&plain); err != nil {
+		return nil, fmt.Errorf("decode JSON: %w", err)
+	}
+
+	return numbersOf(plain), nil
+}
+
+// numbersOf replaces the json.Numbers in v with int64s, or float64s for
+// those that are not whole.
+func numbersOf(v any) any {
+	switch v := v.(type) {
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return n
+		}
+		f, _ := v.Float64()
+		return f
+	case map[string]any:
+		for k, e := range v {
+			v[k] = numbersOf(e)
+		}
+	case []any:
+		for i, e := range v {
+			v[i] = numbersOf(e)
+		}
+	}
+	return v
 }
 
 // IsStructured reports whether the format s names is machine-readable --
@@ -227,38 +287,6 @@ func cell(v any) string {
 	}
 }
 
-// selectedRows returns the rows of item holding only the named columns, as
-// selectedColumns picks them.
-func selectedRows(item Printable, names []string) ([]map[string]any, error) {
-	columns, err := selectedColumns(item, names)
-	if err != nil {
-		return nil, err
-	}
-
-	rows := item.Rows()
-	selected := make([]map[string]any, 0, len(rows))
-	for _, values := range rows {
-		row := make(map[string]any, len(columns))
-		for _, column := range columns {
-			row[column] = values[column]
-		}
-		selected = append(selected, row)
-	}
-
-	return selected, nil
-}
-
-// printYAML prints the named columns of item as a YAML sequence of
-// mappings.
-func printYAML(item Printable, out io.Writer, names []string) error {
-	rows, err := selectedRows(item, names)
-	if err != nil {
-		return err
-	}
-
-	return encodeYAML(out, rows)
-}
-
 // encodeYAML writes v to out as YAML, indented by two spaces.
 func encodeYAML(out io.Writer, v any) error {
 	encoder := yaml.NewEncoder(out)
@@ -314,17 +342,6 @@ var templateFuncs = template.FuncMap{
 		}
 		return strings.ToUpper(s[:1]) + s[1:]
 	},
-}
-
-// printJSON prints the named columns of item as an indented JSON array of
-// objects.
-func printJSON(item Printable, out io.Writer, names []string) error {
-	rows, err := selectedRows(item, names)
-	if err != nil {
-		return err
-	}
-
-	return encodeJSON(out, rows)
 }
 
 // encodeJSON writes v to out as JSON, indented by two spaces.

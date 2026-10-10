@@ -19,8 +19,10 @@ type printableToken struct {
 	Tokens []dicer.Token
 }
 
+func (p *printableToken) Records() any { return p.Tokens }
+
 func (p *printableToken) Columns() []string {
-	return []string{"Name", "Scopes", "Created", "Last Used"}
+	return []string{"Name", "Scopes", "Created", "Last used"}
 }
 
 func (p *printableToken) Rows() []map[string]any {
@@ -30,7 +32,7 @@ func (p *printableToken) Rows() []map[string]any {
 			"Name":      t.Name,
 			"Scopes":    scopeList(t.Scopes),
 			"Created":   age(t.CreateTime),
-			"Last Used": age(t.LastUseTime),
+			"Last used": age(t.LastUseTime),
 		})
 	}
 	return rows
@@ -116,7 +118,7 @@ func newTokenCreateCommand() *cobra.Command {
 	cmd.Flags().StringSlice("scopes", nil, "What the token allows, comma-separated (default: * for everything)")
 	cmd.Flags().Bool("secret-stdin", false, "Read the token's secret from standard input")
 	cmd.Flags().String("format", "table", "Output format: table for the token alone, json or yaml")
-	_ = cmd.RegisterFlagCompletionFunc("format", completeFormats)
+	_ = cmd.RegisterFlagCompletionFunc("format", completeObjectFormats)
 
 	return cmd
 }
@@ -184,7 +186,7 @@ func newTokenRotateCommand() *cobra.Command {
 
 	cmd.Flags().Bool("secret-stdin", false, "Read the token's new secret from standard input")
 	cmd.Flags().String("format", "table", "Output format: table for the token alone, json or yaml")
-	_ = cmd.RegisterFlagCompletionFunc("format", completeFormats)
+	_ = cmd.RegisterFlagCompletionFunc("format", completeObjectFormats)
 
 	return cmd
 }
@@ -220,11 +222,7 @@ func newTokenDeleteCommand() *cobra.Command {
 // script to capture, and on standard error the command that uses it.
 func writeIssuedToken(cmd *cobra.Command, client *dicer.Client, issued dicer.IssuedToken, done string) error {
 	if format, _ := cmd.Flags().GetString("format"); !printer.IsTable(format) {
-		r, err := record(issued)
-		if err != nil {
-			return err
-		}
-		return writeStructured(cmd.OutOrStdout(), format, r)
+		return writeStructured(cmd.OutOrStdout(), format, issued)
 	}
 
 	if _, err := fmt.Fprintln(cmd.OutOrStdout(), issued.Value); err != nil {

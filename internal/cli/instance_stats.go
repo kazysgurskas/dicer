@@ -22,6 +22,8 @@ type printableInstanceStats struct {
 	Instances []dicer.InstanceStats
 }
 
+func (p *printableInstanceStats) Records() any { return p.Instances }
+
 func (p *printableInstanceStats) Columns() []string {
 	return []string{"Name", "CPUPerc", "MemUsage", "MemPerc", "NetIO", "BlockIO"}
 }
@@ -61,8 +63,8 @@ func newInstanceStatsCommand() *cobra.Command {
 			"files, such as the serial console log and a snapshot's memory. Reads served\n" +
 			"from the host's page cache are not counted. Both are totals since the\n" +
 			"instance started.\n\n" +
-			"The column names are also the fields of a --format template, and the keys of\n" +
-			"--format json.\n\n" +
+			"The column names are also the fields of a --format template. --format json\n" +
+			"and yaml give each instance's record instead, with the counts as numbers.\n\n" +
 			"The view is redrawn every second until Ctrl+C. With --no-stream it is shown\n" +
 			"once, a second after asking, since CPU use is measured over that second.",
 		Example: "  dicer stats\n" +
