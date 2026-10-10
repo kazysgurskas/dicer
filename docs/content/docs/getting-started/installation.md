@@ -39,7 +39,7 @@ and [Tuning a host](../../guides/tuning-a-host) first: the filesystem under
 
 **To build from source**
 
-- Go 1.25.5 or later, `git`, `make` and `curl`.
+- Go 1.27.2 or later, `git`, `make` and `curl`.
 
 Distributions often carry an older Go, so install it from
 [go.dev/dl](https://go.dev/dl/). Install everything else, the host's tools
