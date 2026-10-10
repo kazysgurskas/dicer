@@ -185,11 +185,6 @@ func (m *Manager) resumeStandby(ctx context.Context, instance Spec, wokenByPort 
 		m.record(instance, event.ActionDied, "Failed to resume instance from standby: "+err.Error(), nil)
 		return err
 	}
-	// The VMM has what it reads of the frozen guest open, which outlives
-	// its name.
-	if err := os.RemoveAll(m.standbyDir(instance)); err != nil {
-		m.logger.WarnContext(ctx, "cannot remove a resumed instance's standby", "instance", instance.Name, "error", err)
-	}
 
 	allocation, _ := m.allocationOf(instance)
 	attrs := map[string]string{"ip": allocation.IP}

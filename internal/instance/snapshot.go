@@ -617,6 +617,14 @@ func (m *Manager) restore(
 	if err := hv.ResumeVM(ctx); err != nil {
 		return nil, nil, fmt.Errorf("resume restored instance: %w", err)
 	}
+	// A guest resumed from standby runs on its own disk, so what was frozen
+	// no longer matches it and must not be resumed again, even if the rest
+	// fails. The VMM keeps open what it still reads, so the files can go.
+	if frozen.overlay == "" {
+		if err := os.RemoveAll(frozen.dir); err != nil {
+			m.logger.WarnContext(ctx, "cannot remove a resumed instance's standby", "instance", instance.Name, "error", err)
+		}
+	}
 
 	// The guest's clock stood still in the snapshot. One whose agent is too
 	// old to set it is left behind, which is no reason to fail.
