@@ -35,6 +35,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -147,15 +148,8 @@ type server struct {
 func listen(
 	ctx context.Context, addr string, nw servedNetwork, resolver Resolver, metrics metrics, logger *slog.Logger,
 ) (*server, error) {
-	var lc net.ListenConfig
-	udp, err := lc.ListenPacket(ctx, "udp4", addr)
+	udp, tcp, err := listenOnPort(ctx, addr)
 	if err != nil {
-		return nil, err
-	}
-	// On the port UDP got, which is addr's unless it asked for any.
-	tcp, err := lc.Listen(ctx, "tcp4", udp.LocalAddr().String())
-	if err != nil {
-		_ = udp.Close()
 		return nil, err
 	}
 
@@ -176,6 +170,37 @@ func listen(
 	s.wg.Go(func() { s.serveUDP(serverCtx) })
 	s.wg.Go(func() { s.serveTCP(serverCtx) })
 	return s, nil
+}
+
+// maxPortAttempts is how many ports are tried in search of one free for
+// both UDP and TCP.
+const maxPortAttempts = 10
+
+// listenOnPort listens for UDP and TCP on the same port of addr. If addr
+// asks for any port, it takes the one UDP gets. UDP and TCP have separate
+// ports, so that port may already be taken for TCP, for example by the
+// local end of a connection. It then tries another.
+func listenOnPort(ctx context.Context, addr string) (net.PacketConn, net.Listener, error) {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var lc net.ListenConfig
+	for attempt := 1; ; attempt++ {
+		udp, err := lc.ListenPacket(ctx, "udp4", addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		tcp, err := lc.Listen(ctx, "tcp4", udp.LocalAddr().String())
+		if err == nil {
+			return udp, tcp, nil
+		}
+		_ = udp.Close()
+		if port != "0" || !errors.Is(err, syscall.EADDRINUSE) || attempt == maxPortAttempts {
+			return nil, nil, err
+		}
+	}
 }
 
 // addr is the UDP address the server listens on.

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -99,11 +100,7 @@ func newUpstream(t *testing.T) *upstream {
 			[]dnsmessage.Resource{aRecord(q.Name, netip.MustParseAddr("192.0.2.99"))})
 	}
 
-	udp, err := (&net.ListenConfig{}).ListenPacket(t.Context(), "udp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tcp, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp4", udp.LocalAddr().String())
+	udp, tcp, err := listenOnPort(t.Context(), "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,30 +591,33 @@ func TestServerRecordsHowItAnswered(t *testing.T) {
 }
 
 func TestServersServeAndStop(t *testing.T) {
-	// A free port, for the servers to listen on at 127.0.0.1.
-	probe, err := (&net.ListenConfig{}).ListenPacket(t.Context(), "udp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	probeAddr, ok := probe.LocalAddr().(*net.UDPAddr)
-	if !ok {
-		t.Fatal("a UDP socket's address is not a UDP address")
-	}
-	port := probeAddr.Port
-	_ = probe.Close()
-
-	servers := NewServers(Config{
-		Resolver:           fakeResolver{"db": "127.0.0.5"},
-		DefaultNameservers: []string{"192.0.2.1"},
-		Port:               port,
-		Logger:             slog.New(slog.DiscardHandler),
-	})
-	t.Cleanup(servers.Close)
-
 	nw := network.Network{Name: "shop", Subnet: "127.0.0.0/8", Gateway: "127.0.0.1"}
-	if err := servers.Serve(t.Context(), nw); err != nil {
-		t.Fatal(err)
+
+	// The servers listen at 127.0.0.1 on a port that was free for UDP and
+	// TCP a moment before. Something else can take it in between, and the
+	// test then tries another.
+	var (
+		servers *Servers
+		port    int
+	)
+	for attempt := 1; ; attempt++ {
+		port = freePort(t)
+		servers = NewServers(Config{
+			Resolver:           fakeResolver{"db": "127.0.0.5"},
+			DefaultNameservers: []string{"192.0.2.1"},
+			Port:               port,
+			Logger:             slog.New(slog.DiscardHandler),
+		})
+		err := servers.Serve(t.Context(), nw)
+		if err == nil {
+			break
+		}
+		servers.Close()
+		if !errors.Is(err, syscall.EADDRINUSE) || attempt == maxPortAttempts {
+			t.Fatal(err)
+		}
 	}
+	t.Cleanup(servers.Close)
 	// Serving again as it is changes nothing.
 	first := servers.servers["shop"]
 	if err := servers.Serve(t.Context(), nw); err != nil {
@@ -658,4 +658,22 @@ func TestServersServeAndStop(t *testing.T) {
 	}); err == nil {
 		t.Error("serving on an address the host does not have succeeded")
 	}
+}
+
+// freePort returns a port of 127.0.0.1 that was free for both UDP and TCP
+// when it checked. Something else may take it afterwards.
+func freePort(t *testing.T) int {
+	t.Helper()
+
+	udp, tcp, err := listenOnPort(t.Context(), "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, ok := udp.LocalAddr().(*net.UDPAddr)
+	_ = tcp.Close()
+	_ = udp.Close()
+	if !ok {
+		t.Fatal("a UDP socket's address is not a UDP address")
+	}
+	return addr.Port
 }
