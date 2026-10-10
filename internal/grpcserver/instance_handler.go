@@ -6,6 +6,7 @@ package grpcserver
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -360,6 +361,10 @@ func (h *instanceHandler) ListInstances(
 	}
 	for _, instance := range instances {
 		view, err := h.view(instance)
+		if errors.Is(err, errdefs.ErrNotFound) {
+			// Deleted since the list was taken.
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
