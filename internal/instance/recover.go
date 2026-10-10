@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/konradasb/dicer/internal/event"
+	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
 )
@@ -106,6 +107,9 @@ func (m *Manager) recoverInstance(ctx context.Context, instance Spec) recovery {
 	}
 
 	if vmm != nil && status.State.IsActive() {
+		if status.State == StateRunning {
+			m.resumeLeftPaused(ctx, instance, status)
+		}
 		m.supervise(ctx, instance, vmm, status)
 		m.logger.InfoContext(ctx, "adopted running instance",
 			"instance", instance.Name, "state", status.State, "pid", vmm.PID())
@@ -137,6 +141,37 @@ func (m *Manager) recoverInstance(ctx context.Context, instance Spec) recovery {
 	m.record(instance, event.ActionDied, "Instance failed: "+cause.Error(), nil)
 
 	return recoveryCleaned
+}
+
+// resumeLeftPaused resumes an adopted guest recorded as running whose
+// hypervisor has it paused. Only the daemon pauses a running guest of its
+// own accord, to snapshot, fork or put it on standby, so the last daemon
+// ended before it finished. Failures are logged: the guest is adopted as
+// it is either way.
+func (m *Manager) resumeLeftPaused(ctx context.Context, instance Spec, status Status) {
+	hv, err := m.connect(instance, status)
+	if err != nil {
+		m.logger.WarnContext(ctx, "cannot ask an adopted instance's hypervisor its state",
+			"instance", instance.Name, "error", err)
+		return
+	}
+	info, err := hv.VMInfo(ctx)
+	if err != nil {
+		m.logger.WarnContext(ctx, "cannot ask an adopted instance's hypervisor its state",
+			"instance", instance.Name, "error", err)
+		return
+	}
+	if info.State != hypervisor.VMStatePaused {
+		return
+	}
+
+	if err := hv.ResumeVM(ctx); err != nil {
+		m.logger.WarnContext(ctx, "cannot resume an adopted instance the last daemon left paused",
+			"instance", instance.Name, "error", err)
+		return
+	}
+	m.logger.WarnContext(ctx, "resumed an adopted instance the last daemon left paused",
+		"instance", instance.Name)
 }
 
 // restoreAdoptedNetworks sets up again the networks whose instances

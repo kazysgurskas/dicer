@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
 )
@@ -74,6 +75,43 @@ func TestRecoverAdoptsLiveInstance(t *testing.T) {
 	}
 	if manager.vmm(instance.ID) != vmm {
 		t.Error("adopted VMM is not supervised")
+	}
+}
+
+// TestRecoverResumesAGuestLeftPaused checks that a guest recorded as running,
+// which the last daemon paused to snapshot it and did not resume, is resumed
+// as it is adopted.
+func TestRecoverResumesAGuestLeftPaused(t *testing.T) {
+	tests := []struct {
+		name        string
+		state       hypervisor.VMState
+		wantResumed int
+	}{
+		{"running", hypervisor.VMStateRunning, 0},
+		{"left paused", hypervisor.VMStatePaused, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.define()
+			vmm := startAdoptable(t, h.manager)
+			pid := vmm.PID()
+			if err := h.manager.writeStatus(Status{
+				InstanceID: h.instance.ID, State: StateRunning, VMMPID: &pid, HypervisorVersion: testHypervisorVersion,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			h.hv.state = tt.state
+
+			h.manager.Recover(t.Context())
+
+			if h.hv.resumed != tt.wantResumed {
+				t.Errorf("resumed the guest %d times, want %d", h.hv.resumed, tt.wantResumed)
+			}
+			if status := h.status(t); status.State != StateRunning {
+				t.Errorf("state = %s, want %s", status.State, StateRunning)
+			}
+		})
 	}
 }
 

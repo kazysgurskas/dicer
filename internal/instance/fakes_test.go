@@ -4,6 +4,7 @@
 package instance
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -520,8 +521,10 @@ type fakeHypervisor struct {
 	capabilities hypervisor.Capabilities
 
 	paused, resumed int
-	snapshotDirs    []string
-	snapshotErr     error
+	// state, if set, is the state VMInfo reports, rather than running.
+	state        hypervisor.VMState
+	snapshotDirs []string
+	snapshotErr  error
 	// restoringSnapshots is how many snapshots fail with
 	// hypervisor.ErrRestoringMemory before one is taken.
 	restoringSnapshots int
@@ -585,7 +588,7 @@ func (f *fakeHypervisor) Shutdown(context.Context) error {
 }
 
 func (f *fakeHypervisor) VMInfo(context.Context) (*hypervisor.VMInfo, error) {
-	return &hypervisor.VMInfo{State: hypervisor.VMStateRunning}, nil
+	return &hypervisor.VMInfo{State: cmp.Or(f.state, hypervisor.VMStateRunning)}, nil
 }
 
 func (f *fakeHypervisor) ResizeVMMemory(_ context.Context, bytes int64) error {
