@@ -116,6 +116,10 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 			}
 		}
 	}()
+	// Copied while the guest is paused, as writeMemorySnapshot copies it.
+	if err := diskfile.Copy(m.statusDiskPath(instance.ID), filepath.Join(staged, statusDiskFile)); err != nil {
+		return fmt.Errorf("copy status disk: %w", err)
+	}
 
 	standby := Snapshot{
 		Name:              "standby",

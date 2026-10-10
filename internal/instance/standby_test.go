@@ -41,7 +41,7 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 	default:
 		t.Error("the VMM is still running")
 	}
-	for _, f := range []string{standbyFile, "vmstate"} {
+	for _, f := range []string{standbyFile, "vmstate", statusDiskFile} {
 		if _, err := os.Stat(filepath.Join(h.manager.standbyDir(h.instance), f)); err != nil {
 			t.Errorf("standby is missing %s: %v", f, err)
 		}

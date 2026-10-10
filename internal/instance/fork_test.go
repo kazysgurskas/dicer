@@ -4,15 +4,20 @@
 package instance
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/network"
 )
 
@@ -244,4 +249,110 @@ func forkOf(source Spec, name string) Spec {
 	fork.ID, fork.Name = "id-"+name, name
 	fork.StaticIP, fork.Ports = "", nil
 	return fork
+}
+
+// TestForkResumesWithTheStatusDiskItWasFrozenWith checks that a guest frozen
+// as it booted, before it counted its boot, resumes with a status disk that
+// has not counted it either, so that it does not take its boot for a reset
+// and halt. A booted guest keeps its count.
+func TestForkResumesWithTheStatusDiskItWasFrozenWith(t *testing.T) {
+	for _, boots := range []int{0, 1} {
+		t.Run(fmt.Sprintf("%d boots counted", boots), func(t *testing.T) {
+			h := newHarness(t)
+			h.running(t)
+			if err := writeStatusDisk(h.manager.statusDiskPath(h.instance.ID), guest.Status{Boots: boots}); err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fork := forkOf(snapshot.Instance, "copy")
+			if err := h.manager.forkSnapshot(t.Context(), snapshot, fork); err != nil {
+				t.Fatalf("ForkSnapshot: %v", err)
+			}
+
+			got, err := readStatusDisk(h.manager.statusDiskPath(fork.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Boots != boots {
+				t.Errorf("the fork's status disk counts %d boots, want %d, as its guest had", got.Boots, boots)
+			}
+		})
+	}
+}
+
+// TestForkOfSnapshotWithoutAStatusDiskTakesTheBootAsCounted checks that a
+// snapshot taken before Dicer kept the status disk resumes as it did then.
+func TestForkOfSnapshotWithoutAStatusDiskTakesTheBootAsCounted(t *testing.T) {
+	h := newHarness(t)
+	h.running(t)
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(h.manager.snapshotDir(snapshot), statusDiskFile)); err != nil {
+		t.Fatal(err)
+	}
+
+	fork := forkOf(snapshot.Instance, "copy")
+	if err := h.manager.forkSnapshot(t.Context(), snapshot, fork); err != nil {
+		t.Fatalf("ForkSnapshot: %v", err)
+	}
+
+	if got, err := readStatusDisk(h.manager.statusDiskPath(fork.ID)); err != nil || got.Boots != 1 {
+		t.Errorf("the fork's status disk = %+v, %v; want 1 boot counted", got, err)
+	}
+}
+
+// TestRestoreOfAGuestThatEndsAsItResumesFails checks that a restored guest
+// whose VMM exits before its agent answers fails the restore at once, saying
+// so, rather than after the agent's timeout, or not at all.
+func TestRestoreOfAGuestThatEndsAsItResumesFails(t *testing.T) {
+	tests := []struct {
+		name    string
+		restore func(h *harness, snapshot Snapshot) error
+	}{
+		{"fork", func(h *harness, snapshot Snapshot) error {
+			return h.manager.forkSnapshot(t.Context(), snapshot, forkOf(snapshot.Instance, "copy"))
+		}},
+		{"restore", func(h *harness, snapshot Snapshot) error {
+			h.stopped(t)
+			_, err := h.manager.restoreSnapshot(t.Context(), snapshot)
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.running(t)
+			snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "snap")
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The guest halts as it resumes, and its agent never answers: the
+			// call gives up when ctx is done or, as a real one does, after
+			// restoredAgentTimeout.
+			h.agent.onClock = func(ctx context.Context) error {
+				_ = h.starter.vmm().Kill()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(restoredAgentTimeout):
+					return context.DeadlineExceeded
+				}
+			}
+
+			started := time.Now()
+			err = tt.restore(h, snapshot)
+			if err == nil || !strings.Contains(err.Error(), "ended as it resumed") {
+				t.Errorf("err = %v, want it to say the guest ended as it resumed", err)
+			}
+			if took := time.Since(started); took >= restoredAgentTimeout {
+				t.Errorf("the restore took %s to fail, want it to fail once the VMM exited", took)
+			}
+		})
+	}
 }

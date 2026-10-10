@@ -825,7 +825,9 @@ func (f *fakeRecorder) last(action event.Action) (event.Event, bool) {
 type fakeGuestAgent struct {
 	hostNetwork *fakeHostNetwork
 
-	clockSets  int
+	clockSets int
+	// onClock, if set, is how SetClock answers.
+	onClock    func(ctx context.Context) error
 	identities []*diceragentv1.SetIdentityRequest
 	// identityErr is what SetIdentity fails with.
 	identityErr error
@@ -834,8 +836,11 @@ type fakeGuestAgent struct {
 	connectedForIdentity bool
 }
 
-func (f *fakeGuestAgent) setClock(context.Context, string, time.Time) error {
+func (f *fakeGuestAgent) setClock(ctx context.Context, _ string, _ time.Time) error {
 	f.clockSets++
+	if f.onClock != nil {
+		return f.onClock(ctx)
+	}
 	return nil
 }
 

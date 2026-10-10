@@ -237,9 +237,13 @@ func (m *Manager) writeMemorySnapshot(
 		}()
 	}
 
-	// Copied while the guest is still paused, so that the disk matches its
+	// Copied while the guest is still paused, so that the disks match its
 	// memory. Where the filesystem cannot reflink, this is a full copy, and
-	// the guest stays paused for all of it.
+	// the guest stays paused for all of it. See frozenGuestStatus for why
+	// the status disk is kept.
+	if err := diskfile.Copy(m.statusDiskPath(instance.ID), filepath.Join(dir, statusDiskFile)); err != nil {
+		return 0, fmt.Errorf("copy status disk: %w", err)
+	}
 	if err := diskfile.Copy(m.overlayDiskPath(instance), filepath.Join(dir, overlayDiskFile)); err != nil {
 		return 0, fmt.Errorf("copy overlay disk: %w", err)
 	}
@@ -599,8 +603,11 @@ func (m *Manager) restore(
 		}
 	}
 
-	// The restored guest has already booted once.
-	if err := m.writeGuestDisks(ctx, instance, starter, image, mounts.guest, setup, guest.Status{Boots: 1}); err != nil {
+	guestStatus, err := frozenGuestStatus(frozen.dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := m.writeGuestDisks(ctx, instance, starter, image, mounts.guest, setup, guestStatus); err != nil {
 		return nil, nil, err
 	}
 
@@ -626,14 +633,32 @@ func (m *Manager) restore(
 		}
 	}
 
+	// A guest that ends as it resumes cannot answer its agent's calls, so
+	// they stop when its VMM exits, and the restore fails with how it ended.
+	agentCtx, stopAgentCalls := context.WithCancel(ctx)
+	defer stopAgentCalls()
+	go func() {
+		select {
+		case <-vmm.Done():
+			stopAgentCalls()
+		case <-agentCtx.Done():
+		}
+	}()
+
 	// The guest's clock stood still in the snapshot. One whose agent is too
 	// old to set it is left behind, which is no reason to fail.
-	if err := m.setGuestClock(ctx, m.vsockPath(instance.ID), time.Now()); err != nil {
+	if err := m.setGuestClock(agentCtx, m.vsockPath(instance.ID), time.Now()); err != nil {
+		if err := m.endedAsItResumed(instance, vmm); err != nil {
+			return nil, nil, err
+		}
 		m.logger.WarnContext(ctx, "cannot set the restored guest's clock", "instance", instance.Name, "error", err)
 	}
 
 	if forked {
-		if err := m.setGuestIdentity(ctx, m.vsockPath(instance.ID), guestIdentity(instance, setup)); err != nil {
+		if err := m.setGuestIdentity(agentCtx, m.vsockPath(instance.ID), guestIdentity(instance, setup)); err != nil {
+			if err := m.endedAsItResumed(instance, vmm); err != nil {
+				return nil, nil, err
+			}
 			if grpcstatus.Code(err) == codes.Unimplemented {
 				return nil, nil, errdefs.InvalidState("the guest of instance %q has an agent too old to take another identity; "+
 					"restart that instance, then fork it or a new snapshot of it", snapshot.Instance.Name)
@@ -646,6 +671,34 @@ func (m *Manager) restore(
 	}
 
 	return vmm, cu.Release(), nil
+}
+
+// frozenGuestStatus returns the status disk to resume a frozen guest with:
+// the one it had when it was frozen. A guest frozen as it booted, before
+// dicer-init counted the boot, counts it when it resumes, and would take a
+// disk that already counted one for a reset. A guest frozen before Dicer kept
+// the disk is taken to have counted its boot.
+func frozenGuestStatus(dir string) (guest.Status, error) {
+	guestStatus, err := readStatusDisk(filepath.Join(dir, statusDiskFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return guest.Status{Boots: 1}, nil
+	}
+	return guestStatus, err
+}
+
+// endedAsItResumed returns an error saying how a restored guest ended if its
+// VMM has exited, and nil if it is still running.
+func (m *Manager) endedAsItResumed(instance Spec, vmm *process.Process) error {
+	select {
+	case <-vmm.Done():
+	default:
+		return nil
+	}
+	exit := m.readExit(instance.ID, vmm.Err())
+	if exit.Clean() {
+		return fmt.Errorf("the guest of instance %q ended as it resumed, with exit code 0", instance.Name)
+	}
+	return fmt.Errorf("the guest of instance %q ended as it resumed: %w", instance.Name, exit.Failure)
 }
 
 // snapshotImage returns the image a memory snapshot's guest booted from,

@@ -162,6 +162,10 @@ func (h *harness) running(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}
+	// A booted guest has counted its boot on its status disk.
+	if err := writeStatusDisk(h.manager.statusDiskPath(h.instance.ID), guest.Status{Boots: 1}); err != nil {
+		t.Fatal(err)
+	}
 
 	// A running guest holds an address on its network.
 	nw, err := h.store.Network(h.instance.NetworkName)
