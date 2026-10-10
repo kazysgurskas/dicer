@@ -150,6 +150,7 @@ func newVolumeDeleteCommand() *cobra.Command {
 		},
 	}
 	addDeleteAllFlags(cmd, "volumes")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

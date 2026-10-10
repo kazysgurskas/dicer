@@ -159,6 +159,7 @@ func newImageDeleteCommand() *cobra.Command {
 
 	cmd.Flags().BoolP("force", "f", false, "Force deletion of an image that is in use by one or more instances")
 	addDeleteAllFlags(cmd, "images")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

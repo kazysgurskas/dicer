@@ -22,6 +22,7 @@ Also run as `dicer image rm`, `dicer image remove`.
 |---|---|
 | `-A`, `--all` | Delete all images. |
 | `-f`, `--force` | Force deletion of an image that is in use by one or more instances. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

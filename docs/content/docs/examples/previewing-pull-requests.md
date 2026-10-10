@@ -62,12 +62,12 @@ deploy() {
 
 case $1 in
 up)
-	dicer rm -f "shop-pr-$2" 2>/dev/null || true
+	dicer rm -f --ignore-missing "shop-pr-$2"
 	dicer snapshot fork shop-main "shop-pr-$2" -p "$((10000 + $2)):3000"
 	deploy "shop-pr-$2" "pull/$2/head"
 	;;
 down)
-	dicer rm -f "shop-pr-$2" 2>/dev/null || true
+	dicer rm -f --ignore-missing "shop-pr-$2"
 	;;
 refresh)
 	dicer snapshot fork shop-main shop-build

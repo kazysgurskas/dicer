@@ -238,6 +238,7 @@ func newSnapshotDeleteCommand() *cobra.Command {
 		},
 	}
 	addDeleteAllFlags(cmd, "snapshots")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

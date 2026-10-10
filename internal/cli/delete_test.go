@@ -268,3 +268,34 @@ func (d *fakeInstanceDaemon) instanceNames() []string {
 	defer d.mu.Unlock()
 	return slices.Sorted(maps.Keys(d.instances))
 }
+
+// TestDeleteWithIgnoreMissingPassesOverWhatIsGone checks that a name that
+// does not exist fails a delete, unless --ignore-missing is given, and that
+// the names that do exist are deleted either way.
+func TestDeleteWithIgnoreMissingPassesOverWhatIsGone(t *testing.T) {
+	d := newStoreDaemon(fakeInstances()...) // web running, db stopped, cache paused
+	d.snapshotSet["web-before"] = true
+	serveFakeDaemon(t, d)
+
+	if out, err := run(t, "rm", "gone"); err == nil {
+		t.Errorf("rm of a missing instance succeeded:\n%s", out)
+	}
+
+	out, err := run(t, "rm", "--ignore-missing", "gone", "db")
+	if err != nil {
+		t.Fatalf("rm --ignore-missing: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "gone") {
+		t.Errorf("output = %q, want nothing said of the missing instance", out)
+	}
+	if got := d.instanceNames(); !slices.Equal(got, []string{"cache", "web"}) {
+		t.Errorf("left = %q, want db deleted", got)
+	}
+
+	if out, err := run(t, "snapshot", "rm", "--ignore-missing", "gone", "web-before"); err != nil {
+		t.Fatalf("snapshot rm --ignore-missing: %v\n%s", err, out)
+	}
+	if got := d.names(d.snapshotSet); len(got) != 0 {
+		t.Errorf("snapshots left = %q, want none", got)
+	}
+}

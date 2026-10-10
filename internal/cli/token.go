@@ -213,6 +213,7 @@ func newTokenDeleteCommand() *cobra.Command {
 		},
 	}
 	addDeleteAllFlags(cmd, "tokens")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

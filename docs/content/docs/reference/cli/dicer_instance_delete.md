@@ -29,6 +29,7 @@ $ dicer rm --all -f
 |---|---|
 | `-A`, `--all` | Delete all instances. |
 | `-f`, `--force` | Stop an instance first if it is running. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

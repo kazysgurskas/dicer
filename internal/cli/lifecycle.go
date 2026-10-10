@@ -209,6 +209,7 @@ func newInstanceDeleteCommand() *cobra.Command {
 
 	cmd.Flags().BoolP("force", "f", false, "Stop an instance first if it is running")
 	addDeleteAllFlags(cmd, "instances")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

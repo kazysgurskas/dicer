@@ -21,6 +21,7 @@ Also run as `dicer token rm`, `dicer token remove`.
 | Flag | Description |
 |---|---|
 | `-A`, `--all` | Delete all tokens. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

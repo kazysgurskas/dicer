@@ -21,6 +21,7 @@ Also run as `dicer network rm`, `dicer network remove`.
 | Flag | Description |
 |---|---|
 | `-A`, `--all` | Delete all networks. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

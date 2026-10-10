@@ -20,6 +20,7 @@ Also run as `dicer snapshot rm`, `dicer snapshot remove`.
 | Flag | Description |
 |---|---|
 | `-A`, `--all` | Delete all snapshots. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

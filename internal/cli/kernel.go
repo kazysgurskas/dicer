@@ -166,6 +166,7 @@ func newKernelDeleteCommand() *cobra.Command {
 		},
 	}
 	addDeleteAllFlags(cmd, "kernels")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

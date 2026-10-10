@@ -187,6 +187,7 @@ func newNetworkDeleteCommand() *cobra.Command {
 		},
 	}
 	addDeleteAllFlags(cmd, "networks")
+	addIgnoreMissingFlag(cmd)
 
 	return cmd
 }

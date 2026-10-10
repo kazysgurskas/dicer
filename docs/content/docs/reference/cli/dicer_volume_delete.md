@@ -20,6 +20,7 @@ Also run as `dicer volume rm`, `dicer volume remove`.
 | Flag | Description |
 |---|---|
 | `-A`, `--all` | Delete all volumes. |
+| `--ignore-missing` | Succeed for a name that does not exist, rather than fail. |
 | `-y`, `--yes` | With `--all`, do not ask before deleting. |
 
 ## Global flags

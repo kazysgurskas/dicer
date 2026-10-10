@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,12 @@ import (
 func addDeleteAllFlags(cmd *cobra.Command, plural string) {
 	cmd.Flags().BoolP("all", "A", false, "Delete all "+plural)
 	cmd.Flags().BoolP("yes", "y", false, "With --all, do not ask before deleting")
+}
+
+// addIgnoreMissingFlag adds --ignore-missing to a command that deletes
+// things by name, for scripts that delete what may already be gone.
+func addIgnoreMissingFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool("ignore-missing", false, "Succeed for a name that does not exist, rather than fail")
 }
 
 // namesOrAll accepts one or more names, or none with --all.
@@ -34,10 +41,22 @@ func namesOrAll(what string) cobra.PositionalArgs {
 
 // eachNameOrAll runs do for each name given, as eachName does, or with
 // --all for every one list returns, once the deleting has been confirmed.
+// With --ignore-missing, a name that does not exist is passed over without
+// a word.
 func eachNameOrAll(
 	cmd *cobra.Command, args []string, list completer, plural string,
 	do func(client *dicer.Client, name string) error,
 ) error {
+	if ignore, _ := cmd.Flags().GetBool("ignore-missing"); ignore {
+		deleteOne := do
+		do = func(client *dicer.Client, name string) error {
+			if err := deleteOne(client, name); !errors.Is(err, dicer.ErrNotFound) {
+				return err
+			}
+			return nil
+		}
+	}
+
 	if all, _ := cmd.Flags().GetBool("all"); !all {
 		return eachName(cmd, args, list, do)
 	}
