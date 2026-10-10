@@ -158,9 +158,13 @@ $ dicer token list
 NAME     SCOPES   CREATED       LAST USED
 ci       *        2 weeks ago   3 minutes ago
 laptop   *        2 days ago    -
-$ dicer token rotate ci        # a new value; the old one stops working at once
+$ dicer token rotate ci        # a new value; the old one is refused from its next call
 $ dicer token delete laptop    # refused from its next call
 ```
+
+Rotating or deleting a token refuses its next call. A stream it has already
+opened, such as `dicer exec -it`, `dicer logs -f` or `dicer events -f`, goes
+on until it ends. End those yourself, or restart the daemon to end them all.
 
 `dicer remote delete` only removes a remote from the client's list. It does
 not change what the daemon accepts: delete the token for that.
@@ -193,7 +197,9 @@ $ dicer token create ci --scopes instances:write,images:write
 
 A write scope allows reading too. `exec` and `cp` need `instances:write`
 even to read a file, because they reach into the guest. `instances:write`
-also lets `dicer run` pull the image an instance needs. Every token may ask
+also lets `dicer run` pull the image an instance needs. It can also mount any
+volume, or any directory the daemon allows, into an instance it creates, so
+it can read and write what they hold. Every token may ask
 what the daemon is, as `dicer version` and `dicer info` do.
 
 A call the token's scopes do not allow fails, and says which scope it

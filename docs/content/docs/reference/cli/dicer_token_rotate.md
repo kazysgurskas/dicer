@@ -4,8 +4,9 @@ title: "dicer token rotate"
 description: "Give a token a new secret"
 ---
 
-Gives a token a new secret, and prints the token anew. The old one stops
-working at once. Give the new one to whatever used the old, with
+Gives a token a new secret, and prints the token anew. The old one is
+refused from its next call. A stream already open with it goes on until
+it ends. Give the new one to whatever used the old, with
 `dicer remote delete` and `dicer remote create`.
 
 ## Usage

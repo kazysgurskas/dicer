@@ -152,8 +152,9 @@ func newTokenRotateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rotate NAME",
 		Short: "Give a token a new secret",
-		Long: "Gives a token a new secret, and prints the token anew. The old one stops\n" +
-			"working at once. Give the new one to whatever used the old, with\n" +
+		Long: "Gives a token a new secret, and prints the token anew. The old one is\n" +
+			"refused from its next call. A stream already open with it goes on until\n" +
+			"it ends. Give the new one to whatever used the old, with\n" +
 			"'dicer remote delete' and 'dicer remote create'.",
 		Args:              one("a token name"),
 		ValidArgsFunction: complete(1, listTokens),
@@ -193,7 +194,8 @@ func newTokenDeleteCommand() *cobra.Command {
 		Use:   "delete (NAME... | --all)",
 		Short: "Delete one or more tokens, or all of them",
 		Long: "Deletes the tokens named, or with --all every token, asking first on a\n" +
-			"terminal. A client using a deleted token is refused from its next call.",
+			"terminal. A client using a deleted token is refused from its next call.\n" +
+			"A stream already open with it goes on until it ends.",
 		Args:              namesOrAll("token name"),
 		Aliases:           []string{"rm", "remove"},
 		ValidArgsFunction: complete(0, listTokens),

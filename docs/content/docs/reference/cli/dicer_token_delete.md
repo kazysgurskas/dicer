@@ -6,6 +6,7 @@ description: "Delete one or more tokens, or all of them"
 
 Deletes the tokens named, or with `--all` every token, asking first on a
 terminal. A client using a deleted token is refused from its next call.
+A stream already open with it goes on until it ends.
 
 ## Usage
 
