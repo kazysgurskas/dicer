@@ -159,7 +159,7 @@ well. See the [metrics reference](../../reference/metrics#instance-stats).
 
 The daemon records what happens to each instance, snapshot, image, network,
 volume and kernel: created, started, exited, died, restarting, healthy,
-unhealthy, pulled, collected, fetched, deleted and more. Each event has a
+unhealthy, pulled, collected, imported, deleted and more. Each event has a
 message that says why. Every event and its attributes are listed in the
 [events reference](../../reference/events).
 

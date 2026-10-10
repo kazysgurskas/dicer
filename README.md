@@ -94,6 +94,6 @@ a default, and unknown keys are rejected. The
 every key with its default, and `dicerd validate` checks a file before the
 daemon uses it.
 
-## License
+## Licence
 
 MIT. See [LICENSE](LICENSE).

@@ -34,7 +34,7 @@ cover the Linux-only packages from a Mac:
 
 ```console
 GOOS=linux go vet ./...
-docker run --rm -v "$PWD":/src -w /src golang:1.25 make test
+docker run --rm -v "$PWD":/src -w /src golang:1.27 make test
 ```
 
 ### On a real host
@@ -121,6 +121,7 @@ internal/
   cli/                  the command line, dicer compose included
   compose/              compose files: reading them, and the requests they make
   grpcserver/           the API: its servers, and the handlers, which call the managers
+  token/                the tokens that authenticate clients of the TCP listener
   instance/             instances and snapshots, and their lifecycle
   health/               health checks: running probes, and judging their results
   filestore/            resource definitions as YAML on disk, and their references
@@ -128,7 +129,7 @@ internal/
   dns/                  each network's nameserver: guests' names, and forwarding
   image/ registry/      pulling images and converting them to disks
   kernel/ volume/       the other resources an instance uses
-  virtiofs/             sharing host directories with guests, through the virtiofsd it embeds
+  virtiofs/ hostfs/     sharing host directories with guests, through the virtiofsd it embeds
   initrd/               the guest's initramfs
   hypervisor/           the hypervisor interface, and its two drivers
   process/              supervising hypervisor processes
@@ -137,6 +138,8 @@ internal/
   archive/              the tar streams file copies travel as
   errdefs/ naming/      error classes, and the rule resource names follow
   defaults/ version/    host paths, and build identity
+  diskfile/             making, growing, copying and measuring disk files
+  humanize/             writing sizes, durations and counts for people
   atomicfile/ hostinfo/ small helpers
 test/e2e/               the end-to-end tests
 docs/                   the documentation site

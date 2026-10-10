@@ -34,7 +34,7 @@ func newEventsCommand() *cobra.Command {
 		Long: "Shows what has happened on the host: instances created, started, stopped,\n" +
 			"crashed and restarted, health checks failing and recovering, snapshots\n" +
 			"taken and deleted, images pulled and collected, networks and volumes\n" +
-			"created and deleted, kernels imported and fetched. The daemon keeps them,\n" +
+			"created and deleted, kernels imported and deleted. The daemon keeps them,\n" +
 			"so they explain what happened while nobody was looking, and they survive\n" +
 			"it restarting.\n\n" +
 			"Like logs, it prints what is kept and exits; -f keeps following new\n" +

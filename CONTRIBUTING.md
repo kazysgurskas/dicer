@@ -7,7 +7,7 @@ Thanks for taking the time to contribute to Dicer.
 For anything larger than a small fix, open an
 [issue](https://github.com/konradasb/dicer/issues/new) first so the approach
 can be agreed before you spend time on it. The [roadmap](ROADMAP.md) says
-what is in scope — and, as importantly, what is deliberately not.
+what is planned.
 
 ## Making a change
 

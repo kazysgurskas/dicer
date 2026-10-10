@@ -22,7 +22,7 @@ CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_NAME="dicerd"
 
-# Colors for output (true color)
+# Colours for output (true color)
 RED='\033[38;2;255;110;110m'
 GREEN='\033[38;2;92;190;83m'
 YELLOW='\033[0;33m'

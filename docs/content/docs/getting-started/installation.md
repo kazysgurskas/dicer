@@ -39,7 +39,7 @@ and [Tuning a host](../../guides/tuning-a-host) first: the filesystem under
 
 **To build from source**
 
-- Go 1.27.2 or later, `git`, `make` and `curl`.
+- Go 1.27.2 or later, `git`, `make`, `curl` and `zstd`.
 
 Distributions often carry an older Go, so install it from
 [go.dev/dl](https://go.dev/dl/). Install everything else, the host's tools
@@ -48,12 +48,12 @@ included, with the distribution's package manager:
 {{< tabs >}}
   {{< tab name="Debian, Ubuntu" >}}
   ```console
-  $ sudo apt install erofs-utils e2fsprogs iptables git make curl
+  $ sudo apt install erofs-utils e2fsprogs iptables git make curl zstd
   ```
   {{< /tab >}}
   {{< tab name="Fedora" >}}
   ```console
-  $ sudo dnf install erofs-utils e2fsprogs iptables-nft git make curl
+  $ sudo dnf install erofs-utils e2fsprogs iptables-nft git make curl zstd
   ```
   {{< /tab >}}
   {{< tab name="Rocky, AlmaLinux" >}}
@@ -62,17 +62,17 @@ included, with the distribution's package manager:
 
   ```console
   $ sudo dnf install epel-release
-  $ sudo dnf install erofs-utils e2fsprogs iptables-nft git make curl
+  $ sudo dnf install erofs-utils e2fsprogs iptables-nft git make curl zstd
   ```
   {{< /tab >}}
   {{< tab name="Arch" >}}
   ```console
-  $ sudo pacman -S --needed erofs-utils e2fsprogs iptables-nft git make curl
+  $ sudo pacman -S --needed erofs-utils e2fsprogs iptables-nft git make curl zstd
   ```
   {{< /tab >}}
   {{< tab name="openSUSE" >}}
   ```console
-  $ sudo zypper install erofs-utils e2fsprogs iptables git make curl
+  $ sudo zypper install erofs-utils e2fsprogs iptables git make curl zstd
   ```
   {{< /tab >}}
 {{< /tabs >}}

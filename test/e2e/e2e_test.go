@@ -31,8 +31,9 @@ const (
 const (
 	defaultUser = "root"
 
-	// defaultKernelURL is the kernel the installer recommends, so the tests
-	// boot what a new user would boot.
+	// defaultKernelURL is the release of the default kernel, which dicerd
+	// embeds, so the tests boot what a new user would boot. Keep it in step
+	// with KERNEL_VERSION in the Makefile.
 	defaultKernelURL = "https://github.com/konradasb/dicer-kernel/releases/download/" +
 		"v6.18.53-1/vmlinux-x86_64"
 

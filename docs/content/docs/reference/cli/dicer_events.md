@@ -7,7 +7,7 @@ description: "Show what has happened to the instances, snapshots, images, networ
 Shows what has happened on the host: instances created, started, stopped,
 crashed and restarted, health checks failing and recovering, snapshots
 taken and deleted, images pulled and collected, networks and volumes
-created and deleted, kernels imported and fetched. The daemon keeps them,
+created and deleted, kernels imported and deleted. The daemon keeps them,
 so they explain what happened while nobody was looking, and they survive
 it restarting.
 

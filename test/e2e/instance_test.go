@@ -19,7 +19,7 @@ import (
 // command inside it and stops it again.
 //
 // This is the path everything else rests on: the image is pulled and
-// converted to an EROFS root filesystem, a kernel is fetched, a TAP device is
+// converted to an EROFS root filesystem, a kernel is imported, a TAP device is
 // attached to the bridge, the hypervisor boots the guest, dicer-init brings
 // userspace up, and the agent answers over vsock. A failure anywhere in that
 // chain fails here, which is the point -- none of it can be tested without
@@ -71,7 +71,7 @@ func TestInstanceLifecycle(t *testing.T) {
 
 // TestInstanceUsesTheDefaultKernelAndNetwork runs an instance as the
 // quickstart does, naming neither a kernel nor a network: the daemon has
-// created the default network, and fetches the default kernel it pins.
+// created the default network, and the default kernel from the one it embeds.
 func TestInstanceUsesTheDefaultKernelAndNetwork(t *testing.T) {
 	name := instanceName(t)
 
