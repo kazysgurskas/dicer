@@ -72,6 +72,7 @@ var methodScopes = map[string]token.Scope{
 	"RotateToken":            token.ScopeTokensWrite,
 	"DeleteToken":            token.ScopeTokensWrite,
 	"GetHostInfo":            "",
+	"CheckHost":              "",
 	"GetResources":           token.ScopeInstancesRead,
 	"GetEvents":              token.ScopeEventsRead,
 }

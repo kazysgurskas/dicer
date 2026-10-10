@@ -205,6 +205,14 @@ c, err := dicer.NewClient(dicer.WithAddress("host:7443"), dicer.WithToken(token)
 
 Connecting is lazy: an unreachable daemon is reported by the first call. A local socket that is not there, a TCP address without a token, and a token that is not one are reported here.
 
+#### func (*Client) CheckHost {#client-checkhost}
+
+```go
+func (c *Client) CheckHost(ctx context.Context) ([]HostCheck, error)
+```
+
+CheckHost checks that the host can run instances and reach them: KVM, IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and its free disk. It changes nothing, and boots nothing.
+
 #### func (*Client) Close {#client-close}
 
 ```go
@@ -727,6 +735,52 @@ const (
 ```
 
 The health statuses.
+
+### type HostCheck {#hostcheck}
+
+```go
+type HostCheck struct {
+	// Name is what was checked: kvm, ip_forwarding, firewall, tools, uplink
+	// or disk.
+	Name string `json:"name,omitzero"`
+
+	// Status is what the check found.
+	Status HostCheckStatus `json:"status,omitzero"`
+
+	// Detail is what was found, in a line, for a person.
+	Detail string `json:"detail,omitzero"`
+
+	// Hint is what to do about it. It is empty for a check that passed.
+	Hint string `json:"hint,omitzero"`
+}
+```
+
+HostCheck is one thing CheckHost checked about the host.
+
+### type HostCheckStatus {#hostcheckstatus}
+
+```go
+type HostCheckStatus string
+```
+
+HostCheckStatus is what a HostCheck found.
+
+```go
+const (
+	// HostCheckOK means all is well.
+	HostCheckOK HostCheckStatus = "ok"
+
+	// HostCheckWarning means something may go wrong, such as little free
+	// disk.
+	HostCheckWarning HostCheckStatus = "warning"
+
+	// HostCheckFailed means instances cannot boot, or cannot be reached,
+	// until it is fixed.
+	HostCheckFailed HostCheckStatus = "failed"
+)
+```
+
+The host check statuses.
 
 ### type HostInfo {#hostinfo}
 

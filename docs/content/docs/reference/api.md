@@ -101,10 +101,19 @@ was, and whose message says it for a person:
 | `DeleteToken` | [`DeleteTokenRequest`](#deletetokenrequest) | `google.protobuf.Empty` | DeleteToken removes a token. A client using it is refused from its next call. |
 | `GetHostInfo` | [`GetHostInfoRequest`](#gethostinforequest) | [`GetHostInfoResponse`](#gethostinforesponse) | GetHostInfo reports what the daemon is: its version, the hypervisors it carries, and how it is reached. |
 | `GetResources` | [`GetResourcesRequest`](#getresourcesrequest) | [`GetResourcesResponse`](#getresourcesresponse) | GetResources reports how much CPU and memory instances may be given, how much is committed to them, and how full the data directory's disk is. |
+| `CheckHost` | [`CheckHostRequest`](#checkhostrequest) | [`CheckHostResponse`](#checkhostresponse) | CheckHost checks that the host can run instances and reach them: KVM, IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and its free disk. It changes nothing, and boots nothing: `dicer doctor` boots a test guest of its own. |
 | `GetEvents` | [`GetEventsRequest`](#geteventsrequest) | stream [`GetEventsResponse`](#geteventsresponse) | GetEvents streams what has happened to the resources on this host: the history kept, oldest first, in batches, then, with follow, each new event as it happens, none missed between the two. A follower that does not keep up is disconnected with RESOURCE_EXHAUSTED rather than slowing the host. |
 
 
 ## Messages
+
+### CheckHostRequest
+
+### CheckHostResponse
+
+| Field | Type | Description |
+|---|---|---|
+| `checks` | repeated [`HostCheck`](#hostcheck) | What was checked, in the order it was checked. |
 
 ### CopyFromInstanceRequest
 
@@ -529,6 +538,17 @@ HealthCheckExec runs a command as the workload's user.
 | Field | Type | Description |
 |---|---|---|
 | `port` | `uint32` |  |
+
+### HostCheck
+
+HostCheck is one thing checked about the host.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | What was checked: kvm, ip_forwarding, firewall, tools, uplink or disk. |
+| `status` | [`HostCheckStatus`](#hostcheckstatus) |  |
+| `detail` | `string` | What was found, in a line, for a person. |
+| `hint` | `string` | What to do about it. Empty for a check that passed. |
 
 ### HypervisorInfo
 
@@ -1155,6 +1175,17 @@ HealthStatus is what an instance's health check has found.
 | `HEALTH_STATUS_STARTING` | 1 | No verdict yet: the workload is in its start period, or has not been probed. |
 | `HEALTH_STATUS_HEALTHY` | 2 | The last probe passed. |
 | `HEALTH_STATUS_UNHEALTHY` | 3 | The check's retries have failed in a row. |
+
+### HostCheckStatus
+
+HostCheckStatus is what a HostCheck found.
+
+| Value | Number | Description |
+|---|---|---|
+| `HOST_CHECK_STATUS_UNSPECIFIED` | 0 |  |
+| `HOST_CHECK_STATUS_OK` | 1 | All is well. |
+| `HOST_CHECK_STATUS_WARNING` | 2 | Something may go wrong, such as little free disk. |
+| `HOST_CHECK_STATUS_FAILED` | 3 | Instances cannot boot, or cannot be reached, until it is fixed. |
 
 ### HypervisorType
 

@@ -154,6 +154,66 @@ func (c *Client) Resources(ctx context.Context) (Resources, error) {
 	return resourcesFromProto(resp), nil
 }
 
+// HostCheck is one thing CheckHost checked about the host.
+type HostCheck struct {
+	// Name is what was checked: kvm, ip_forwarding, firewall, tools, uplink
+	// or disk.
+	Name string `json:"name,omitzero"`
+
+	// Status is what the check found.
+	Status HostCheckStatus `json:"status,omitzero"`
+
+	// Detail is what was found, in a line, for a person.
+	Detail string `json:"detail,omitzero"`
+
+	// Hint is what to do about it. It is empty for a check that passed.
+	Hint string `json:"hint,omitzero"`
+}
+
+// HostCheckStatus is what a HostCheck found.
+type HostCheckStatus string
+
+// The host check statuses.
+const (
+	// HostCheckOK means all is well.
+	HostCheckOK HostCheckStatus = "ok"
+
+	// HostCheckWarning means something may go wrong, such as little free
+	// disk.
+	HostCheckWarning HostCheckStatus = "warning"
+
+	// HostCheckFailed means instances cannot boot, or cannot be reached,
+	// until it is fixed.
+	HostCheckFailed HostCheckStatus = "failed"
+)
+
+var hostCheckStatuses = enum[HostCheckStatus, dicerdv1.HostCheckStatus]{"host check status", map[HostCheckStatus]dicerdv1.HostCheckStatus{
+	HostCheckOK:      dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK,
+	HostCheckWarning: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING,
+	HostCheckFailed:  dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED,
+}}
+
+// CheckHost checks that the host can run instances and reach them: KVM,
+// IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and
+// its free disk. It changes nothing, and boots nothing.
+func (c *Client) CheckHost(ctx context.Context) ([]HostCheck, error) {
+	resp, err := c.api.CheckHost(ctx, &dicerdv1.CheckHostRequest{})
+	if err != nil {
+		return nil, fromStatus(err)
+	}
+	return convertAll(resp.GetChecks(), hostCheckFromProto), nil
+}
+
+// hostCheckFromProto returns the check p reports.
+func hostCheckFromProto(p *dicerdv1.HostCheck) HostCheck {
+	return HostCheck{
+		Name:   p.GetName(),
+		Status: hostCheckStatuses.fromProto(p.GetStatus()),
+		Detail: p.GetDetail(),
+		Hint:   p.GetHint(),
+	}
+}
+
 // hostInfoFromProto returns what p says the daemon is.
 func hostInfoFromProto(p *dicerdv1.GetHostInfoResponse) HostInfo {
 	return HostInfo{

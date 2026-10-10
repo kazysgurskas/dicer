@@ -237,6 +237,11 @@ service DaemonService {
   // how much is committed to them, and how full the data directory's disk
   // is.
   rpc GetResources(GetResourcesRequest) returns (GetResourcesResponse);
+  // CheckHost checks that the host can run instances and reach them: KVM,
+  // IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and
+  // its free disk. It changes nothing, and boots nothing: `dicer doctor`
+  // boots a test guest of its own.
+  rpc CheckHost(CheckHostRequest) returns (CheckHostResponse);
 
   // GetEvents streams what has happened to the resources on this host: the
   // history kept, oldest first, in batches, then, with follow, each new
@@ -1394,6 +1399,35 @@ message GetHostInfoResponse {
   string fingerprint = 8;
   // The name of the token this call was made with. Empty over the socket.
   string token = 9;
+}
+
+message CheckHostRequest {}
+
+message CheckHostResponse {
+  // What was checked, in the order it was checked.
+  repeated HostCheck checks = 1;
+}
+
+// HostCheck is one thing checked about the host.
+message HostCheck {
+  // What was checked: kvm, ip_forwarding, firewall, tools, uplink or disk.
+  string name = 1;
+  HostCheckStatus status = 2;
+  // What was found, in a line, for a person.
+  string detail = 3;
+  // What to do about it. Empty for a check that passed.
+  string hint = 4;
+}
+
+// HostCheckStatus is what a HostCheck found.
+enum HostCheckStatus {
+  HOST_CHECK_STATUS_UNSPECIFIED = 0;
+  // All is well.
+  HOST_CHECK_STATUS_OK = 1;
+  // Something may go wrong, such as little free disk.
+  HOST_CHECK_STATUS_WARNING = 2;
+  // Instances cannot boot, or cannot be reached, until it is fixed.
+  HOST_CHECK_STATUS_FAILED = 3;
 }
 
 message GetResourcesRequest {}

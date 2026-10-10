@@ -8,6 +8,7 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -155,4 +156,10 @@ var pullStages = enum[image.PullStage, dicerdv1.PullStage]{"pull stage", map[ima
 	image.PullStageDownloading: dicerdv1.PullStage_PULL_STAGE_DOWNLOADING,
 	image.PullStageUnpacking:   dicerdv1.PullStage_PULL_STAGE_UNPACKING,
 	image.PullStageConverting:  dicerdv1.PullStage_PULL_STAGE_CONVERTING,
+}}
+
+var hostCheckStatuses = enum[hostcheck.Status, dicerdv1.HostCheckStatus]{"host check status", map[hostcheck.Status]dicerdv1.HostCheckStatus{
+	hostcheck.OK:      dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK,
+	hostcheck.Warning: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING,
+	hostcheck.Failed:  dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED,
 }}

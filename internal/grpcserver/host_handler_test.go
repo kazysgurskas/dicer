@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/process"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
@@ -129,5 +130,36 @@ func TestListenerAddressesOfAListenerOnAllAddressesAreTheHosts(t *testing.T) {
 				t.Errorf("listenerAddresses = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCheckHostReportsEachCheck(t *testing.T) {
+	h := &hostHandler{checkHost: func(context.Context) []hostcheck.Result {
+		return []hostcheck.Result{
+			{Name: "kvm", Status: hostcheck.OK, Detail: "/dev/kvm is usable"},
+			{Name: "disk", Status: hostcheck.Warning, Detail: "1 GiB free", Hint: "free some space"},
+			{Name: "ip_forwarding", Status: hostcheck.Failed, Detail: "off", Hint: "turn it on"},
+		}
+	}}
+
+	resp, err := h.CheckHost(t.Context(), &dicerdv1.CheckHostRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []*dicerdv1.HostCheck{
+		{Name: "kvm", Status: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK, Detail: "/dev/kvm is usable"},
+		{Name: "disk", Status: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING, Detail: "1 GiB free", Hint: "free some space"},
+		{Name: "ip_forwarding", Status: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED, Detail: "off", Hint: "turn it on"},
+	}
+	if !slices.EqualFunc(resp.GetChecks(), want, func(a, b *dicerdv1.HostCheck) bool {
+		return a.GetName() == b.GetName() && a.GetStatus() == b.GetStatus() &&
+			a.GetDetail() == b.GetDetail() && a.GetHint() == b.GetHint()
+	}) {
+		t.Errorf("checks = %v, want %v", resp.GetChecks(), want)
+	}
+
+	// A server built without a checker checks nothing.
+	if resp, err := (&hostHandler{}).CheckHost(t.Context(), &dicerdv1.CheckHostRequest{}); err != nil || len(resp.GetChecks()) != 0 {
+		t.Errorf("CheckHost without a checker = %v, %v; want no checks", resp, err)
 	}
 }

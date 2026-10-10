@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/konradasb/dicer/internal/grpcserver"
+	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/version"
 )
 
@@ -97,9 +98,13 @@ func (d *daemon) listen(ctx context.Context) (listeners []listener, err error) {
 		TokenManager:     d.tokenManager,
 		Events:           d.events,
 		DataDir:          d.cfg.DataDir,
-		Version:          version.Version,
-		Keepalive:        grpcserver.KeepaliveConfig(d.cfg.Server.Keepalive),
-		Logger:           d.logger,
+		CheckHost: hostcheck.New(hostcheck.Config{
+			DataDir:         d.cfg.DataDir,
+			UplinkInterface: d.cfg.Network.UplinkInterface,
+		}).Check,
+		Version:   version.Version,
+		Keepalive: grpcserver.KeepaliveConfig(d.cfg.Server.Keepalive),
+		Logger:    d.logger,
 	})
 	d.metrics.Register(server)
 

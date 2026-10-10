@@ -72,6 +72,7 @@ var fromProtoConversions = []fromProtoConversion{
 	conversion(issuedTokenFromProto),
 	conversion(hostInfoFromProto),
 	conversion(hypervisorInfoFromProto),
+	conversion(hostCheckFromProto),
 	conversion(resourcesFromProto),
 	conversion(resourceCapacityFromProto),
 	conversion(diskUsageFromProto),
@@ -248,6 +249,7 @@ var sentByName = map[protoreflect.Name][]protoreflect.Name{
 	"DeleteTokenRequest":            {"name"},
 	"GetHostInfoRequest":            {},
 	"GetResourcesRequest":           {},
+	"CheckHostRequest":              {},
 }
 
 // returnedAsTheyAre are the responses whose fields the client returns
@@ -268,6 +270,7 @@ var returnedAsTheyAre = map[protoreflect.Name][]protoreflect.Name{
 	"ListImagesResponse":             {"images"},
 	"ListKernelsResponse":            {"kernels"},
 	"ListTokensResponse":             {"tokens"},
+	"CheckHostResponse":              {"checks"},
 }
 
 // TestEveryCallIsCovered checks that each call's request and response is

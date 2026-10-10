@@ -11,6 +11,7 @@
 package grpcserver
 
 import (
+	"context"
 	"crypto/tls"
 	"log/slog"
 	"net/netip"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/konradasb/dicer/internal/event"
+	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -65,6 +67,9 @@ type Config struct {
 
 	// DataDir is the data directory, whose disk GetResources reports on.
 	DataDir string
+
+	// CheckHost checks the host for CheckHost. Nil checks nothing.
+	CheckHost func(ctx context.Context) []hostcheck.Result
 
 	// Version is the daemon's version, as GetHostInfo reports it.
 	Version string
@@ -155,6 +160,7 @@ func NewServer(cfg Config) *Server {
 			listenAddress: cfg.ListenAddress,
 			hostAddresses: cfg.HostAddresses,
 			fingerprint:   cfg.Fingerprint,
+			checkHost:     cfg.CheckHost,
 		},
 		events:         cfg.Events,
 		metrics:        newMetrics(),

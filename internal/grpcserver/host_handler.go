@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 
+	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -19,6 +20,24 @@ type hostHandler struct {
 	listenAddress string
 	hostAddresses func() ([]netip.Addr, error)
 	fingerprint   string
+	checkHost     func(ctx context.Context) []hostcheck.Result
+}
+
+// CheckHost checks that the host can run instances and reach them.
+func (h *hostHandler) CheckHost(ctx context.Context, _ *dicerdv1.CheckHostRequest) (*dicerdv1.CheckHostResponse, error) {
+	resp := &dicerdv1.CheckHostResponse{}
+	if h.checkHost == nil {
+		return resp, nil
+	}
+	for _, r := range h.checkHost(ctx) {
+		resp.Checks = append(resp.Checks, &dicerdv1.HostCheck{
+			Name:   r.Name,
+			Status: hostCheckStatuses.toProto(r.Status),
+			Detail: r.Detail,
+			Hint:   r.Hint,
+		})
+	}
+	return resp, nil
 }
 
 // GetHostInfo reports the daemon's version, hostname, hypervisors and API
