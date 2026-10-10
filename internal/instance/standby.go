@@ -148,6 +148,7 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 
 	if err := os.Rename(staged, dir); err != nil {
 		err = fmt.Errorf("move standby into place: %w", err)
+		m.teardownNetwork(ctx, instance)
 		m.fail(instance.ID, err)
 		return err
 	}
