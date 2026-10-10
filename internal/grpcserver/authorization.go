@@ -21,6 +21,8 @@ import (
 // A call needs the scope of the resource it is about. Exec and copying go
 // into the guest, so they need instances:write either way, and a call that
 // makes or changes an instance from a snapshot needs instances:write too.
+// CheckHost needs instances:write only to boot a test instance, which its
+// handler checks.
 var methodScopes = map[string]token.Scope{
 	"CreateInstance":         token.ScopeInstancesWrite,
 	"UpdateInstance":         token.ScopeInstancesWrite,

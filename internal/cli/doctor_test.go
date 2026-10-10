@@ -4,61 +4,80 @@
 package cli
 
 import (
-	"context"
-	"slices"
+	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
-// doctorDaemon is a fake daemon whose host has checks, and whose test
-// guests do what guest says.
+// doctorDaemon is a fake daemon whose host checks find results.
 type doctorDaemon struct {
 	*fakeInstanceDaemon
 
-	checks []*dicerdv1.HostCheck
+	results []*dicerdv1.HostCheckResult
+
+	mu  sync.Mutex
+	req *dicerdv1.CheckHostRequest
 }
 
-func (d *doctorDaemon) CheckHost(context.Context, *dicerdv1.CheckHostRequest) (*dicerdv1.CheckHostResponse, error) {
-	return &dicerdv1.CheckHostResponse{Checks: d.checks}, nil
-}
-
-// healthyChecks are the host checks of a host every check passes on.
-func healthyChecks() []*dicerdv1.HostCheck {
-	ok := dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK
-	return []*dicerdv1.HostCheck{
-		{Name: "kvm", Status: ok, Detail: "/dev/kvm is usable"},
-		{Name: "ip_forwarding", Status: ok, Detail: "IPv4 forwarding is on"},
+func (d *doctorDaemon) CheckHost(
+	req *dicerdv1.CheckHostRequest, stream grpc.ServerStreamingServer[dicerdv1.HostCheckResult],
+) error {
+	d.mu.Lock()
+	d.req = proto.CloneOf(req)
+	d.mu.Unlock()
+	for _, r := range d.results {
+		if !req.GetTestInstance() && r.GetGroup() == dicerdv1.HostCheckGroup_HOST_CHECK_GROUP_INSTANCES {
+			continue
+		}
+		if err := stream.Send(r); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// guestRuns makes each test guest print console and exit with code once
-// started.
-func guestRuns(d *fakeInstanceDaemon, console string, code int32) {
-	d.onStart = func(name string) {
-		d.mu.Lock()
-		d.console[name] = console
-		d.mu.Unlock()
-		go d.stops(name, code)
-	}
+// request returns the last CheckHost request.
+func (d *doctorDaemon) request() *dicerdv1.CheckHostRequest {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.req
 }
+
+// The groups and statuses, short.
+const (
+	groupHost      = dicerdv1.HostCheckGroup_HOST_CHECK_GROUP_HOST
+	groupInstances = dicerdv1.HostCheckGroup_HOST_CHECK_GROUP_INSTANCES
+	statusOK       = dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK
+	statusWarning  = dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING
+	statusFailed   = dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED
+)
 
 // newDoctorDaemon returns a doctorDaemon whose host carries Cloud
-// Hypervisor and Firecracker.
+// Hypervisor and Firecracker, and passes every check.
 func newDoctorDaemon() *doctorDaemon {
-	d := &doctorDaemon{fakeInstanceDaemon: newFakeInstanceDaemon(), checks: healthyChecks()}
+	d := &doctorDaemon{fakeInstanceDaemon: newFakeInstanceDaemon()}
 	d.host.Hypervisors = []*dicerdv1.HypervisorInfo{
 		{Type: dicerdv1.HypervisorType_HYPERVISOR_TYPE_CLOUD_HYPERVISOR, Versions: []string{"v53.0.0"}, IsDefault: true},
 		{Type: dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER, Versions: []string{"v1.17.0"}},
+	}
+	d.results = []*dicerdv1.HostCheckResult{
+		{Group: groupHost, Name: "kvm", Status: statusOK, Detail: "/dev/kvm is usable"},
+		{Group: groupHost, Name: "ip_forwarding", Status: statusOK, Detail: "IPv4 forwarding is on"},
+		{Group: groupInstances, Name: "cloud-hypervisor", Status: statusOK, Detail: "booted, ran a command and stopped in 1.1s"},
+		{Group: groupInstances, Name: "internet", Status: statusOK, Detail: "a test instance reached the internet"},
 	}
 	return d
 }
 
 func TestDoctorOnAHealthyHost(t *testing.T) {
 	d := newDoctorDaemon()
-	guestRuns(d.fakeInstanceDaemon, "Linux booting\ndicer-doctor: booted\ndicer-doctor: online\n", 0)
 	serveFakeDaemon(t, d)
 
 	out, err := run(t, "doctor")
@@ -66,106 +85,130 @@ func TestDoctorOnAHealthyHost(t *testing.T) {
 		t.Fatalf("doctor = %v\n%s", err, out)
 	}
 	for _, want := range []string{
-		"✓ KVM", "/dev/kvm is usable",
-		"✓ cloud-hypervisor v53.0.0", "✓ firecracker v1.17.0", "booted, ran a command and stopped",
-		"✓ Network", "No problems found.",
+		"Host\n", "✓ KVM                              /dev/kvm is usable\n",
+		"\nInstances\n",
+		"✓ Boot (cloud-hypervisor v53.0.0)  booted, ran a command and stopped in 1.1s\n",
+		"✓ Internet access                  a test instance reached the internet\n",
+		"No problems found.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
+	if !d.request().GetTestInstance() {
+		t.Error("doctor did not ask for test instances")
+	}
+}
 
-	// The test guests are deleted.
-	d.mu.Lock()
-	left := len(d.instances)
-	d.mu.Unlock()
-	if left != 0 {
-		t.Errorf("%d test guests were left behind", left)
+func TestDoctorPassesItsOptions(t *testing.T) {
+	d := newDoctorDaemon()
+	serveFakeDaemon(t, d)
+
+	out, err := run(t, "doctor", "--image", "registry.example.com/busybox:1.37", "--timeout", "30s", "--keep",
+		"--hypervisor-type", "firecracker", "--hypervisor-version", "v1.17.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := d.request()
+	if req.GetTestInstanceImage() != "registry.example.com/busybox:1.37" ||
+		req.GetTestInstanceTimeout().AsDuration() != 30*time.Second || !req.GetKeepFailedTestInstance() ||
+		req.GetTestInstanceHypervisor() != dicerdv1.HypervisorType_HYPERVISOR_TYPE_FIRECRACKER ||
+		req.GetTestInstanceHypervisorVersion() != "v1.17.0" {
+		t.Errorf("request = %v, want the flags' image, timeout, keep and hypervisor", req)
+	}
+	if !strings.Contains(out, "Boot (firecracker v1.17.0)") {
+		t.Errorf("output does not name the hypervisor asked for:\n%s", out)
 	}
 }
 
 func TestDoctorReportsAFailedCheckWithItsHint(t *testing.T) {
 	d := newDoctorDaemon()
-	d.checks = append(d.checks, &dicerdv1.HostCheck{
-		Name: "kvm", Status: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED,
+	d.results[0] = &dicerdv1.HostCheckResult{
+		Group: groupHost, Name: "kvm", Status: statusFailed,
 		Detail: "/dev/kvm does not exist", Hint: "turn virtualisation on in the firmware",
-	})
+	}
 	serveFakeDaemon(t, d)
 
 	out, err := run(t, "doctor", "--host-only")
 	if err == nil || err.Error() != "1 problem found" {
 		t.Errorf("doctor = %v, want 1 problem found", err)
 	}
-	for _, want := range []string{"✗ KVM", "/dev/kvm does not exist", "turn virtualisation on in the firmware", "1 problem found."} {
+	for _, want := range []string{
+		"✗ KVM            /dev/kvm does not exist\n",
+		"\n                   turn virtualisation on in the firmware\n", "1 problem found.",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Test guests") {
-		t.Errorf("--host-only booted test guests:\n%s", out)
+	if d.request().GetTestInstance() || strings.Contains(out, "\nInstances\n") {
+		t.Errorf("--host-only asked for test instances:\n%s", out)
 	}
 }
 
-func TestDoctorReportsAGuestThatDoesNotBoot(t *testing.T) {
+func TestDoctorShowsAFailedTestInstancesConsole(t *testing.T) {
 	d := newDoctorDaemon()
-	guestRuns(d.fakeInstanceDaemon,
-		"[    3.659149] Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000200\n", 1)
+	d.results = append(d.results[:2], &dicerdv1.HostCheckResult{
+		Group: groupInstances, Name: "cloud-hypervisor", Status: statusFailed,
+		Detail:  "ended without running its command: exit code 1",
+		Console: []string{"Run /init as init process", "Kernel panic - not syncing"},
+	})
 	serveFakeDaemon(t, d)
 
 	out, err := run(t, "doctor")
-	if err == nil || err.Error() != "2 problems found" {
-		t.Errorf("doctor = %v, want 2 problems found, one for each hypervisor", err)
+	if err == nil || err.Error() != "1 problem found" {
+		t.Errorf("doctor = %v, want 1 problem found", err)
 	}
-	for _, want := range []string{"✗ cloud-hypervisor v53.0.0", "ended without running its command", "Kernel panic - not syncing"} {
+	for _, want := range []string{
+		"✗ Boot (cloud-hypervisor v53.0.0)  ended without running its command",
+		"\n                                     Kernel panic - not syncing\n",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
 }
 
-func TestDoctorWarnsOfAGuestOffline(t *testing.T) {
+func TestDoctorWarnsWithoutFailing(t *testing.T) {
 	d := newDoctorDaemon()
-	guestRuns(d.fakeInstanceDaemon, "dicer-doctor: booted\ndicer-doctor: offline\n", 0)
+	d.results[len(d.results)-1] = &dicerdv1.HostCheckResult{
+		Group: groupInstances, Name: "internet", Status: statusWarning,
+		Detail: "a test instance could not reach http://example.com/",
+	}
 	serveFakeDaemon(t, d)
 
 	out, err := run(t, "doctor")
 	if err != nil {
 		t.Fatalf("doctor = %v, want a warning only\n%s", err, out)
 	}
-	if !strings.Contains(out, "! Network") || !strings.Contains(out, "No problems, 1 warning.") {
-		t.Errorf("output does not warn of a guest offline:\n%s", out)
+	if !strings.Contains(out, "! Internet access") || !strings.Contains(out, "No problems, 1 warning.") {
+		t.Errorf("output does not warn of a test instance offline:\n%s", out)
 	}
 }
 
-func TestDoctorGivesUpOnAGuestThatNeverEnds(t *testing.T) {
+func TestDoctorAsJSON(t *testing.T) {
 	d := newDoctorDaemon()
-	d.host.Hypervisors = d.host.GetHypervisors()[:1]
 	serveFakeDaemon(t, d)
 
-	out, err := run(t, "doctor", "--timeout", "200ms")
-	if err == nil {
-		t.Fatalf("doctor succeeded with a guest that never ended:\n%s", out)
+	out, err := run(t, "doctor", "--format", "json")
+	if err != nil {
+		t.Fatalf("doctor = %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "did not run its command within") {
-		t.Errorf("output does not say the guest timed out:\n%s", out)
+	var report struct {
+		Results []struct {
+			Group  string `json:"group"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"results"`
 	}
-}
-
-func TestDoctorKeepsAFailedGuestWhenAsked(t *testing.T) {
-	d := newDoctorDaemon()
-	d.host.Hypervisors = d.host.GetHypervisors()[:1]
-	guestRuns(d.fakeInstanceDaemon, "no shell here\n", 127)
-	serveFakeDaemon(t, d)
-
-	out, _ := run(t, "doctor", "--keep")
-	if !strings.Contains(out, "kept as doctor-") {
-		t.Errorf("output does not name the kept guest:\n%s", out)
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("output is not JSON: %v\n%s", err, out)
 	}
-	d.mu.Lock()
-	left := len(d.instances)
-	d.mu.Unlock()
-	if left != 1 {
-		t.Errorf("%d test guests left, want the failed one kept", left)
+	if len(report.Results) != len(d.results) {
+		t.Fatalf("results = %+v, want %d", report.Results, len(d.results))
+	}
+	if r := report.Results[2]; r.Group != "instances" || r.Name != "cloud-hypervisor" || r.Status != "ok" {
+		t.Errorf("third result = %+v, want the cloud-hypervisor test instance, ok", r)
 	}
 }
 
@@ -173,50 +216,16 @@ func TestDoctorOnADaemonTooOldToCheckItsHost(t *testing.T) {
 	d := newFakeInstanceDaemon()
 	serveFakeDaemon(t, d)
 
-	start := time.Now()
-	out, err := run(t, "doctor", "--host-only")
-	if err == nil || !strings.Contains(out, "too old to check its host") {
-		t.Errorf("doctor = %v, want the daemon called too old:\n%s", err, out)
-	}
-	if time.Since(start) > 5*time.Second {
-		t.Error("doctor took too long against an old daemon")
+	_, err := run(t, "doctor", "--host-only")
+	if err == nil || !strings.Contains(err.Error(), "too old to check its host") {
+		t.Errorf("doctor = %v, want the daemon called too old", err)
 	}
 }
 
-func TestConsoleExcerptShowsThePanic(t *testing.T) {
-	boot := []string{"booting", "Run /init as init process", "Kernel panic - not syncing: Attempted to kill init!", "Rebooting in 1 seconds..", "booting again", "rcu: ..."}
-	got := consoleExcerpt(boot)
-	if len(got) == 0 || got[len(got)-1] != "Kernel panic - not syncing: Attempted to kill init!" || !slices.Contains(got, "Run /init as init process") {
-		t.Errorf("excerpt = %q, want the panic and what led to it", got)
-	}
+func TestDoctorRefusesAnUnknownHypervisor(t *testing.T) {
+	serveFakeDaemon(t, newDoctorDaemon())
 
-	plain := []string{"a", "b", "c", "d", "e", "f", "g"}
-	if got := consoleExcerpt(plain); !slices.Equal(got, plain[2:]) {
-		t.Errorf("excerpt without a panic = %q, want the last five lines", got)
-	}
-}
-
-// TestDoctorChecksTheNetworkFromAGuestThatBooted checks that a guest that
-// does not boot does not keep the network from being checked.
-func TestDoctorChecksTheNetworkFromAGuestThatBooted(t *testing.T) {
-	d := newDoctorDaemon()
-	// The first guest, Cloud Hypervisor's, panics; the second boots.
-	started := 0
-	d.onStart = func(name string) {
-		d.mu.Lock()
-		started++
-		console, code := "dicer-doctor: booted\ndicer-doctor: online\n", int32(0)
-		if started == 1 {
-			console, code = "Kernel panic - not syncing\n", 1
-		}
-		d.console[name] = console
-		d.mu.Unlock()
-		go d.stops(name, code)
-	}
-	serveFakeDaemon(t, d)
-
-	out, _ := run(t, "doctor")
-	if !strings.Contains(out, "✗ cloud-hypervisor") || !strings.Contains(out, "✓ Network") {
-		t.Errorf("output does not check the network from the guest that booted:\n%s", out)
+	if _, err := run(t, "doctor", "--hypervisor-type", "qemu"); err == nil {
+		t.Error("doctor --hypervisor-type qemu succeeded")
 	}
 }

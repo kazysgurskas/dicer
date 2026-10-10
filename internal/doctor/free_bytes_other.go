@@ -3,7 +3,7 @@
 
 //go:build !linux
 
-package hostcheck
+package doctor
 
 import "errors"
 

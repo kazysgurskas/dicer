@@ -153,6 +153,40 @@ const (
 
 The architectures.
 
+### type CheckHostOptions {#checkhostoptions}
+
+```go
+type CheckHostOptions struct {
+	// TestInstance boots a test instance after the host is checked. It
+	// creates and deletes an instance, pulls its image if the host does not
+	// have it, and needs a token with instances:write.
+	TestInstance bool
+
+	// TestInstanceImage is the test instance's image: one with sh and wget,
+	// such as busybox. Empty is docker.io/library/busybox:1.37.
+	TestInstanceImage string
+
+	// TestInstanceHypervisor is the hypervisor the test instance boots on.
+	// Empty is cloud-hypervisor.
+	TestInstanceHypervisor HypervisorType
+
+	// TestInstanceHypervisorVersion is the version of the hypervisor the test
+	// instance boots on. Empty is the hypervisor's default version, which
+	// HostInfo lists first.
+	TestInstanceHypervisorVersion string
+
+	// TestInstanceTimeout is how long a test instance may take to run its
+	// command. Zero is 2 minutes.
+	TestInstanceTimeout time.Duration
+
+	// KeepFailedTestInstance keeps a test instance that failed, to look into,
+	// rather than deleting it.
+	KeepFailedTestInstance bool
+}
+```
+
+CheckHostOptions say whether CheckHost boots a test instance, and how.
+
 ### type Client {#client}
 
 ```go
@@ -208,10 +242,12 @@ Connecting is lazy: an unreachable daemon is reported by the first call. A local
 #### func (*Client) CheckHost {#client-checkhost}
 
 ```go
-func (c *Client) CheckHost(ctx context.Context) ([]HostCheck, error)
+func (c *Client) CheckHost(
+	ctx context.Context, opts CheckHostOptions, onResult func(HostCheckResult),
+) ([]HostCheckResult, error)
 ```
 
-CheckHost checks that the host can run instances and reach them: KVM, IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and its free disk. It changes nothing, and boots nothing.
+CheckHost checks that the host can run instances and reach them: KVM, IPv4 forwarding, the firewall, the tools the daemon runs, its uplink and its free disk. Those checks change nothing. With opts.TestInstance, it then boots a small test instance, has it run a command and reach the internet, and deletes it. onResult, if not nil, is called with each result as it is found. CheckHost returns every result: the host's first, then the test instance's, then whether it reached the internet.
 
 #### func (*Client) Close {#client-close}
 
@@ -736,12 +772,37 @@ const (
 
 The health statuses.
 
-### type HostCheck {#hostcheck}
+### type HostCheckGroup {#hostcheckgroup}
 
 ```go
-type HostCheck struct {
-	// Name is what was checked: kvm, ip_forwarding, firewall, tools, uplink
-	// or disk.
+type HostCheckGroup string
+```
+
+HostCheckGroup is which part of CheckHost's checks a result belongs to.
+
+```go
+const (
+	// HostCheckGroupHost holds the checks of the host itself.
+	HostCheckGroupHost HostCheckGroup = "host"
+
+	// HostCheckGroupInstances holds what the test instance showed, and
+	// whether it reached the internet.
+	HostCheckGroupInstances HostCheckGroup = "instances"
+)
+```
+
+The host check groups, in the order their results come.
+
+### type HostCheckResult {#hostcheckresult}
+
+```go
+type HostCheckResult struct {
+	// Group is which part of the checks the result belongs to.
+	Group HostCheckGroup `json:"group,omitzero"`
+
+	// Name is what was checked. For the host it is kvm, ip_forwarding,
+	// firewall, tools, uplink or disk. For the test instance it is its
+	// hypervisor's type, or internet.
 	Name string `json:"name,omitzero"`
 
 	// Status is what the check found.
@@ -752,10 +813,14 @@ type HostCheck struct {
 
 	// Hint is what to do about it. It is empty for a check that passed.
 	Hint string `json:"hint,omitzero"`
+
+	// Console is a failed test instance's last console lines, which say why it
+	// failed.
+	Console []string `json:"console,omitzero"`
 }
 ```
 
-HostCheck is one thing CheckHost checked about the host.
+HostCheckResult is what one of CheckHost's checks found.
 
 ### type HostCheckStatus {#hostcheckstatus}
 
@@ -763,20 +828,20 @@ HostCheck is one thing CheckHost checked about the host.
 type HostCheckStatus string
 ```
 
-HostCheckStatus is what a HostCheck found.
+HostCheckStatus is what a HostCheckResult found.
 
 ```go
 const (
-	// HostCheckOK means all is well.
-	HostCheckOK HostCheckStatus = "ok"
+	// HostCheckStatusOK means all is well.
+	HostCheckStatusOK HostCheckStatus = "ok"
 
-	// HostCheckWarning means something may go wrong, such as little free
-	// disk.
-	HostCheckWarning HostCheckStatus = "warning"
+	// HostCheckStatusWarning means something may go wrong, such as little
+	// free disk.
+	HostCheckStatusWarning HostCheckStatus = "warning"
 
-	// HostCheckFailed means instances cannot boot, or cannot be reached,
-	// until it is fixed.
-	HostCheckFailed HostCheckStatus = "failed"
+	// HostCheckStatusFailed means instances cannot boot, or cannot be
+	// reached, until it is fixed.
+	HostCheckStatusFailed HostCheckStatus = "failed"
 )
 ```
 

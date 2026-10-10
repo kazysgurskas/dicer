@@ -13,6 +13,7 @@ package grpcserver
 import (
 	"context"
 	"crypto/tls"
+	"iter"
 	"log/slog"
 	"net/netip"
 	"time"
@@ -21,8 +22,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/konradasb/dicer/internal/doctor"
 	"github.com/konradasb/dicer/internal/event"
-	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -69,7 +70,7 @@ type Config struct {
 	DataDir string
 
 	// CheckHost checks the host for CheckHost. Nil checks nothing.
-	CheckHost func(ctx context.Context) []hostcheck.Result
+	CheckHost func(ctx context.Context, opts doctor.Options) iter.Seq[doctor.Result]
 
 	// Version is the daemon's version, as GetHostInfo reports it.
 	Version string

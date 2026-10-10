@@ -4,11 +4,11 @@
 package grpcserver
 
 import (
+	"github.com/konradasb/dicer/internal/doctor"
 	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
-	"github.com/konradasb/dicer/internal/hostcheck"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -158,8 +158,13 @@ var pullStages = enum[image.PullStage, dicerdv1.PullStage]{"pull stage", map[ima
 	image.PullStageConverting:  dicerdv1.PullStage_PULL_STAGE_CONVERTING,
 }}
 
-var hostCheckStatuses = enum[hostcheck.Status, dicerdv1.HostCheckStatus]{"host check status", map[hostcheck.Status]dicerdv1.HostCheckStatus{
-	hostcheck.OK:      dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK,
-	hostcheck.Warning: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING,
-	hostcheck.Failed:  dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED,
+var hostCheckStatuses = enum[doctor.Status, dicerdv1.HostCheckStatus]{"host check status", map[doctor.Status]dicerdv1.HostCheckStatus{
+	doctor.StatusOK:      dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_OK,
+	doctor.StatusWarning: dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_WARNING,
+	doctor.StatusFailed:  dicerdv1.HostCheckStatus_HOST_CHECK_STATUS_FAILED,
+}}
+
+var hostCheckGroups = enum[doctor.Group, dicerdv1.HostCheckGroup]{"host check group", map[doctor.Group]dicerdv1.HostCheckGroup{
+	doctor.GroupHost:      dicerdv1.HostCheckGroup_HOST_CHECK_GROUP_HOST,
+	doctor.GroupInstances: dicerdv1.HostCheckGroup_HOST_CHECK_GROUP_INSTANCES,
 }}
