@@ -8,4 +8,8 @@
 package agent
 
 // server implements diceragentv1.AgentServiceServer.
-type server struct{}
+type server struct {
+	// user is who a command runs as when its request names no one: the
+	// workload's user, as user, uid, user:group or uid:gid. Empty is root.
+	user string
+}

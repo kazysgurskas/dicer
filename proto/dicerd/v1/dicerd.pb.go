@@ -1039,7 +1039,9 @@ type Instance struct {
 	InitMode InitMode `protobuf:"varint,43,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
 	// Whether the instance is deleted once it stops. See
 	// CreateInstanceRequest.remove_on_exit.
-	RemoveOnExit  bool `protobuf:"varint,44,opt,name=remove_on_exit,json=removeOnExit,proto3" json:"remove_on_exit,omitempty"`
+	RemoveOnExit bool `protobuf:"varint,44,opt,name=remove_on_exit,json=removeOnExit,proto3" json:"remove_on_exit,omitempty"`
+	// Who the workload runs as. See CreateInstanceRequest.user.
+	User          string `protobuf:"bytes,45,opt,name=user,proto3" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1382,6 +1384,13 @@ func (x *Instance) GetRemoveOnExit() bool {
 	return false
 }
 
+func (x *Instance) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
 // HealthCheck is how an instance's health is checked: one probe, run inside
 // the guest by its agent, and when to run it. Unset timings take the
 // defaults: every 10s, a 5s timeout, no start period and 3 retries.
@@ -1532,6 +1541,7 @@ func (*HealthCheck_Http) isHealthCheck_Probe() {}
 
 func (*HealthCheck_Tcp) isHealthCheck_Probe() {}
 
+// HealthCheckExec runs a command as the workload's user.
 type HealthCheckExec struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Command       []string               `protobuf:"bytes,1,rep,name=command,proto3" json:"command,omitempty"`
@@ -2029,6 +2039,11 @@ type CreateInstanceRequest struct {
 	HealthCheck   *HealthCheck      `protobuf:"bytes,22,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
 	// How the guest starts the command. Unspecified means auto.
 	InitMode InitMode `protobuf:"varint,23,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
+	// Who the workload runs as in the exec init mode: user, uid, user:group
+	// or uid:gid, looked up in the guest's /etc/passwd and /etc/group. Empty
+	// means the image's USER, or root if it has none. The systemd init mode
+	// runs as root, so it cannot be combined with a user.
+	User string `protobuf:"bytes,34,opt,name=user,proto3" json:"user,omitempty"`
 	// When the image is pulled; see PullPolicy.
 	PullPolicy PullPolicy `protobuf:"varint,26,opt,name=pull_policy,json=pullPolicy,proto3,enum=dicerd.v1.PullPolicy" json:"pull_policy,omitempty"`
 	// Boots the instance immediately after defining it.
@@ -2252,6 +2267,13 @@ func (x *CreateInstanceRequest) GetInitMode() InitMode {
 	return InitMode_INIT_MODE_UNSPECIFIED
 }
 
+func (x *CreateInstanceRequest) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
 func (x *CreateInstanceRequest) GetPullPolicy() PullPolicy {
 	if x != nil {
 		return x.PullPolicy
@@ -2325,6 +2347,8 @@ type UpdateInstanceRequest struct {
 	Cmd           []string             `protobuf:"bytes,25,rep,name=cmd,proto3" json:"cmd,omitempty"`
 	Labels        map[string]string    `protobuf:"bytes,26,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Ports         []*PortMapping       `protobuf:"bytes,27,rep,name=ports,proto3" json:"ports,omitempty"`
+	// Empty means the image's USER again.
+	User          *string `protobuf:"bytes,28,opt,name=user,proto3,oneof" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2546,6 +2570,13 @@ func (x *UpdateInstanceRequest) GetPorts() []*PortMapping {
 		return x.Ports
 	}
 	return nil
+}
+
+func (x *UpdateInstanceRequest) GetUser() string {
+	if x != nil && x.User != nil {
+		return *x.User
+	}
+	return ""
 }
 
 type StartInstanceRequest struct {
@@ -3301,7 +3332,8 @@ type ExecInstanceStart struct {
 	// Environment variables added to the command's environment.
 	Env map[string]string `protobuf:"bytes,8,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// The user to run the command as, as user, uid, user:group or uid:gid,
-	// looked up in the guest's /etc/passwd and /etc/group. Empty means root.
+	// looked up in the guest's /etc/passwd and /etc/group. Empty means the
+	// user the workload runs as, which is root in the systemd init mode.
 	// An unknown user fails the command with INVALID_ARGUMENT. So that a
 	// command never runs as root by mistake, an instance whose guest agent
 	// cannot switch users fails it with FAILED_PRECONDITION. Its agent is
@@ -8003,7 +8035,7 @@ var File_dicerd_v1_dicerd_proto protoreflect.FileDescriptor
 
 const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\n" +
-	"\x16dicerd/v1/dicerd.proto\x12\tdicerd.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x0f\n" +
+	"\x16dicerd/v1/dicerd.proto\x12\tdicerd.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x0f\n" +
 	"\bInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
@@ -8057,7 +8089,8 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\fhealth_check\x18) \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x12)\n" +
 	"\x06health\x18* \x01(\v2\x11.dicerd.v1.HealthR\x06health\x120\n" +
 	"\tinit_mode\x18+ \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12$\n" +
-	"\x0eremove_on_exit\x18, \x01(\bR\fremoveOnExit\x1a6\n" +
+	"\x0eremove_on_exit\x18, \x01(\bR\fremoveOnExit\x12\x12\n" +
+	"\x04user\x18- \x01(\tR\x04user\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
@@ -8106,7 +8139,7 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\thost_port\x18\x02 \x01(\rR\bhostPort\x12\x1d\n" +
 	"\n" +
 	"guest_port\x18\x03 \x01(\rR\tguestPort\x12/\n" +
-	"\bprotocol\x18\x04 \x01(\x0e2\x13.dicerd.v1.ProtocolR\bprotocol\"\xa9\v\n" +
+	"\bprotocol\x18\x04 \x01(\x0e2\x13.dicerd.v1.ProtocolR\bprotocol\"\xbd\v\n" +
 	"\x15CreateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\timage_ref\x18\x02 \x01(\tR\bimageRef\x12B\n" +
@@ -8136,7 +8169,8 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\bhostname\x18\x11 \x01(\tR\bhostname\x12?\n" +
 	"\x0erestart_policy\x18\x15 \x01(\v2\x18.dicerd.v1.RestartPolicyR\rrestartPolicy\x129\n" +
 	"\fhealth_check\x18\x16 \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x120\n" +
-	"\tinit_mode\x18\x17 \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x126\n" +
+	"\tinit_mode\x18\x17 \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12\x12\n" +
+	"\x04user\x18\" \x01(\tR\x04user\x126\n" +
 	"\vpull_policy\x18\x1a \x01(\x0e2\x15.dicerd.v1.PullPolicyR\n" +
 	"pullPolicy\x12\x14\n" +
 	"\x05start\x18\x13 \x01(\bR\x05start\x12,\n" +
@@ -8148,7 +8182,7 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\r\x10\x0eJ\x04\b\x12\x10\x13R\avolumesR\x05filesR\tautostart\"\x86\r\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\r\x10\x0eJ\x04\b\x12\x10\x13R\avolumesR\x05filesR\tautostart\"\xa8\r\n" +
 	"\x15UpdateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12B\n" +
 	"\x0fhypervisor_type\x18\x02 \x01(\x0e2\x19.dicerd.v1.HypervisorTypeR\x0ehypervisorType\x122\n" +
@@ -8181,7 +8215,8 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x03env\x18\x18 \x03(\v2).dicerd.v1.UpdateInstanceRequest.EnvEntryR\x03env\x12\x10\n" +
 	"\x03cmd\x18\x19 \x03(\tR\x03cmd\x12D\n" +
 	"\x06labels\x18\x1a \x03(\v2,.dicerd.v1.UpdateInstanceRequest.LabelsEntryR\x06labels\x12,\n" +
-	"\x05ports\x18\x1b \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x1a6\n" +
+	"\x05ports\x18\x1b \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x12\x17\n" +
+	"\x04user\x18\x1c \x01(\tH\x10R\x04user\x88\x01\x01\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
@@ -8206,7 +8241,8 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\n" +
 	"_static_ipB\v\n" +
 	"\t_hostnameB\x11\n" +
-	"\x0f_remove_on_exit\"*\n" +
+	"\x0f_remove_on_exitB\a\n" +
+	"\x05_user\"*\n" +
 	"\x14StartInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x89\x01\n" +
 	"\x15ResizeInstanceRequest\x12\x12\n" +

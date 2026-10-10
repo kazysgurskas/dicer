@@ -125,6 +125,32 @@ func TestInstanceRateLimits(t *testing.T) {
 	wantClass(t, err, errdefs.ErrInvalidArgument)
 }
 
+// An instance keeps the user it is created with, and an update that sets an
+// empty one goes back to the image's.
+func TestInstanceKeepsItsUserUntilAnUpdateChangesIt(t *testing.T) {
+	s, store := newTestServer(t)
+	seedKernel(t, store)
+
+	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{
+		Name: "web", ImageRef: "alpine", Vcpus: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30, User: "app",
+	})
+	if err != nil {
+		t.Fatalf("newInstance: %v", err)
+	}
+	if got := instanceToProto(instance.Instance{Spec: spec}).GetUser(); got != "app" {
+		t.Errorf("user = %q, want app", got)
+	}
+
+	applySettings(&spec, &dicerdv1.UpdateInstanceRequest{})
+	if spec.User != "app" {
+		t.Errorf("user = %q after an update that sets none, want app", spec.User)
+	}
+	applySettings(&spec, &dicerdv1.UpdateInstanceRequest{User: new("")})
+	if spec.User != "" {
+		t.Errorf("user = %q after an update that empties it, want the image's", spec.User)
+	}
+}
+
 // An instance that names no kernel or network gets the default ones.
 func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
 	s, store := newTestServer(t)

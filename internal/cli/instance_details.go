@@ -220,8 +220,9 @@ func networkLines(instance dicer.Instance) []string {
 	return out
 }
 
-// commandLines is what the instance runs -- its own command, or the
-// image's -- and how, if it is not left to the guest to decide.
+// commandLines is what the instance runs: its own command, or the image's.
+// It adds the user the instance names, and the init mode if it is not left
+// to the guest to decide.
 func commandLines(instance dicer.Instance) []string {
 	command := "the image's"
 	if len(instance.Cmd) > 0 {
@@ -229,6 +230,9 @@ func commandLines(instance dicer.Instance) []string {
 	}
 
 	out := []string{command}
+	if user := instance.User; user != "" {
+		out = append(out, "as "+user)
+	}
 	if mode := instance.InitMode; mode != "" && mode != dicer.InitModeAuto {
 		out = append(out, "in "+string(mode)+" mode")
 	}

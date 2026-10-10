@@ -76,8 +76,10 @@ message ExecStart {
   // Environment variables added to the command's environment.
   map<string, string> env = 7;
   // The user to run the command as, as user, uid, user:group or uid:gid,
-  // looked up in the guest's /etc/passwd and /etc/group. Empty means root.
-  // An agent without AGENT_FEATURE_EXEC_USER ignores it.
+  // looked up in the guest's /etc/passwd and /etc/group. Empty means the
+  // workload's user, which dicer-init starts the agent with, or root if it
+  // gives none. An agent without AGENT_FEATURE_EXEC_USER ignores it, and
+  // runs the command as root.
   string user = 8;
 }
 
@@ -148,7 +150,8 @@ message ProbeRequest {
   google.protobuf.Duration timeout = 4;
 }
 
-// ExecProbe passes when the command exits 0.
+// ExecProbe passes when the command exits 0. The command runs as the
+// workload's user, like an ExecStart that names no user.
 message ExecProbe {
   repeated string command = 1;
 }

@@ -164,6 +164,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | `restart_policy` | [`RestartPolicy`](#restartpolicy) |  |
 | `health_check` | [`HealthCheck`](#healthcheck) |  |
 | `init_mode` | [`InitMode`](#initmode) | How the guest starts the command. Unspecified means auto. |
+| `user` | `string` | Who the workload runs as in the exec init mode: user, uid, user:group or uid:gid, looked up in the guest's /etc/passwd and /etc/group. Empty means the image's USER, or root if it has none. The systemd init mode runs as root, so it cannot be combined with a user. |
 | `pull_policy` | [`PullPolicy`](#pullpolicy) | When the image is pulled; see PullPolicy. |
 | `start` | `bool` | Boots the instance immediately after defining it. |
 | `ports` | repeated [`PortMapping`](#portmapping) |  |
@@ -336,7 +337,7 @@ ExecInstanceStart is the first message on an ExecInstance stream.
 | `rows` | `uint32` | The initial terminal size, when tty is set. |
 | `cols` | `uint32` |  |
 | `env` | repeated [`ExecInstanceStart.EnvEntry`](#execinstancestartenventry) | Environment variables added to the command's environment. |
-| `user` | `string` | The user to run the command as, as user, uid, user:group or uid:gid, looked up in the guest's /etc/passwd and /etc/group. Empty means root. An unknown user fails the command with INVALID_ARGUMENT. So that a command never runs as root by mistake, an instance whose guest agent cannot switch users fails it with FAILED_PRECONDITION. Its agent is that old if it has run since before the daemon was upgraded, or was restored from a snapshot taken before then. |
+| `user` | `string` | The user to run the command as, as user, uid, user:group or uid:gid, looked up in the guest's /etc/passwd and /etc/group. Empty means the user the workload runs as, which is root in the systemd init mode. An unknown user fails the command with INVALID_ARGUMENT. So that a command never runs as root by mistake, an instance whose guest agent cannot switch users fails it with FAILED_PRECONDITION. Its agent is that old if it has run since before the daemon was upgraded, or was restored from a snapshot taken before then. |
 
 ### ExecInstanceStart.EnvEntry
 
@@ -510,6 +511,8 @@ defaults: every 10s, a 5s timeout, no start period and 3 retries.
 
 ### HealthCheckExec
 
+HealthCheckExec runs a command as the workload's user.
+
 | Field | Type | Description |
 |---|---|---|
 | `command` | repeated `string` |  |
@@ -622,6 +625,7 @@ is not running.
 | `health` | [`Health`](#health) | What the health check of the running instance has found. Unset if it is not running, or has no check. |
 | `init_mode` | [`InitMode`](#initmode) | How the guest starts the command. See CreateInstanceRequest.init_mode. |
 | `remove_on_exit` | `bool` | Whether the instance is deleted once it stops. See CreateInstanceRequest.remove_on_exit. |
+| `user` | `string` | Who the workload runs as. See CreateInstanceRequest.user. |
 
 ### Instance.EnvEntry
 
@@ -1042,6 +1046,7 @@ the existing value whole.
 | `cmd` | repeated `string` |  |
 | `labels` | repeated [`UpdateInstanceRequest.LabelsEntry`](#updateinstancerequestlabelsentry) |  |
 | `ports` | repeated [`PortMapping`](#portmapping) |  |
+| `user` | optional `string` | One of `_user`. Empty means the image's USER again. |
 
 ### UpdateInstanceRequest.EnvEntry
 

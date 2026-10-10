@@ -91,8 +91,10 @@ type ExecStart struct {
 	// Environment variables added to the command's environment.
 	Env map[string]string `protobuf:"bytes,7,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// The user to run the command as, as user, uid, user:group or uid:gid,
-	// looked up in the guest's /etc/passwd and /etc/group. Empty means root.
-	// An agent without AGENT_FEATURE_EXEC_USER ignores it.
+	// looked up in the guest's /etc/passwd and /etc/group. Empty means the
+	// workload's user, which dicer-init starts the agent with, or root if it
+	// gives none. An agent without AGENT_FEATURE_EXEC_USER ignores it, and
+	// runs the command as root.
 	User          string `protobuf:"bytes,8,opt,name=user,proto3" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -872,7 +874,8 @@ func (*ProbeRequest_Http) isProbeRequest_Probe() {}
 
 func (*ProbeRequest_Tcp) isProbeRequest_Probe() {}
 
-// ExecProbe passes when the command exits 0.
+// ExecProbe passes when the command exits 0. The command runs as the
+// workload's user, like an ExecStart that names no user.
 type ExecProbe struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Command       []string               `protobuf:"bytes,1,rep,name=command,proto3" json:"command,omitempty"`

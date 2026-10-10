@@ -33,6 +33,7 @@ func NewCommand() *cobra.Command {
 
 	cmd.SetVersionTemplate(version.String() + "\n")
 	cmd.Flags().Uint32P("port", "p", guest.AgentPort, "The vsock port to listen on.")
+	cmd.Flags().String("user", "", "Who a command runs as when it names no user: the workload's user (default root).")
 
 	cmd.AddCommand(newReportExitCommand())
 
@@ -71,6 +72,7 @@ func runRoot(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("get port flag: %w", err)
 	}
+	user, _ := cmd.Flags().GetString("user")
 
 	var listener *vsock.Listener
 	for i := range 10 {
@@ -95,7 +97,7 @@ func runRoot(cmd *cobra.Command, _ []string) error {
 	}()
 
 	grpcServer := grpc.NewServer()
-	diceragentv1.RegisterAgentServiceServer(grpcServer, &server{})
+	diceragentv1.RegisterAgentServiceServer(grpcServer, &server{user: user})
 
 	if err := grpcServer.Serve(listener); err != nil {
 		return fmt.Errorf("grpc serve: %w", err)

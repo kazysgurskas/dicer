@@ -57,6 +57,7 @@ services:
     hostname: www
     entrypoint: /docker-entrypoint.sh
     command: nginx -g 'daemon off;'
+    user: nginx
     environment:
       MODE: production
       FROM_SHELL:
@@ -125,6 +126,7 @@ volumes:
 		KernelName:        "linux-6.18",
 		KernelArgs:        "quiet",
 		InitMode:          dicer.InitModeExec,
+		User:              "nginx",
 		VCPUs:             2,
 		MemoryBytes:       1 << 30,
 		DiskBytes:         20 << 30,

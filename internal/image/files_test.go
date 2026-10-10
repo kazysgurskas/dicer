@@ -330,6 +330,7 @@ func TestSaveAndLoadMetadata(t *testing.T) {
 			"HOME": "/root",
 		},
 		WorkingDir: "/app",
+		User:       "app",
 		CreatedAt:  now.Add(-1 * time.Hour),
 		UpdatedAt:  now,
 	}
@@ -372,6 +373,9 @@ func TestSaveAndLoadMetadata(t *testing.T) {
 	}
 	if loaded.WorkingDir != image.WorkingDir {
 		t.Errorf("WorkingDir = %v, want %v", loaded.WorkingDir, image.WorkingDir)
+	}
+	if loaded.User != image.User {
+		t.Errorf("User = %v, want %v", loaded.User, image.User)
 	}
 	if loaded.CreatedAt.Unix() != image.CreatedAt.Unix() {
 		t.Errorf("CreatedAt = %v, want %v", loaded.CreatedAt, image.CreatedAt)

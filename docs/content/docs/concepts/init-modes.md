@@ -25,7 +25,8 @@ The command runs as a container runs it. `dicer-init` stays the machine's
 PID 1, and starts the command as PID 1 of a PID namespace of its own, with
 its own mount namespace and `/proc`. `ps` in it shows its processes and no
 others, and tools that look processes up in `/proc`, such as Docker's, find
-them.
+them. The command runs as the image's `USER`, or as the instance's
+[user](../../guides/running-workloads#user) if it names one.
 
 `dicer-init` supervises the command. When the command exits, `dicer-init`
 reports its exit code to the host and ends the machine, so the instance ends
@@ -40,7 +41,7 @@ container.
 
 If the command cannot be started, the instance ends at once, with the exit
 code a shell would give: 127 if the image does not have the command, or 126
-if it cannot be run.
+if it cannot be run or the guest has no such user.
 
 ## systemd
 

@@ -6,6 +6,7 @@
 package boot
 
 import (
+	"cmp"
 	"errors"
 	"log/slog"
 	"os"
@@ -18,8 +19,8 @@ import (
 
 // bootExec starts the guest agent, then runs the entrypoint in the overlay
 // root as PID 1 of its own PID namespace, with a mount namespace and /proc of
-// its own. When it exits, its exit code is written to the status disk and the
-// machine ends. It does not return.
+// its own, as cfg's user. When it exits, its exit code is written to the
+// status disk and the machine ends. It does not return.
 func bootExec(log *slog.Logger, cfg *guest.Config) {
 	if err := syscall.Chroot(overlayRoot); err != nil {
 		fatal(log, "chroot", err)
@@ -34,7 +35,11 @@ func bootExec(log *slog.Logger, cfg *guest.Config) {
 	env := guestEnv(cfg.Env)
 
 	log.Debug("starting guest agent")
-	agentCmd := exec.Command(guestAgentPath)
+	var agentArgs []string
+	if cfg.User != "" {
+		agentArgs = []string{"--user", cfg.User}
+	}
+	agentCmd := exec.Command(guestAgentPath, agentArgs...)
 	agentCmd.Stdout = os.Stdout
 	agentCmd.Stderr = os.Stderr
 	agentCmd.Env = env
@@ -42,32 +47,18 @@ func bootExec(log *slog.Logger, cfg *guest.Config) {
 		log.Error("failed to start guest agent", "error", err)
 	}
 
-	workdir := cfg.Workdir
-	if workdir == "" {
-		workdir = "/"
-	}
-
-	// dicer-init starts again as the namespaces' first process, to mount their
-	// /proc before it becomes the workload: Go cannot run code between
-	// creating a process and running its program. /proc/self/exe is this
-	// binary, which the chroot has otherwise left behind.
-	argv := cfg.Argv()
-	entrypointCmd := exec.Command("/proc/self/exe", append([]string{entrypointCommand, "--"}, argv...)...)
-	entrypointCmd.Stdin = os.Stdin
-	entrypointCmd.Stdout = os.Stdout
-	entrypointCmd.Stderr = os.Stderr
-	entrypointCmd.Env = env
-	entrypointCmd.Dir = workdir
-	entrypointCmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
-
-	log.Info("starting entrypoint", "argv", argv, "workdir", workdir)
-
 	// Listened for before the start, so that a stop asked for as the
 	// entrypoint starts is not lost.
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, forwardedSignals...)
 
-	exitCode := runWorkload(log, entrypointCmd, signals)
+	exitCode := exitCannotExecute
+	if cmd, err := entrypointCmd(cfg); err != nil {
+		log.Error("entrypoint start failed", "error", err)
+	} else {
+		log.Info("starting entrypoint", "argv", cfg.Argv(), "user", cfg.User, "workdir", cmd.Dir)
+		exitCode = runWorkload(log, cmd, signals)
+	}
 
 	// The workload is the reason the machine exists: once it has exited,
 	// the machine ends, and the host decides what happens next. The guest
@@ -75,6 +66,38 @@ func bootExec(log *slog.Logger, cfg *guest.Config) {
 	log.Info("entrypoint exited", "code", exitCode)
 	reportExit(log, cfg, exitCode)
 	halt(log, cfg.Halt)
+}
+
+// entrypointCmd returns the command that starts cfg's entrypoint, as cfg's
+// user with the user's home directory as HOME, or as root if it names no
+// user. It fails if the guest has no such user.
+//
+// dicer-init starts again as the namespaces' first process, to mount their
+// /proc before it becomes the workload: Go cannot run code between creating
+// a process and running its program. It switches to the user only then,
+// since the user could not mount /proc. /proc/self/exe is this binary, which
+// the chroot has otherwise left behind.
+func entrypointCmd(cfg *guest.Config) (*exec.Cmd, error) {
+	args := []string{entrypointCommand}
+	env := cfg.Env
+	if cfg.User != "" {
+		user, err := guest.UserNamed(cfg.User)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, credentialArgs(user.Credential)...)
+		env = user.EnvWithHome(env)
+	}
+	args = append(append(args, "--"), cfg.Argv()...)
+
+	cmd := exec.Command("/proc/self/exe", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = guestEnv(env)
+	cmd.Dir = cmp.Or(cfg.Workdir, "/")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID | syscall.CLONE_NEWNS}
+	return cmd, nil
 }
 
 // runWorkload starts cmd, passes signals on to it and waits for it to exit,

@@ -39,7 +39,7 @@ func (s *server) Probe(ctx context.Context, req *diceragentv1.ProbeRequest) (*di
 		if len(p.Exec.GetCommand()) == 0 {
 			return nil, status.Error(codes.InvalidArgument, "an exec probe needs a command")
 		}
-		output, err = probeExec(ctx, p.Exec.GetCommand())
+		output, err = s.probeExec(ctx, p.Exec.GetCommand())
 	case *diceragentv1.ProbeRequest_Http:
 		output, err = probeHTTP(ctx, p.Http.GetPort(), p.Http.GetPath())
 	case *diceragentv1.ProbeRequest_Tcp:
@@ -58,19 +58,24 @@ func (s *server) Probe(ctx context.Context, req *diceragentv1.ProbeRequest) (*di
 	return &diceragentv1.ProbeResponse{Healthy: err == nil, Output: guest.TruncateProbeOutput(output)}, nil
 }
 
-// probeExec runs a command, in the environment an exec gets. It passes if
-// the command exits 0; what it printed is its output either way.
-func probeExec(ctx context.Context, command []string) (string, error) {
+// probeExec runs a command the way an exec that names no user runs one: as
+// the workload's user, in the workload's environment. It passes if the
+// command exits 0; what it printed is its output either way.
+func (s *server) probeExec(ctx context.Context, command []string) (string, error) {
+	user, err := s.commandUser("")
+	if err != nil {
+		return "", err
+	}
+
 	var out boundedBuffer
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	cmd.Env = execEnv(nil, false)
+	cmd := execCommand(ctx, &diceragentv1.ExecStart{}, command, user)
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	// A command that leaves a child holding its output open must not hold
 	// the probe past its timeout.
 	cmd.WaitDelay = time.Second
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		err = fmt.Errorf("exited with code %d", exitErr.ExitCode())
 	}

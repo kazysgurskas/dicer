@@ -77,6 +77,7 @@ func (m *fakeRegistryClient) PullAndExport(
 		Cmd:        []string{},
 		Env:        map[string]string{"PATH": "/usr/bin"},
 		WorkingDir: "/",
+		User:       "app",
 	}, nil
 }
 
@@ -186,6 +187,10 @@ func TestManager_Pull(t *testing.T) {
 
 	if image.SizeBytes == 0 {
 		t.Error("SizeBytes not set")
+	}
+
+	if image.User != "app" {
+		t.Errorf("User = %q, want the image's USER, app", image.User)
 	}
 
 	// Second call should return cached image

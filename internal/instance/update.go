@@ -163,6 +163,7 @@ func definitionChanges(a, b Spec) []string {
 	from("kernel", a.KernelName, b.KernelName)
 	from("kernel args", a.KernelArgs, b.KernelArgs)
 	from("init mode", string(a.InitMode), string(b.InitMode))
+	from("user", cmp.Or(a.User, "the image's"), cmp.Or(b.User, "the image's"))
 	from("health check", healthCheckString(a.HealthCheck), healthCheckString(b.HealthCheck))
 	changed("command", slices.Equal(a.Cmd, b.Cmd))
 	changed("environment", maps.Equal(a.Env, b.Env))

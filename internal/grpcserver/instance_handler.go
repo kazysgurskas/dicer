@@ -121,6 +121,7 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 		Restart:                restart,
 		HealthCheck:            healthCheck,
 		InitMode:               cmp.Or(initMode, guest.InitModeAuto),
+		User:                   req.GetUser(),
 		RemoveOnExit:           req.GetRemoveOnExit(),
 		CreatedAt:              now,
 		UpdatedAt:              now,
@@ -221,6 +222,7 @@ func applySettings(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest)
 	}
 	setIf(&instance.StaticIP, req.StaticIp)
 	setIf(&instance.Hostname, req.Hostname)
+	setIf(&instance.User, req.User)
 	setIf(&instance.RemoveOnExit, req.RemoveOnExit)
 }
 

@@ -73,6 +73,10 @@ type Metadata struct {
 	Env        map[string]string
 	WorkingDir string
 
+	// User is the image's USER: user, uid, user:group or uid:gid. Empty is
+	// root.
+	User string
+
 	// HealthCheck is the image's HEALTHCHECK as Docker records it, or nil.
 	HealthCheck *gcr.HealthConfig
 }
@@ -187,6 +191,7 @@ func metadataOf(image gcr.Image) (*Metadata, error) {
 		Cmd:         configFile.Config.Cmd,
 		Env:         parseEnv(configFile.Config.Env),
 		WorkingDir:  configFile.Config.WorkingDir,
+		User:        configFile.Config.User,
 		HealthCheck: configFile.Config.Healthcheck,
 	}, nil
 }

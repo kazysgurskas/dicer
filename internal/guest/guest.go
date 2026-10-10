@@ -3,7 +3,8 @@
 
 // Package guest defines the contract between the host and a guest: the
 // Config written to the config disk, the Status read from the status disk,
-// the agent's port, and how a guest's workload and probes are reported.
+// the agent's port, how a guest's workload and probes are reported, and who
+// a process in the guest runs as.
 package guest
 
 import (
@@ -41,15 +42,22 @@ const ConfigFile = "config.json"
 // It is serialised by the host (internal/instance) and deserialised by the
 // guest init binary (internal/guest/boot).
 type Config struct {
-	Entrypoint        []string          `json:"entrypoint"`
-	Cmd               []string          `json:"cmd"`
-	Workdir           string            `json:"workdir"`
-	Env               map[string]string `json:"env"`
-	Hostname          string            `json:"hostname,omitempty"`
-	Mode              InitMode          `json:"init_mode"`
-	Mounts            []Mount           `json:"mounts,omitempty"`
-	Network           NetworkConfig     `json:"network,omitzero"`
-	SkipKernelHeaders bool              `json:"skip_kernel_headers,omitempty"`
+	Entrypoint []string          `json:"entrypoint"`
+	Cmd        []string          `json:"cmd"`
+	Workdir    string            `json:"workdir"`
+	Env        map[string]string `json:"env"`
+	Hostname   string            `json:"hostname,omitempty"`
+	Mode       InitMode          `json:"init_mode"`
+
+	// User is who the workload runs as in the exec init mode: user, uid,
+	// user:group or uid:gid, looked up in the guest's /etc/passwd and
+	// /etc/group. Empty is root. In the systemd init mode it is ignored, as
+	// systemd runs as root.
+	User string `json:"user,omitempty"`
+
+	Mounts            []Mount       `json:"mounts,omitempty"`
+	Network           NetworkConfig `json:"network,omitzero"`
+	SkipKernelHeaders bool          `json:"skip_kernel_headers,omitempty"`
 
 	// StatusDevice is the raw disk dicer-init reports how the guest ended
 	// on. See Status.

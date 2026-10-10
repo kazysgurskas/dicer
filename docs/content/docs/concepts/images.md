@@ -41,9 +41,8 @@ An instance takes these from the image's configuration:
 | `ENTRYPOINT` and `CMD` | Run as the workload. A command given to the instance replaces both. |
 | `ENV` | Set in the workload's environment. The instance's own variables are added, and win over the image's. |
 | `WORKDIR` | The workload's working directory. |
+| `USER` | Who the workload runs as, unless the instance names a [user](../../guides/running-workloads#user) of its own. |
 | `HEALTHCHECK` | Used unless the instance sets a [health check](../../guides/health-checks) of its own. |
-
-`USER` is not applied: the workload runs as root.
 
 An image has no [kernel](../kernels) and usually no init system. Dicer
 supplies both, which is what turns a container image into a machine.

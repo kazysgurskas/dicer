@@ -66,6 +66,7 @@ $ dicer instance create worker -i alpine:3.21 -e QUEUE=jobs -- /bin/worker --ver
 | `--standby-after duration` | Put the instance on standby once it has been idle this long, e.g. 15m (0: never). |
 | `--start` | Start the instance immediately after defining it. |
 | `--upload-rate string` | Bytes per second the guest can send, e.g. 10MiB (0: unlimited). |
+| `-u`, `--user string` | User the command runs as: user, uid, user:group or uid:gid (default: the image's USER, or root). |
 | `--vcpus int` | Number of virtual CPUs. Default: `1`. |
 
 ## Global flags

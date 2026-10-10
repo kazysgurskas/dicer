@@ -43,7 +43,8 @@ type Cmd struct {
 	// User is who the command runs as: user, uid, user:group or uid:gid, as
 	// the guest's /etc/passwd and /etc/group define them. The command gets
 	// the user's groups, and its home directory as HOME unless Env sets it.
-	// Empty is root. An unknown user fails with ErrInvalidArgument. A guest
+	// Empty is the user the workload runs as, which is root in the systemd
+	// init mode. An unknown user fails with ErrInvalidArgument. A guest
 	// whose agent is too old to switch users fails with
 	// ErrFailedPrecondition until the instance is restarted.
 	User string

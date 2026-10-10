@@ -193,6 +193,12 @@ type InstanceSpec struct {
 	// InitMode is how the guest starts the command. Empty means auto.
 	InitMode InitMode `json:"init_mode,omitzero"`
 
+	// User is who the workload runs as in the exec init mode: user, uid,
+	// user:group or uid:gid, looked up in the guest's /etc/passwd and
+	// /etc/group. Empty means the image's USER, or root if it has none. The
+	// systemd init mode runs as root, so it cannot be given a user.
+	User string `json:"user,omitzero"`
+
 	// Ports are the guest ports published on the host.
 	Ports []PortMapping `json:"ports,omitzero"`
 
@@ -524,6 +530,10 @@ type InstanceUpdate struct {
 	// InitMode replaces how the guest starts the command.
 	InitMode InitMode
 
+	// User replaces who the workload runs as. Empty goes back to the
+	// image's USER.
+	User *string
+
 	// RemoveOnExit replaces whether the instance is deleted once it stops.
 	RemoveOnExit *bool
 
@@ -760,6 +770,7 @@ func instanceFromProto(p *dicerdv1.Instance) Instance {
 		RestartPolicy:          restartPolicyFromProto(p.GetRestartPolicy()),
 		HealthCheck:            healthCheckFromProto(p.GetHealthCheck()),
 		InitMode:               initModes.fromProto(p.GetInitMode()),
+		User:                   p.GetUser(),
 		Ports:                  convertAll(p.GetPorts(), portMappingFromProto),
 		RemoveOnExit:           p.GetRemoveOnExit(),
 		CreateTime:             timeFromProto(p.GetCreateTime()),
@@ -808,6 +819,7 @@ func createInstanceRequest(spec InstanceSpec, opts CreateOptions) (*dicerdv1.Cre
 		Cmd:                    spec.Cmd,
 		Labels:                 spec.Labels,
 		Hostname:               spec.Hostname,
+		User:                   spec.User,
 		Start:                  opts.Start,
 		RemoveOnExit:           spec.RemoveOnExit,
 	}
@@ -860,6 +872,7 @@ func updateInstanceRequest(name string, update InstanceUpdate) (*dicerdv1.Update
 		NetworkName:            update.NetworkName,
 		StaticIp:               update.StaticIP,
 		Hostname:               update.Hostname,
+		User:                   update.User,
 		RemoveOnExit:           update.RemoveOnExit,
 		Env:                    update.Env,
 		Cmd:                    update.Cmd,

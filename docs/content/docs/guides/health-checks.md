@@ -30,7 +30,8 @@ $ dicer run -d --name cache --health-tcp 6379 redis:7
 ```
 
 The HTTP and TCP probes need nothing in the image, so they suit minimal
-images with no shell. A command runs with the instance's environment, and
+images with no shell. A command runs as the workload's
+[user](../running-workloads#user), with the instance's environment, and
 what it prints is kept as the check's output.
 
 ## Timing

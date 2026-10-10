@@ -341,6 +341,7 @@ func (m *Manager) pullFromRegistry(
 		Cmd:        metadata.Cmd,
 		Env:        metadata.Env,
 		WorkingDir: metadata.WorkingDir,
+		User:       metadata.User,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 		LastUsedAt: now,

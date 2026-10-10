@@ -346,6 +346,7 @@ func (b *builder) service(key string, raw *rawService) (*Service, error) {
 		KernelName:        raw.Kernel,
 		KernelArgs:        raw.KernelArgs,
 		HypervisorVersion: raw.HypervisorVersion,
+		User:              raw.User,
 		VCPUs:             defaultVCPUs,
 		MemoryBytes:       defaultMemoryBytes,
 		DiskBytes:         defaultDiskBytes,

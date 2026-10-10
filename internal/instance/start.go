@@ -446,6 +446,7 @@ func buildInitConfig(
 		Workdir:      image.WorkingDir,
 		Env:          mergeEnv(image.Env, instance.Env),
 		Mode:         cmp.Or(instance.InitMode, guest.InitModeAuto),
+		User:         cmp.Or(instance.User, image.User),
 		Mounts:       mounts,
 		StatusDevice: statusDevice,
 		Halt:         halt,

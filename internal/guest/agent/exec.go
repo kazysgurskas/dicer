@@ -7,6 +7,7 @@ package agent
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -51,16 +52,12 @@ func (s *server) Exec(stream diceragentv1.AgentService_ExecServer) error {
 	if len(command) == 0 {
 		command = []string{"/bin/sh"}
 	}
-	var user *execUser
-	if start.GetUser() != "" {
-		u, err := execUserNamed(start.GetUser())
-		if err != nil {
-			return status.Error(codes.InvalidArgument, err.Error())
-		}
-		user = &u
+	user, err := s.commandUser(start.GetUser())
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	slog.Info("exec", "command", command, "user", start.GetUser(), "tty", start.GetTty(),
+	slog.Info("exec", "command", command, "user", cmp.Or(start.GetUser(), s.user), "tty", start.GetTty(),
 		"workdir", start.GetCwd(), "timeout", start.GetTimeoutSeconds())
 
 	ctx := stream.Context()
@@ -77,22 +74,27 @@ func (s *server) Exec(stream diceragentv1.AgentService_ExecServer) error {
 	return execPlain(ctx, stream, cmd)
 }
 
-// execCommand returns the command an ExecStart asks for, to run as user, or
-// as root if user is nil. A user's HOME is its own unless the start sets it.
-func execCommand(ctx context.Context, start *diceragentv1.ExecStart, command []string, user *execUser) *exec.Cmd {
+// commandUser returns who a command runs as: who spec names, or the
+// workload's user if spec is empty. If neither names a user, it returns the
+// zero User, so the command runs as root, like the agent.
+func (s *server) commandUser(spec string) (guest.User, error) {
+	spec = cmp.Or(spec, s.user)
+	if spec == "" {
+		return guest.User{}, nil
+	}
+	return guest.UserNamed(spec)
+}
+
+// execCommand returns the command an ExecStart asks for, to run as user. A
+// user's HOME is its own unless the start sets it.
+func execCommand(ctx context.Context, start *diceragentv1.ExecStart, command []string, user guest.User) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = start.GetCwd()
 
 	env := start.GetEnv()
-	if user != nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: user.credential}
-		if _, ok := env["HOME"]; !ok {
-			env = maps.Clone(env)
-			if env == nil {
-				env = make(map[string]string, 1)
-			}
-			env["HOME"] = user.home
-		}
+	if user.Credential != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: user.Credential}
+		env = user.EnvWithHome(env)
 	}
 	cmd.Env = execEnv(env, start.GetTty())
 

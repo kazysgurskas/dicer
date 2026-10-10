@@ -70,6 +70,7 @@ $ dicer update web -- /usr/sbin/nginx -g 'daemon off;'
 | `--rm` | Delete the instance once it stops, the daemon doing the deleting. |
 | `--standby-after duration` | Put the instance on standby once it has been idle this long, e.g. 15m (0: never). |
 | `--upload-rate string` | Bytes per second the guest can send, e.g. 10MiB (0: unlimited). |
+| `-u`, `--user string` | User the command runs as: user, uid, user:group or uid:gid (default: the image's USER, or root). |
 | `--vcpus int` | Number of virtual CPUs. |
 
 ## Global flags

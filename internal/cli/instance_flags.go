@@ -86,6 +86,8 @@ func addInstanceSpecFlags(cmd *cobra.Command, withDefaults bool) {
 	flags.StringArray("env-file", nil, "Read environment variables from a file of KEY=VALUE lines (repeatable)")
 	flags.StringArrayP("label", "l", nil, "Label as KEY=VALUE (repeatable)")
 	flags.String("hostname", "", "Guest hostname (default: the instance name)")
+	flags.StringP("user", "u", "",
+		"User the command runs as: user, uid, user:group or uid:gid (default: the image's USER, or root)")
 	flags.String("restart", "",
 		"Restart policy when the instance ends on its own: no, on-failure[:max-retries], unless-stopped or always (default no)")
 	flags.Bool("rm", false, "Delete the instance once it stops, the daemon doing the deleting")
@@ -225,6 +227,7 @@ func applySpecFlags(cmd *cobra.Command, spec *dicer.InstanceSpec) error {
 	setString("network", &spec.NetworkName)
 	setString("ip", &spec.StaticIP)
 	setString("hostname", &spec.Hostname)
+	setString("user", &spec.User)
 
 	var err error
 	if flags.Changed("hypervisor-type") {
@@ -328,6 +331,7 @@ func buildUpdate(cmd *cobra.Command, args []string) (dicer.InstanceUpdate, error
 	update.NetworkName = optionalString("network")
 	update.StaticIP = optionalString("ip")
 	update.Hostname = optionalString("hostname")
+	update.User = optionalString("user")
 
 	var err error
 	if v := optionalString("hypervisor-type"); v != nil {

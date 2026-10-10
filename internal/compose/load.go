@@ -360,7 +360,6 @@ var unsupported = map[string]string{
 	"links":        "services on a network find each other by name already",
 	"extra_hosts":  "an instance's /etc/hosts cannot be added to",
 	"dns":          "set nameservers on the network instead",
-	"user":         "the image's user runs the command",
 	"working_dir":  "the image's working directory is used",
 	"stdin_open":   "attach with dicer compose exec instead",
 	"tty":          "attach with dicer compose exec instead",

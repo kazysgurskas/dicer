@@ -189,6 +189,26 @@ is given an address when it first starts, and keeps it until it is deleted.
 `--hostname` sets the guest's hostname. By default, it is the instance's
 name.
 
+## User
+
+The command runs as the image's `USER`, or as root if the image has none.
+`-u` runs it as another user: a user or uid, with a group or gid after a
+colon if you like, as with `docker run -u`.
+
+```console
+$ dicer run -d -u 1000:1000 -p 8080:8080 ghcr.io/acme/api:3
+```
+
+A user is looked up in the guest's own `/etc/passwd` and `/etc/group`. The
+command gets the user's groups, and the user's home directory as `HOME`
+unless the environment sets one. A uid that the guest has no entry for runs
+as it is, with gid 0 and `HOME` set to `/`. A name that the guest has no
+entry for ends the instance at once with exit code 126.
+
+The user applies in the [exec init mode](../../concepts/init-modes#exec)
+only. systemd runs as root, so an instance in the systemd init mode cannot
+be given a user, and ignores its image's `USER`.
+
 ## Hypervisor, kernel and init
 
 Most instances need none of these flags. They are there for when the

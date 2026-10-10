@@ -53,6 +53,7 @@ func instanceToProto(instance instance.Instance) *dicerdv1.Instance {
 		RestartPolicy:          restartPolicyToProto(spec.Restart),
 		HealthCheck:            healthCheckToProto(spec.HealthCheck),
 		InitMode:               initModes.toProto(cmp.Or(spec.InitMode, guest.InitModeAuto)),
+		User:                   spec.User,
 		CreateTime:             timestamppb.New(spec.CreatedAt),
 		UpdateTime:             timestamppb.New(spec.UpdatedAt),
 

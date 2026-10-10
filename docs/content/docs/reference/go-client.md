@@ -257,7 +257,8 @@ type Cmd struct {
 	// User is who the command runs as: user, uid, user:group or uid:gid, as
 	// the guest's /etc/passwd and /etc/group define them. The command gets
 	// the user's groups, and its home directory as HOME unless Env sets it.
-	// Empty is root. An unknown user fails with ErrInvalidArgument. A guest
+	// Empty is the user the workload runs as, which is root in the systemd
+	// init mode. An unknown user fails with ErrInvalidArgument. A guest
 	// whose agent is too old to switch users fails with
 	// ErrFailedPrecondition until the instance is restarted.
 	User string
@@ -1104,6 +1105,12 @@ type InstanceSpec struct {
 	// InitMode is how the guest starts the command. Empty means auto.
 	InitMode InitMode `json:"init_mode,omitzero"`
 
+	// User is who the workload runs as in the exec init mode: user, uid,
+	// user:group or uid:gid, looked up in the guest's /etc/passwd and
+	// /etc/group. Empty means the image's USER, or root if it has none. The
+	// systemd init mode runs as root, so it cannot be given a user.
+	User string `json:"user,omitzero"`
+
 	// Ports are the guest ports published on the host.
 	Ports []PortMapping `json:"ports,omitzero"`
 
@@ -1361,6 +1368,10 @@ type InstanceUpdate struct {
 
 	// InitMode replaces how the guest starts the command.
 	InitMode InitMode
+
+	// User replaces who the workload runs as. Empty goes back to the
+	// image's USER.
+	User *string
 
 	// RemoveOnExit replaces whether the instance is deleted once it stops.
 	RemoveOnExit *bool

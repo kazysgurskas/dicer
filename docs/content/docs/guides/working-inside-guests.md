@@ -36,7 +36,8 @@ command.
 
 A command runs:
 
-- as root, unless `-u` gives another user;
+- as the workload's [user](../running-workloads#user), unless `-u` gives
+  another, such as `-u root`;
 - in `/`, unless `-w` gives another directory;
 - with the instance's environment, plus any `-e KEY=VALUE` you give;
 - beside the workload, not inside it.

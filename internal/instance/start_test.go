@@ -216,3 +216,29 @@ func TestInitConfigCarriesTheInitMode(t *testing.T) {
 		}
 	}
 }
+
+// The workload runs as the instance's user, or else as the image's USER.
+func TestInitConfigCarriesTheUser(t *testing.T) {
+	setup := &networkSetup{nic: hypervisor.NetworkInterfaceConfig{IP: "10.0.0.2"}, prefixLen: 24}
+
+	tests := []struct {
+		name     string
+		instance string
+		image    string
+		want     string
+	}{
+		{"neither", "", "", ""},
+		{"the image's", "", "app", "app"},
+		{"the instance's", "1000:1000", "", "1000:1000"},
+		{"the instance's over the image's", "root", "app", "root"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			image := &image.Image{User: tt.image}
+			cfg := buildInitConfig(Spec{Name: "web", User: tt.instance}, image, nil, setup, guest.HaltPowerOff)
+			if cfg.User != tt.want {
+				t.Errorf("config user = %q, want %q", cfg.User, tt.want)
+			}
+		})
+	}
+}

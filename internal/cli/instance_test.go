@@ -243,6 +243,31 @@ func TestInitModeFlag(t *testing.T) {
 	}
 }
 
+func TestUserFlagNamesTheWorkloadsUser(t *testing.T) {
+	got, err := runBuild(t, "web", "--image", "grafana/grafana", "-u", "472:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.spec.User != "472:0" {
+		t.Errorf("-u: user = %q, want 472:0", got.spec.User)
+	}
+
+	// Left out, it is the image's USER.
+	if got, _ := runBuild(t, "web", "--image", "grafana/grafana"); got.spec.User != "" {
+		t.Errorf("no -u: user = %q, want it unset", got.spec.User)
+	}
+}
+
+func TestCommandLinesShowTheUserOnlyWhenChosen(t *testing.T) {
+	if got := commandLines(dicer.Instance{}); slices.ContainsFunc(got, func(l string) bool { return strings.HasPrefix(l, "as ") }) {
+		t.Errorf("no user: %q, want no user shown", got)
+	}
+	got := commandLines(dicer.Instance{User: "app", InitMode: dicer.InitModeExec})
+	if want := []string{"the image's", "as app", "in exec mode"}; !slices.Equal(got, want) {
+		t.Errorf("user app: %q, want %q", got, want)
+	}
+}
+
 func TestCommandLinesShowTheInitModeOnlyWhenChosen(t *testing.T) {
 	for mode, want := range map[dicer.InitMode][]string{
 		"":                    {"the image's"},

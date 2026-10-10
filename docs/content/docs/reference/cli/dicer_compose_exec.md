@@ -30,7 +30,7 @@ $ dicer compose exec -T web cat /etc/nginx/nginx.conf > nginx.conf
 | `-T`, `--no-tty` | Do not allocate a pseudo-TTY. |
 | `--timeout duration` | Kill the command after this long, e.g. 30s (0: no limit). |
 | `-t`, `--tty` | Allocate a pseudo-TTY (default: when stdin and stdout are a terminal). |
-| `-u`, `--user string` | User to run as: user, uid, user:group or uid:gid (default: root). |
+| `-u`, `--user string` | User to run as: user, uid, user:group or uid:gid (default: the workload's user). |
 | `-w`, `--workdir string` | Working directory inside the instance. |
 
 ## Global flags

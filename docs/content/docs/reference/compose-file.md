@@ -73,6 +73,12 @@ The project's own keys. The sections after them are its services, networks and v
 
 `entrypoint` is put before `command`, and together they replace the image's ENTRYPOINT and CMD.
 
+### `services.*.user` {#services-user}
+
+*string*
+
+`user` is who the command runs as: `user`, `uid`, `user:group` or `uid:gid`, as `dicer run --user`. Unset is the image's `USER`, or root if it has none.
+
 ### `services.*.environment` {#services-environment}
 
 *mapping of strings, or list of KEY=VALUE strings*
@@ -515,6 +521,5 @@ These keys of a service are refused, saying why, as are `secrets` and `configs` 
 | `sysctls` | Set kernel parameters in the guest, or with `kernel_args`. |
 | `tty` | Attach with `dicer compose exec` instead. |
 | `ulimits` | Set limits in the guest's own configuration. |
-| `user` | The image's user runs the command. |
 | `working_dir` | The image's working directory is used. |
 

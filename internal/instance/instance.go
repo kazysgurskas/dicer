@@ -77,6 +77,11 @@ type Spec struct {
 	// Empty is auto: systemd if the command is systemd, else exec.
 	InitMode guest.InitMode `yaml:"init_mode,omitempty" json:"init_mode,omitempty"`
 
+	// User is who the workload runs as in the exec init mode: user, uid,
+	// user:group or uid:gid, looked up in the guest's /etc/passwd and
+	// /etc/group. Empty is the image's USER, or root if it has none.
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+
 	Labels  map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 	Restart RestartPolicy     `yaml:"restart,omitempty" json:"restart,omitzero"`
 
@@ -122,9 +127,10 @@ func (s Spec) PinnedImageRef() (string, error) {
 // Validate returns an invalid argument error if the instance cannot be run
 // as defined, as far as the definition alone can tell: an invalid name or
 // hostname, no image, a size it cannot have, a maximum below what it asks
-// for or that its hypervisor cannot honour, a negative rate limit, a request
-// to be deleted when it stops that its restart policy contradicts, or
-// invalid or clashing ports or mounts.
+// for or that its hypervisor cannot honour, a negative rate limit, a user
+// that is malformed or that systemd cannot run as, a request to be deleted
+// when it stops that its restart policy contradicts, or invalid or clashing
+// ports or mounts.
 func (s Spec) Validate() error {
 	if err := naming.Validate(s.Name); err != nil {
 		return err
@@ -162,6 +168,11 @@ func (s Spec) Validate() error {
 	case s.HasDirectoryMount() && s.StandbyAfter != 0:
 		return errdefs.InvalidArgument("an instance that mounts a host directory cannot be put on standby: " +
 			"leave standby_after unset")
+	case s.User != "" && !validUser(s.User):
+		return errdefs.InvalidArgument("invalid user %q: give user, uid, user:group or uid:gid", s.User)
+	case s.User != "" && s.InitMode == guest.InitModeSystemd:
+		return errdefs.InvalidArgument("systemd runs as root, so the systemd init mode cannot run as user %q: "+
+			"leave the user unset, or use the exec init mode", s.User)
 	case s.RemoveOnExit && s.Restart.Restarts():
 		return errdefs.InvalidArgument(
 			"an instance cannot be deleted when it stops and restarted when it stops: "+
@@ -179,6 +190,16 @@ func (s Spec) Validate() error {
 		}
 	}
 	return validateMounts(s.Mounts)
+}
+
+// validUser reports whether user has the form user, uid, user:group or
+// uid:gid.
+func validUser(user string) bool {
+	name, group, hasGroup := strings.Cut(user, ":")
+	if hasGroup && (group == "" || strings.Contains(group, ":")) {
+		return false
+	}
+	return name != ""
 }
 
 // VolumeMount returns the mount by which the instance attaches the named

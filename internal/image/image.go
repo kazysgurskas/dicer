@@ -21,6 +21,10 @@ type Image struct {
 	Env        map[string]string `json:"env,omitempty"`
 	WorkingDir string            `json:"working_dir,omitempty"`
 
+	// User is who the image runs its command as, from its USER: user, uid,
+	// user:group or uid:gid. Empty is root.
+	User string `json:"user,omitempty"`
+
 	// HealthCheck is the check the image declares, used by an instance that
 	// sets none of its own. Nil if it declares none.
 	HealthCheck *health.Check `json:"health_check,omitempty"`

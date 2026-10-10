@@ -25,8 +25,9 @@ func newInstanceExecCommand() *cobra.Command {
 			"stdout -- so a shell is interactive, and output piped elsewhere is not\n" +
 			"mangled by one. -t and -T force it on or off. Flags go before the name:\n" +
 			"everything after it is the command's.\n\n" +
-			"The command runs as root unless -u names one of the guest's users, as user,\n" +
-			"uid, user:group or uid:gid. It then gets the user's groups, and the user's\n" +
+			"The command runs as the workload does: as the instance's user, its image's\n" +
+			"USER, or root. -u names another of the guest's users, as user, uid,\n" +
+			"user:group or uid:gid. The command gets the user's groups, and the user's\n" +
 			"home directory as HOME.\n\n" +
 			"If the instance is still booting, exec waits up to 30 seconds for its guest\n" +
 			"agent to answer.",
@@ -56,7 +57,7 @@ func newInstanceExecCommand() *cobra.Command {
 	cmd.Flags().StringArrayP("env", "e", nil,
 		"Environment variable as KEY=VALUE, or KEY to pass this shell's value (repeatable)")
 	cmd.Flags().StringP("workdir", "w", "", "Working directory inside the instance")
-	cmd.Flags().StringP("user", "u", "", "User to run as: user, uid, user:group or uid:gid (default: root)")
+	cmd.Flags().StringP("user", "u", "", "User to run as: user, uid, user:group or uid:gid (default: the workload's user)")
 	cmd.Flags().Duration("timeout", 0, "Kill the command after this long, e.g. 30s (0: no limit)")
 	cmd.MarkFlagsMutuallyExclusive("tty", "no-tty")
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/network"
 )
@@ -187,6 +188,14 @@ func TestSpecValidate(t *testing.T) {
 		// Idleness is judged a minute at a time.
 		{name: "standby after 30 seconds", modify: func(s *Spec) { s.StandbyAfter = 30 * time.Second }},
 		{name: "negative standby after", modify: func(s *Spec) { s.StandbyAfter = -time.Minute }},
+		{name: "user", modify: func(s *Spec) { s.User = "app" }, valid: true},
+		{name: "uid and gid", modify: func(s *Spec) { s.User = "1000:1000" }, valid: true},
+		{name: "user without a name", modify: func(s *Spec) { s.User = ":app" }},
+		{name: "user with an empty group", modify: func(s *Spec) { s.User = "app:" }},
+		{name: "user with two groups", modify: func(s *Spec) { s.User = "app:app:app" }},
+		{name: "user in the exec init mode", modify: func(s *Spec) { s.User, s.InitMode = "app", guest.InitModeExec }, valid: true},
+		// systemd runs as root.
+		{name: "user in the systemd init mode", modify: func(s *Spec) { s.User, s.InitMode = "app", guest.InitModeSystemd }},
 		{name: "remove on exit", modify: func(s *Spec) { s.RemoveOnExit = true }, valid: true},
 		{name: "remove on exit, never restarted", modify: removeOnExitRestarted(RestartModeNo), valid: true},
 		// Deleted when it stops and started again when it stops: one of the

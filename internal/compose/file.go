@@ -68,6 +68,11 @@ type rawService struct {
 	// image's ENTRYPOINT and CMD.
 	Entrypoint *shellCommand `yaml:"entrypoint"`
 
+	// User is who the command runs as: `user`, `uid`, `user:group` or
+	// `uid:gid`, as `dicer run --user`. Unset is the image's `USER`, or root
+	// if it has none.
+	User string `yaml:"user"`
+
 	// Environment is the variables the command runs with. A `KEY` with no
 	// value takes this shell's, and is left out if it has none.
 	Environment keyValues `yaml:"environment"`
