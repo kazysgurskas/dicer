@@ -51,11 +51,19 @@ func (m *Manager) sharedPull(
 				return nil, ctx.Err()
 			}
 		}
-		if p == nil {
-			p = m.startPull(ctx, resolved)
+		start := p == nil
+		if start {
+			p = &pull{done: make(chan struct{})}
+			m.pulls[digest] = p
 		}
 		p.waiters++
 		listener := p.progress.add(onProgress)
+		if start {
+			// The pull starts only now that its first caller listens.
+			// Otherwise a quick pull could finish before anyone heard how
+			// it went.
+			m.startPull(ctx, resolved, p)
+		}
 		m.mu.Unlock()
 
 		select {
@@ -69,14 +77,13 @@ func (m *Manager) sharedPull(
 	}
 }
 
-// startPull starts pulling the resolved image. The caller must hold
+// startPull starts p pulling the resolved image. The caller must hold
 // m.mu. The pull keeps ctx's values but not its cancellation.
-func (m *Manager) startPull(ctx context.Context, resolved *reference.ResolvedRef) *pull {
+func (m *Manager) startPull(ctx context.Context, resolved *reference.ResolvedRef, p *pull) {
 	digest := resolved.Digest()
 
 	pullCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	p := &pull{done: make(chan struct{}), cancel: cancel}
-	m.pulls[digest] = p
+	p.cancel = cancel
 
 	go func() {
 		defer close(p.done)
@@ -88,8 +95,6 @@ func (m *Manager) startPull(ctx context.Context, resolved *reference.ResolvedRef
 		delete(m.pulls, digest)
 		m.mu.Unlock()
 	}()
-
-	return p
 }
 
 // leavePull stops waiting on p, and cancels it if nobody else is.
