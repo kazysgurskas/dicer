@@ -88,7 +88,9 @@ func mountOne(i int, m guest.Mount) error {
 	}
 }
 
-// mountVolume mounts the filesystem on a volume's disk.
+// mountVolume mounts the filesystem on a volume's disk. A volume mounted
+// read-write while it is empty is first populated with what the image has at
+// target. If that fails, the volume is unmounted again.
 func mountVolume(volume *guest.VolumeSource, target string, readOnly bool) error {
 	if err := waitForDevice(volume.Device); err != nil {
 		return err
@@ -96,6 +98,14 @@ func mountVolume(volume *guest.VolumeSource, target string, readOnly bool) error
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
 	}
+
+	// Opened before the volume covers it, so that the image's directory can
+	// still be read once the volume is mounted over it.
+	image, err := os.OpenRoot(target)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = image.Close() }()
 
 	var (
 		flags uintptr
@@ -112,6 +122,13 @@ func mountVolume(volume *guest.VolumeSource, target string, readOnly bool) error
 
 	if err := syscall.Mount(volume.Device, target, volume.FilesystemType, flags, data); err != nil {
 		return fmt.Errorf("mount %s: %w", volume.Device, err)
+	}
+	if readOnly {
+		return nil
+	}
+	if err := populateVolume(image, target); err != nil {
+		return errors.Join(fmt.Errorf("populate %s from the image: %w", volume.Device, err),
+			syscall.Unmount(target, 0))
 	}
 	return nil
 }

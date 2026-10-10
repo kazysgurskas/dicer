@@ -53,6 +53,9 @@ $ dicer run -d --mount source=pgdata,target=/data ghcr.io/acme/app:2
 ```
 
 It is attached to the guest as a disk of its own and mounted at the target.
+A volume that is still empty is first populated with what the image has at
+the target, with its owners and permissions, so the workload can write to it
+whichever user it runs as.
 Deleting the instance keeps the volume. A volume is only deleted by
 `dicer volume rm`, and not while any instance is defined to mount it.
 

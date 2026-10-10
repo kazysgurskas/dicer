@@ -149,10 +149,18 @@ $ dicer run -d --name db \
     postgres:17
 ```
 
-A new volume is an empty ext4 filesystem. Like every ext4 filesystem, it has
-a `lost+found` directory at its root. Some software refuses to use a
-directory that is not empty, which is why PostgreSQL is pointed at a
-directory inside the volume above.
+A new volume is an empty ext4 filesystem. When an instance mounts a volume
+read-write while it is still empty, the guest first populates it with what
+the image has at the target, as Docker populates a new volume. The files
+keep their owners and permissions, so a workload that does not run as root
+can write to the volume as it could to the image's directory. A volume that
+already holds anything is mounted as it is. If populating a volume fails,
+for example because it is too small, the volume is not mounted, and the
+instance's console says why.
+
+Like every ext4 filesystem, a volume has a `lost+found` directory at its
+root. Some software refuses to use a directory that is not empty, which is
+why PostgreSQL is pointed at a directory inside the volume above.
 
 A volume is sparse: it takes up only what has been written to it, whatever
 its size. Its size is fixed when it is created, and a volume cannot be
