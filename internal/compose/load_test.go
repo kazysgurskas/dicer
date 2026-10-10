@@ -173,6 +173,29 @@ volumes:
 	}
 }
 
+func TestLoadMaximums(t *testing.T) {
+	p := mustLoad(t, `
+services:
+  db:
+    image: postgres:17
+    vcpus: 2
+    memory: 1GiB
+    max_vcpus: 8
+    max_memory: 4GiB
+`, nil)
+
+	got := p.Services["db"].Instance
+	if got.MaxVCPUs != 8 || got.MaxMemoryBytes != 4<<30 {
+		t.Errorf("instance = %v, want the maximums the service gives", got)
+	}
+
+	// Unset, there are none.
+	if got := mustLoad(t, "services: {db: {image: postgres:17}}", nil).Services["db"].Instance; got.MaxVCPUs != 0 ||
+		got.MaxMemoryBytes != 0 {
+		t.Errorf("instance = %v, want no maximums", got)
+	}
+}
+
 func TestLoadRateLimits(t *testing.T) {
 	p := mustLoad(t, `
 services:
@@ -560,6 +583,7 @@ func TestLoadRefuses(t *testing.T) {
 		{"fractional cpus", "services: {web: {image: x, cpus: 0.5}}", "not a whole number"},
 		{"cpus and vcpus", "services: {web: {image: x, cpus: 1, vcpus: 2}}", "vcpus or cpus, not both"},
 		{"bad size", "services: {web: {image: x, memory: lots}}", `invalid size "lots"`},
+		{"bad maximum memory", "services: {web: {image: x, max_memory: lots}}", `invalid size "lots"`},
 		{"bad restart", "services: {web: {image: x, restart: sometimes}}", `invalid restart "sometimes"`},
 		{"count on always", "services: {web: {image: x, restart: 'always:3'}}", "only on-failure takes a count"},
 		{"bad hypervisor", "services: {web: {image: x, hypervisor: qemu}}", `invalid hypervisor "qemu"`},

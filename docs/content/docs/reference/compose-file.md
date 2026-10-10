@@ -151,6 +151,18 @@ depends_on:
 
 `memory` is the machine's memory, as `dicer run --memory`. Unset is 512MiB.
 
+### `services.*.max_vcpus` {#services-max-vcpus}
+
+*integer*
+
+`max_vcpus` is the most vCPUs `dicer resize` can give the running instance, on Cloud Hypervisor, as `dicer run --max-vcpus`. Unset is none.
+
+### `services.*.max_memory` {#services-max-memory}
+
+*size, such as 512MiB or 2GiB*
+
+`max_memory` is the most memory `dicer resize` can give the running instance, as `dicer run --max-memory`. Unset is none.
+
 ### `services.*.disk` {#services-disk}
 
 *size, such as 512MiB or 2GiB*

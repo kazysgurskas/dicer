@@ -154,6 +154,15 @@ type rawService struct {
 	// 512MiB.
 	Memory *byteSize `yaml:"memory"`
 
+	// MaxVCPUs is the most vCPUs `dicer resize` can give the running
+	// instance, on Cloud Hypervisor, as `dicer run --max-vcpus`. Unset is
+	// none.
+	MaxVCPUs *int32 `yaml:"max_vcpus"`
+
+	// MaxMemory is the most memory `dicer resize` can give the running
+	// instance, as `dicer run --max-memory`. Unset is none.
+	MaxMemory *byteSize `yaml:"max_memory"`
+
 	// Disk is the size of the instance's disk, as `dicer run --disk`. Unset is
 	// 10GiB.
 	Disk *byteSize `yaml:"disk"`

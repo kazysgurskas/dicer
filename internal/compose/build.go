@@ -400,7 +400,8 @@ func parseCondition(s string) (Condition, error) {
 	}
 }
 
-// setSizes sets the instance's vCPUs, memory and disk.
+// setSizes sets the instance's vCPUs, memory and disk, and the most vCPUs
+// and memory it can be resized to.
 func (b *builder) setSizes(raw *rawService, spec *dicer.InstanceSpec) error {
 	switch {
 	case raw.VCPUs != nil && raw.CPUs != nil:
@@ -428,6 +429,13 @@ func (b *builder) setSizes(raw *rawService, spec *dicer.InstanceSpec) error {
 	}
 	if raw.Disk != nil {
 		spec.DiskBytes = int64(*raw.Disk)
+	}
+
+	if raw.MaxVCPUs != nil {
+		spec.MaxVCPUs = int(*raw.MaxVCPUs)
+	}
+	if raw.MaxMemory != nil {
+		spec.MaxMemoryBytes = int64(*raw.MaxMemory)
 	}
 	return nil
 }

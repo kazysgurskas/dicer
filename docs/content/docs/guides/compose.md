@@ -228,7 +228,8 @@ service can do:
 - **Volumes have a size**, 10 GiB unless given.
 - **Sizes are the machine's.** `vcpus` (or `cpus`, as a whole number),
   `memory` (or `mem_limit`) and `disk` size the virtual machine. They are
-  1 vCPU, 512 MiB and 10 GiB unless given.
+  1 vCPU, 512 MiB and 10 GiB unless given. `max_vcpus` and `max_memory` are
+  the most that `dicer resize` can give it while it runs.
 - **A service is one instance.** There is no `scale`.
 
 ## Checking a file
