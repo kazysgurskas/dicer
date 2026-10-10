@@ -38,6 +38,28 @@ func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 	}
 }
 
+// TestImagesInUseKeepsADiskSnapshotsImage checks that a disk snapshot keeps
+// the image its disk lies over, once its instance is gone.
+func TestImagesInUseKeepsADiskSnapshotsImage(t *testing.T) {
+	h := newHarness(t)
+	snapshot, err := h.manager.createSnapshot(t.Context(), h.instance, "cold")
+	if err != nil {
+		t.Fatalf("CreateSnapshot: %v", err)
+	}
+	if snapshot.Kind != SnapshotKindDisk {
+		t.Fatalf("took a %s snapshot, want %s", snapshot.Kind, SnapshotKindDisk)
+	}
+	delete(h.store.instances, h.instance.Name)
+
+	inUse, err := h.manager.ImagesInUse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user := inUse["sha256:aaaa"]; user != `snapshot "cold"` {
+		t.Errorf("in use = %v, want the snapshot's image kept, used by snapshot cold", inUse)
+	}
+}
+
 // TestImagesInUseKeepsThePinnedImage checks that a stopped instance keeps
 // the image it was created with, which it boots from next, and not the one
 // its reference names now.

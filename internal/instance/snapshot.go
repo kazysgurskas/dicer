@@ -71,7 +71,7 @@ type Snapshot struct {
 
 	// VCPUs, MemoryBytes and ImageDigest are what a memory snapshot's guest
 	// ran with, which a restore is admitted on and boots the image of. They
-	// can differ from Instance's after a resize or an image update.
+	// can differ from Instance's after a resize.
 	VCPUs       int    `yaml:"vcpus,omitempty" json:"vcpus,omitempty"`
 	MemoryBytes int64  `yaml:"memory_bytes,omitempty" json:"memory_bytes,omitempty"`
 	ImageDigest string `yaml:"image_digest,omitempty" json:"image_digest,omitempty"`

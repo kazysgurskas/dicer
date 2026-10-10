@@ -49,7 +49,11 @@ func (m *Manager) ImagesInUse() (image.InUse, error) {
 		}
 	}
 	for _, snapshot := range m.store.Snapshots() {
-		use(snapshot.ImageDigest, fmt.Sprintf("snapshot %q", snapshot.Name))
+		// A disk snapshot has no ImageDigest of its own: its disk lies over
+		// its instance's image.
+		user := fmt.Sprintf("snapshot %q", snapshot.Name)
+		use(snapshot.ImageDigest, user)
+		use(snapshot.Instance.ImageDigest, user)
 	}
 
 	return inUse, nil
