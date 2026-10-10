@@ -37,6 +37,12 @@ func (m *Manager) Update(ctx context.Context, updated Spec) error {
 	if err != nil {
 		return err
 	}
+	// The definition is stored by name, so one read before a rename would
+	// be written under the old name.
+	if updated.Name != current.Name {
+		return errdefs.InvalidState("instance %q was renamed to %q while it was being updated: update it again",
+			updated.Name, current.Name)
+	}
 	status, err := m.statusOf(current)
 	if err != nil {
 		return err

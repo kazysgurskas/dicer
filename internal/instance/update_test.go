@@ -33,6 +33,25 @@ func TestUpdateReleasesTheAddressOfAMovedInstance(t *testing.T) {
 	}
 }
 
+// TestUpdateRefusesADefinitionReadBeforeARename checks that an update made
+// from a definition read before the instance was renamed does not write it
+// back under the old name.
+func TestUpdateRefusesADefinitionReadBeforeARename(t *testing.T) {
+	h := newHarness(t)
+	stale := h.instance
+	if _, err := h.manager.Rename(t.Context(), h.instance.ID, "api"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+
+	stale.VCPUs++
+	if err := h.manager.Update(t.Context(), stale); !errors.Is(err, errdefs.ErrInvalidState) {
+		t.Errorf("Update = %v, want a refusal of the definition read before the rename", err)
+	}
+	if _, err := h.store.Instance(stale.Name); !errors.Is(err, errdefs.ErrNotFound) {
+		t.Errorf("an instance %q exists after the update: %v", stale.Name, err)
+	}
+}
+
 func TestUpdateRefusesARunningInstance(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
