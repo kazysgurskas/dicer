@@ -6,7 +6,7 @@ description: "Stop one or more instances if they are running, then start them"
 
 Stops each instance if it is running, paused or on standby, then starts it
 afresh. A stopped instance is just started. Restarting is how a changed file
-mount or an updated image takes effect.
+mount takes effect.
 
 ## Usage
 

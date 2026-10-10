@@ -203,10 +203,14 @@ func (m *Manager) resolveBoot(ctx context.Context, instance Spec, starter hyperv
 		b.kernelArgs = starter.DefaultKernelArgs()
 	}
 
+	// The image the instance was created with, whatever its tag names now.
 	// Pulled only if it is not held, so a start needs no registry.
-	var err error
-	if b.image, err = m.images.Ensure(ctx, instance.ImageRef, image.PullPolicyMissing); err != nil {
-		return b, fmt.Errorf("get image %q: %w", instance.ImageRef, err)
+	pinned, err := instance.PinnedImageRef()
+	if err != nil {
+		return b, err
+	}
+	if b.image, err = m.images.Ensure(ctx, pinned, image.PullPolicyMissing); err != nil {
+		return b, fmt.Errorf("get image %q: %w", pinned, err)
 	}
 
 	kernel, err := m.store.Kernel(instance.KernelName)

@@ -88,7 +88,7 @@ func newInstanceRestartCommand() *cobra.Command {
 		Short: "Stop one or more instances if they are running, then start them",
 		Long: "Stops each instance if it is running, paused or on standby, then starts it\n" +
 			"afresh. A stopped instance is just started. Restarting is how a changed file\n" +
-			"mount or an updated image takes effect.",
+			"mount takes effect.",
 		Args:              oneOrMore("instance name"),
 		ValidArgsFunction: complete(0, instancesIn()),
 		RunE: func(cmd *cobra.Command, args []string) error {

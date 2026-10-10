@@ -42,11 +42,6 @@ size smaller than the disk already has is refused. Restoring a snapshot
 puts back the disk as it was then, at its size then, and it grows again at
 the next start.
 
-Changing a stopped instance's image with `dicer update --image` keeps its
-overlay disk too. The guest boots the new image with what it wrote laid
-over it. A file it changed or deleted stays changed or deleted, whatever
-the new image holds.
-
 ## Volumes
 
 A volume is a disk that exists apart from any instance, for data that must

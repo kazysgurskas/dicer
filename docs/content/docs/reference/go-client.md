@@ -922,6 +922,11 @@ type Instance struct {
 
 	InstanceSpec
 
+	// ImageDigest is the digest ImageRef resolved to when the instance was
+	// created. The instance always boots that image: pulling ImageRef again
+	// does not change it.
+	ImageDigest string `json:"image_digest,omitzero"`
+
 	// CreateTime is when the instance was defined.
 	CreateTime time.Time `json:"create_time,omitzero"`
 
@@ -1009,7 +1014,9 @@ type InstanceSpec struct {
 	// Hostname is the guest's hostname. Empty means the instance's name.
 	Hostname string `json:"hostname,omitzero"`
 
-	// ImageRef is the image the instance boots from, such as nginx:1.27.
+	// ImageRef is the image the instance boots from, such as nginx:1.27. It
+	// is resolved to a digest when the instance is created, which the
+	// instance boots from then on: see Instance.ImageDigest.
 	ImageRef string `json:"image_ref,omitzero"`
 
 	// HypervisorType is the hypervisor the instance runs on. Empty means
@@ -1291,9 +1298,6 @@ Next returns the next batch. It returns io.EOF after the last, and the error the
 
 ```go
 type InstanceUpdate struct {
-	// ImageRef replaces the image the instance boots from.
-	ImageRef *string
-
 	// HypervisorType replaces the hypervisor the instance runs on.
 	HypervisorType HypervisorType
 
@@ -1382,7 +1386,7 @@ type InstanceUpdate struct {
 }
 ```
 
-InstanceUpdate is a change to a stopped instance's definition. Only the fields that are set change: a pointer that is not nil, an enumeration that is not empty, and a slice or map that is not empty, which replaces the existing value whole. Ptr makes the pointers:
+InstanceUpdate is a change to a stopped instance's definition. Only the fields that are set change: a pointer that is not nil, an enumeration that is not empty, and a slice or map that is not empty, which replaces the existing value whole. The image cannot be changed: an instance always boots the image it was created with. Ptr makes the pointers:
 
 ```go
 update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4), Labels: map[string]string{"tier": "web"}}

@@ -68,7 +68,7 @@ func seedInstance(t *testing.T, store *fakeStore, name string) Spec {
 
 	instance := Spec{
 		ID: "id-" + name, Name: name,
-		ImageRef: "alpine:latest", KernelName: "k", NetworkName: "default",
+		ImageRef: "alpine:latest", ImageDigest: "sha256:aaaa", KernelName: "k", NetworkName: "default",
 		VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 20,
 	}
 	store.instances[name] = instance

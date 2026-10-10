@@ -37,6 +37,9 @@ type fakeInstanceDaemon struct {
 	// cached are the images already on the host: pulling one of them
 	// downloads nothing.
 	cached map[string]bool
+	// digest is the digest every image reference resolves to, which a new
+	// instance is pinned to.
+	digest string
 	// kernels and networks are what the host has, and host what
 	// GetHostInfo says of it.
 	kernels  []string
@@ -64,6 +67,7 @@ func newFakeInstanceDaemon(instances ...*dicerdv1.Instance) *fakeInstanceDaemon 
 	d := &fakeInstanceDaemon{
 		instances: make(map[string]*dicerdv1.Instance),
 		cached:    make(map[string]bool),
+		digest:    "sha256:0123456789abcdef0123",
 		host:      &dicerdv1.GetHostInfoResponse{Version: "v9.9.9", Hostname: "compute-1"},
 		events:    make(chan *dicerdv1.Event, 8),
 		console:   make(map[string]string),
@@ -209,7 +213,8 @@ func (d *fakeInstanceDaemon) CreateInstance(
 
 	d.created = req
 	instance := &dicerdv1.Instance{
-		Id: "id-" + req.GetName(), Name: req.GetName(), ImageRef: req.GetImageRef(), State: stateStopped,
+		Id: "id-" + req.GetName(), Name: req.GetName(), ImageRef: req.GetImageRef(), ImageDigest: d.digest,
+		State: stateStopped,
 	}
 	if req.GetStart() {
 		instance.State, instance.Ip = stateRunning, "10.0.0.9"
@@ -410,7 +415,7 @@ func (d *fakeInstanceDaemon) GetImage(_ context.Context, req *dicerdv1.GetImageR
 	if !d.cached[req.GetRef()] {
 		return nil, status.Errorf(codes.NotFound, "no image %q", req.GetRef())
 	}
-	return &dicerdv1.Image{Name: req.GetRef(), Digest: "sha256:0123456789abcdef0123", SizeBytes: 64 << 20}, nil
+	return &dicerdv1.Image{Name: req.GetRef(), Digest: d.digest, SizeBytes: 64 << 20}, nil
 }
 
 // PullImage reports a download for an image not yet cached, and caches it.
@@ -433,7 +438,7 @@ func (d *fakeInstanceDaemon) PullImage(
 		)
 	}
 	progress = append(progress, &dicerdv1.PullImageProgress{
-		Image: &dicerdv1.Image{Name: req.GetRef(), Digest: "sha256:0123456789abcdef0123", SizeBytes: 64 << 20},
+		Image: &dicerdv1.Image{Name: req.GetRef(), Digest: d.digest, SizeBytes: 64 << 20},
 	})
 
 	for _, p := range progress {

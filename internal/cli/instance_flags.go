@@ -323,7 +323,6 @@ func buildUpdate(cmd *cobra.Command, args []string) (dicer.InstanceUpdate, error
 		return &v
 	}
 
-	update.ImageRef = optionalString("image")
 	update.KernelName = optionalString("kernel")
 	update.KernelArgs = optionalString("kernel-args")
 	update.HypervisorVersion = optionalString("hypervisor-version")

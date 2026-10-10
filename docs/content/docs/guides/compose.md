@@ -154,9 +154,10 @@ wait on runs at every `up`, so it should do no harm when there is nothing
 for it to do.
 
 A recreated instance boots from a fresh overlay disk, so keep what must survive on
-a volume. `--force-recreate` recreates every instance, which you need after
-`dicer compose pull` to pick up an image whose tag has moved.
-`--no-recreate` never recreates an instance.
+a volume. An instance always boots the image it was created with, so `up`
+also recreates one whose image tag has moved, as after `dicer compose pull`.
+`--force-recreate` recreates every instance, and `--no-recreate` never
+recreates one.
 
 A service removed from the file leaves its instance behind. `up` and `down`
 point out these orphans, and delete them when given `--remove-orphans`.

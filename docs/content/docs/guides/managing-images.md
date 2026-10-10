@@ -108,25 +108,24 @@ as root, so it uses root's cloud credentials, such as an instance role.
 ## Update to a newer image
 
 A tag such as `nginx:1.27` or `latest` means the image most recently pulled
-under it on this host. Starting an instance never asks the registry whether
-the tag has moved. Pulling does, and so does creating an instance with
-`--pull always`:
+under it on this host. Pulling asks the registry whether the tag has moved,
+and so does creating an instance with `--pull always`.
+
+An instance is pinned to the image its tag pointed to when the instance was
+created. It boots the same image every time, even after the tag moves to a
+newer one. To run the newer image, create the instance again:
 
 ```console
-$ dicer pull nginx:1.27          # the tag now means the new image
-$ dicer restart web              # web boots from it
-$ dicer image prune              # the old one is no longer in use
+$ dicer pull nginx:1.27                    # the tag now means the new image
+$ dicer rm -f web
+$ dicer run -d --name web nginx:1.27       # web boots from it
+$ dicer image prune                        # the old one is no longer in use
 ```
 
-Each image is kept by digest, so after the pull, both images are listed under
-the same name until the old one is removed. A running instance keeps the
-image it booted from until it next starts.
-
-To pin an instance to one image, whatever the tag does, give a digest:
-
-```console
-$ dicer run -d --name web nginx:1.27@sha256:9d6b58feebd2…
-```
+The new instance starts with a fresh overlay disk, so keep what must
+survive on a [volume](../files-and-volumes#volumes). Each image is kept by
+digest, so after the pull, both images are listed under the same name until
+the old one is removed.
 
 ## Remove images
 

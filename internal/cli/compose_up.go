@@ -28,9 +28,10 @@ func newComposeUpCommand() *cobra.Command {
 		Short: "Create and start the project's instances",
 		Long: "Creates the networks and volumes the services use, pulls the images the host\n" +
 			"does not have, and brings each service's instance up to date with the file:\n" +
-			"creating the missing ones, recreating those whose definition has changed, and\n" +
-			"starting those that are stopped. Services start after those they depend on,\n" +
-			"and those that do not depend on each other start at the same time.\n\n" +
+			"creating the missing ones, recreating those whose definition has changed or\n" +
+			"whose image has moved, as after 'dicer compose pull', and starting those that\n" +
+			"are stopped. Services start after those they depend on, and those that do not\n" +
+			"depend on each other start at the same time.\n\n" +
 			"Naming services brings up those and what they depend on.\n\n" +
 			"The instances' consoles are written out until they all stop, each line\n" +
 			"marked with its instance's name. Ctrl+C stops them; a second Ctrl+C stops\n" +
@@ -379,6 +380,13 @@ func (u *upper) up(s *compose.Service) error {
 	}
 
 	changed := instance.Labels[compose.LabelConfigHash] != s.Instance.Labels[compose.LabelConfigHash]
+	if !changed {
+		moved, err := u.imageMoved(s, instance)
+		if err != nil {
+			return fmt.Errorf("service %s: %w", s.Name, err)
+		}
+		changed = moved
+	}
 	if u.opts.forceRecreate || (changed && !u.opts.noRecreate) {
 		if err := u.client.Instances.Delete(u.ctx(), name, dicer.DeleteOptions{Force: true}); err != nil {
 			return fmt.Errorf("service %s: delete %s to recreate it: %w", s.Name, name, err)
@@ -472,6 +480,18 @@ func (u *upper) once(key string, fn func()) {
 	if !said {
 		fn()
 	}
+}
+
+// imageMoved reports whether a service's image reference now names a
+// different image from the one its instance was created with, as after a
+// pull that moved its tag. An instance always boots the image it was created
+// with, so only a new instance runs the other.
+func (u *upper) imageMoved(s *compose.Service, instance dicer.Instance) (bool, error) {
+	image, err := u.client.Images.Get(u.ctx(), s.Instance.ImageRef)
+	if err != nil {
+		return false, err
+	}
+	return image.Digest != instance.ImageDigest, nil
 }
 
 // checkHasHealthCheck fails for a service that has no health check to wait

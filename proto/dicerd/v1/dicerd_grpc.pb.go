@@ -119,7 +119,9 @@ type DaemonServiceClient interface {
 	// policy says, reporting no progress: to show a pull's progress, call
 	// PullImage first. Nothing is recorded if the image cannot be had.
 	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
-	// UpdateInstance modifies the definition of a stopped instance.
+	// UpdateInstance modifies the definition of a stopped instance. Its image
+	// cannot be changed: an instance always boots the image it was created
+	// with.
 	UpdateInstance(ctx context.Context, in *UpdateInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
 	// RenameInstance changes a stopped instance's name. The instance keeps its
 	// ID, its disks and its address; only what people call it changes.
@@ -912,7 +914,9 @@ type DaemonServiceServer interface {
 	// policy says, reporting no progress: to show a pull's progress, call
 	// PullImage first. Nothing is recorded if the image cannot be had.
 	CreateInstance(context.Context, *CreateInstanceRequest) (*Instance, error)
-	// UpdateInstance modifies the definition of a stopped instance.
+	// UpdateInstance modifies the definition of a stopped instance. Its image
+	// cannot be changed: an instance always boots the image it was created
+	// with.
 	UpdateInstance(context.Context, *UpdateInstanceRequest) (*Instance, error)
 	// RenameInstance changes a stopped instance's name. The instance keeps its
 	// ID, its disks and its address; only what people call it changes.

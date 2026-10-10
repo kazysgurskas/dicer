@@ -14,6 +14,7 @@ import (
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
+	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/naming"
 	"github.com/konradasb/dicer/internal/network"
 )
@@ -29,10 +30,16 @@ type Instance struct {
 // Spec is the persistent definition of a virtual machine. Referenced kernels,
 // networks and mounts are resolved at each start.
 type Spec struct {
-	ID                string          `yaml:"id" json:"id"`
-	Name              string          `yaml:"name" json:"name"`
-	Hostname          string          `yaml:"hostname,omitempty" json:"hostname,omitempty"`
-	ImageRef          string          `yaml:"image_ref" json:"image_ref"`
+	ID       string `yaml:"id" json:"id"`
+	Name     string `yaml:"name" json:"name"`
+	Hostname string `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	ImageRef string `yaml:"image_ref" json:"image_ref"`
+
+	// ImageDigest is the digest ImageRef resolved to when the instance was
+	// created. The instance always boots that image: pulling ImageRef again
+	// does not change it.
+	ImageDigest string `yaml:"image_digest" json:"image_digest"`
+
 	HypervisorType    hypervisor.Type `yaml:"hypervisor_type,omitempty" json:"hypervisor_type,omitempty"`
 	HypervisorVersion string          `yaml:"hypervisor_version,omitempty" json:"hypervisor_version,omitempty"`
 	KernelName        string          `yaml:"kernel_name" json:"kernel_name"`
@@ -100,6 +107,16 @@ func (s Spec) Resources() Resources {
 // set, otherwise what it asks for.
 func (s Spec) MaxResources() Resources {
 	return Resources{VCPUs: max(s.VCPUs, s.MaxVCPUs), MemoryBytes: max(s.MemoryBytes, s.MaxMemoryBytes)}
+}
+
+// PinnedImageRef returns the reference the instance boots its image by: the
+// repository ImageRef names, at ImageDigest.
+func (s Spec) PinnedImageRef() (string, error) {
+	ref, err := reference.Parse(s.ImageRef)
+	if err != nil {
+		return "", fmt.Errorf("image %q: %w", s.ImageRef, err)
+	}
+	return ref.Repository() + "@" + s.ImageDigest, nil
 }
 
 // Validate returns an invalid argument error if the instance cannot be run

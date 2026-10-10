@@ -6,9 +6,10 @@ description: "Create and start the project's instances"
 
 Creates the networks and volumes the services use, pulls the images the host
 does not have, and brings each service's instance up to date with the file:
-creating the missing ones, recreating those whose definition has changed, and
-starting those that are stopped. Services start after those they depend on,
-and those that do not depend on each other start at the same time.
+creating the missing ones, recreating those whose definition has changed or
+whose image has moved, as after `dicer compose pull`, and starting those that
+are stopped. Services start after those they depend on, and those that do not
+depend on each other start at the same time.
 
 Naming services brings up those and what they depend on.
 

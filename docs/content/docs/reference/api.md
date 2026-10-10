@@ -51,7 +51,7 @@ was, and whose message says it for a person:
 | Method | Request | Response | Description |
 |---|---|---|---|
 | `CreateInstance` | [`CreateInstanceRequest`](#createinstancerequest) | [`Instance`](#instance) | CreateInstance records an instance definition without starting it, unless start is set. It first pulls the image as the request's pull policy says, reporting no progress: to show a pull's progress, call PullImage first. Nothing is recorded if the image cannot be had. |
-| `UpdateInstance` | [`UpdateInstanceRequest`](#updateinstancerequest) | [`Instance`](#instance) | UpdateInstance modifies the definition of a stopped instance. |
+| `UpdateInstance` | [`UpdateInstanceRequest`](#updateinstancerequest) | [`Instance`](#instance) | UpdateInstance modifies the definition of a stopped instance. Its image cannot be changed: an instance always boots the image it was created with. |
 | `RenameInstance` | [`RenameInstanceRequest`](#renameinstancerequest) | [`Instance`](#instance) | RenameInstance changes a stopped instance's name. The instance keeps its ID, its disks and its address; only what people call it changes. |
 | `StartInstance` | [`StartInstanceRequest`](#startinstancerequest) | [`Instance`](#instance) | StartInstance boots a defined instance, or resumes one on standby. |
 | `StopInstance` | [`StopInstanceRequest`](#stopinstancerequest) | [`Instance`](#instance) | StopInstance shuts a running instance down, keeping its definition, overlay disk and address. |
@@ -139,7 +139,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` |  |
-| `image_ref` | `string` |  |
+| `image_ref` | `string` | The image to boot, by tag or digest. It is resolved to a digest when the instance is created, and the instance boots that image from then on. |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | Unspecified means Cloud Hypervisor. |
 | `hypervisor_version` | `string` | A version that hypervisor ships. Empty is its default version, which HypervisorInfo lists first. |
 | `kernel_name` | `string` | Empty means the default kernel, "default". |
@@ -580,6 +580,7 @@ is not running.
 | `name` | `string` |  |
 | `hostname` | `string` |  |
 | `image_ref` | `string` |  |
+| `image_digest` | `string` | The digest of the image image_ref named when the instance was created. The instance always boots this image: pulling image_ref again does not change it. |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | The hypervisor the instance runs on: Cloud Hypervisor if it was created without one. |
 | `hypervisor_version` | `string` | A version that hypervisor ships. Empty is its default version, which HypervisorInfo lists first. |
 | `kernel_name` | `string` |  |
@@ -1013,7 +1014,6 @@ the existing value whole.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` |  |
-| `image_ref` | optional `string` | One of `_image_ref`.  |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) |  |
 | `hypervisor_version` | optional `string` | One of `_hypervisor_version`.  |
 | `kernel_name` | optional `string` | One of `_kernel_name`.  |

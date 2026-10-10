@@ -66,6 +66,30 @@ func TestCreateFollowsThePullPolicy(t *testing.T) {
 	}
 }
 
+// TestCreatePinsTheImageDigest checks that a new instance records the digest
+// its image reference resolves to, the image it boots from then on.
+func TestCreatePinsTheImageDigest(t *testing.T) {
+	h := newHarness(t)
+	images, ok := h.manager.images.(*fakeImages)
+	if !ok {
+		t.Fatalf("images is a %T, want the fake", h.manager.images)
+	}
+	images.held = &image.Image{Name: "docker.io/library/alpine:latest", Digest: "sha256:bbbb", DiskPath: images.diskPath}
+
+	instance := Spec{ID: "new-id", Name: "new", ImageRef: "alpine", KernelName: "k", NetworkName: "default", VCPUs: 1, MemoryBytes: 1 << 30, DiskBytes: 1 << 30}
+	if err := h.manager.Create(t.Context(), instance, image.PullPolicyMissing); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	created, err := h.store.Instance(instance.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ImageDigest != "sha256:bbbb" {
+		t.Errorf("ImageDigest = %q, want sha256:bbbb, the digest alpine resolved to", created.ImageDigest)
+	}
+}
+
 // A definition that could never start is refused when it is created, before
 // its image is pulled.
 func TestCreateRefusesWhatCouldNeverStart(t *testing.T) {

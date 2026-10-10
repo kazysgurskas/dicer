@@ -1,7 +1,7 @@
 ---
 title: Running OpenClaw
 weight: 6
-description: "Give OpenClaw, the personal AI assistant, a machine of its own to use as it likes, and snapshot it before every upgrade."
+description: "Give OpenClaw, the personal AI assistant, a machine of its own to use as it likes, with its dashboard published and its state in snapshots."
 icon: chat
 related:
   - /docs/guides/snapshots
@@ -27,8 +27,8 @@ Instance openclaw started in 1s (172.20.55.87)
 $ until dicer ps --filter name=openclaw | grep -q '(healthy)'; do sleep 2; done
 ```
 
-The command runs `openclaw doctor`, which migrates OpenClaw's state after an
-upgrade, and then its gateway. `--allow-unconfigured` lets the gateway start
+The command runs `openclaw doctor`, which checks and repairs OpenClaw's
+state, and then its gateway. `--allow-unconfigured` lets the gateway start
 before it is set up. The start period gives `doctor` time to finish before
 a failed health check counts.
 
@@ -117,31 +117,14 @@ The page connects on its own, and you can talk to Pinch there:
 the dashboard off the internet, publish it on a private address only, such
 as `-p 10.10.0.101:18789:18789`.
 
-## Upgrade it
+## Take snapshots
 
-Take a snapshot first. It holds the whole machine, OpenClaw's memory and
-configuration included, so you can go back to it if the new release
-misbehaves. Then change the image:
+OpenClaw keeps everything on the instance's own disk, so a
+[snapshot](../../guides/snapshots) holds the whole assistant, its memory and
+configuration included. Take one before you let OpenClaw do something you
+may want to undo, such as installing a skill or reorganising its files:
 
 ```console
-$ dicer snapshot create openclaw before-upgrade
-Snapshot before-upgrade of instance openclaw created in 3.2s (memory, 4.1 GiB)
-$ dicer stop openclaw
-$ dicer update openclaw --image ghcr.io/openclaw/openclaw:2026.9.9
-Instance openclaw updated
-$ dicer start openclaw
-Instance openclaw started in 1.6s (172.20.55.87)
-$ until dicer ps --filter name=openclaw | grep -q '(healthy)'; do sleep 2; done
-$ dicer exec openclaw openclaw --version
-OpenClaw 2026.9.9 (bcfc888)
-$ dicer exec openclaw openclaw agent --agent main --message "How do I take my coffee, and where does my sister live?"
-Black. Ada's in Vilnius.
-…
+$ dicer snapshot create openclaw before-cleanup
+Snapshot before-cleanup of instance openclaw created in 3.2s (memory, 4.1 GiB)
 ```
-
-The instance keeps its disk across the change, so OpenClaw starts the new
-release with everything it had. `doctor` migrates its state on the way,
-which takes the first start about a minute.
-
-Take a snapshot the same way before you let OpenClaw do something you may
-want to undo, such as installing a skill or reorganising its files.

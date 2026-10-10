@@ -25,9 +25,7 @@ func (m *Manager) ImagesInUse() (image.InUse, error) {
 
 	for _, instance := range m.store.Instances() {
 		user := fmt.Sprintf("instance %q", instance.Name)
-		if resolved, err := m.images.Image(instance.ImageRef); err == nil {
-			use(resolved.Digest, user)
-		}
+		use(instance.ImageDigest, user)
 
 		status, err := m.statusOf(instance)
 		if err != nil {

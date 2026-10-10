@@ -142,9 +142,6 @@ func (h *instanceHandler) UpdateInstance(
 		return nil, err
 	}
 
-	if err := h.applyReferences(&instance, req); err != nil {
-		return nil, err
-	}
 	applySettings(&instance, req)
 	if err := applyLists(&instance, req); err != nil {
 		return nil, err
@@ -178,23 +175,11 @@ func (h *instanceHandler) UpdateInstance(
 	return h.view(instance)
 }
 
-// applyReferences applies the image, kernel and network an update names.
-// The instance manager checks that the kernel and network exist.
-func (h *instanceHandler) applyReferences(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) error {
-	if v := req.ImageRef; v != nil {
-		ref, err := reference.Parse(*v)
-		if err != nil {
-			return errdefs.InvalidArgument("invalid image %q: %v", *v, err)
-		}
-		instance.ImageRef = ref.String()
-	}
+// applySettings applies the scalar fields an update sets. The instance
+// manager checks that a kernel and network it names exist.
+func applySettings(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) {
 	setIf(&instance.KernelName, req.KernelName)
 	setIf(&instance.NetworkName, req.NetworkName)
-	return nil
-}
-
-// applySettings applies the scalar fields an update sets.
-func applySettings(instance *instance.Spec, req *dicerdv1.UpdateInstanceRequest) {
 	if v := req.Vcpus; v != nil {
 		instance.VCPUs = int(*v)
 	}

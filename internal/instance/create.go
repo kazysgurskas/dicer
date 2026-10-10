@@ -17,9 +17,10 @@ import (
 )
 
 // Create records a new instance's definition, first pulling its image as
-// pull says. It refuses an invalid definition, a name already taken, and one
-// that could never start, before pulling anything. It boots nothing: see
-// Start. Nothing is recorded if the image cannot be had.
+// pull says, and pins it to the digest its image reference resolves to. It
+// refuses an invalid definition, a name already taken, and one that could
+// never start, before pulling anything. It boots nothing: see Start. Nothing
+// is recorded if the image cannot be had.
 func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPolicy) error {
 	if err := instance.Validate(); err != nil {
 		return err
@@ -33,18 +34,16 @@ func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPoli
 
 	// Before the definition, so that one whose image cannot be had is never
 	// seen, even for as long as a pull takes. The error names the image.
-	if _, err := m.images.Ensure(ctx, instance.ImageRef, pull); err != nil {
+	resolved, err := m.images.Ensure(ctx, instance.ImageRef, pull)
+	if err != nil {
 		return err
 	}
+	instance.ImageDigest = resolved.Digest
 
 	if err := m.store.CreateInstance(instance); err != nil {
 		return err
 	}
-	m.record(instance, event.ActionCreated,
-		fmt.Sprintf("Created instance from image %s with %s, %s memory, %s disk; restart policy %s",
-			reference.FamiliarString(instance.ImageRef), humanize.Count(instance.VCPUs, "vCPU"), humanize.Bytes(instance.MemoryBytes), humanize.Bytes(instance.DiskBytes),
-			instance.Restart),
-		map[string]string{"image": instance.ImageRef})
+	m.record(instance, event.ActionCreated, fmt.Sprintf("Created instance from image %s with %s, %s memory, %s disk; restart policy %s", reference.FamiliarString(instance.ImageRef), humanize.Count(instance.VCPUs, "vCPU"), humanize.Bytes(instance.MemoryBytes), humanize.Bytes(instance.DiskBytes), instance.Restart), map[string]string{"image": instance.ImageRef})
 	return nil
 }
 

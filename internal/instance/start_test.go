@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
@@ -150,6 +151,27 @@ func TestStartUsesTheImageHeld(t *testing.T) {
 
 	if images.pulls != 0 {
 		t.Errorf("pulls = %d, want none for an image the host holds", images.pulls)
+	}
+}
+
+// TestStartBootsThePinnedImage checks that a start boots the image the
+// instance was created with, by its digest, even once its reference names
+// another image.
+func TestStartBootsThePinnedImage(t *testing.T) {
+	h := newHarness(t)
+	images, ok := h.manager.images.(*fakeImages)
+	if !ok {
+		t.Fatalf("images is a %T, want the fake", h.manager.images)
+	}
+
+	h.start(t)
+
+	want := "docker.io/library/alpine@sha256:aaaa"
+	if !slices.Contains(images.ensured, want) {
+		t.Errorf("images asked for = %q, want %q", images.ensured, want)
+	}
+	if slices.Contains(images.ensured, h.instance.ImageRef) {
+		t.Errorf("images asked for = %q, want not the reference %q", images.ensured, h.instance.ImageRef)
 	}
 }
 

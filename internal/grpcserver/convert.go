@@ -30,6 +30,7 @@ func instanceToProto(instance instance.Instance) *dicerdv1.Instance {
 		Name:                   spec.Name,
 		Hostname:               spec.Hostname,
 		ImageRef:               spec.ImageRef,
+		ImageDigest:            spec.ImageDigest,
 		HypervisorType:         hypervisorTypes.toProto(spec.EffectiveHypervisorType()),
 		HypervisorVersion:      spec.HypervisorVersion,
 		KernelName:             spec.KernelName,

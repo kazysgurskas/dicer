@@ -76,8 +76,8 @@ func (d *composeDaemon) CreateInstance(
 	d.created = req
 
 	instance := &dicerdv1.Instance{
-		Id: "id-" + req.GetName(), Name: req.GetName(), ImageRef: req.GetImageRef(), State: stateStopped,
-		Labels: req.GetLabels(), NetworkName: req.GetNetworkName(), Mounts: req.GetMounts(),
+		Id: "id-" + req.GetName(), Name: req.GetName(), ImageRef: req.GetImageRef(), ImageDigest: d.digest,
+		State: stateStopped, Labels: req.GetLabels(), NetworkName: req.GetNetworkName(), Mounts: req.GetMounts(),
 		Ports: req.GetPorts(), HealthCheck: req.GetHealthCheck(), Env: req.GetEnv(),
 	}
 	d.instances[instance.GetName()] = instance
@@ -363,6 +363,37 @@ networks:
 	if api.GetLabels()[compose.LabelProject] != "shop" || api.GetLabels()[compose.LabelService] != "api" ||
 		api.GetLabels()[compose.LabelConfigHash] == "" {
 		t.Errorf("api's labels = %v, want the project's", api.GetLabels())
+	}
+}
+
+// TestComposeUpRecreatesInstancesWhoseImageMoved checks that up recreates
+// an instance whose image reference names a different image from the one it
+// was created with, as after a pull that moved the tag: an instance always
+// boots the image it was created with.
+func TestComposeUpRecreatesInstancesWhoseImageMoved(t *testing.T) {
+	d := newComposeDaemon()
+	serveComposeDaemon(t, d)
+	file := composeProject(t, shopFile)
+
+	if out, err := runCompose(t, file, "up", "-d"); err != nil {
+		t.Fatalf("up: %v\n%s", err, out)
+	}
+
+	d.mu.Lock()
+	d.digest = "sha256:fedcba9876543210fedc"
+	d.calls = nil
+	d.mu.Unlock()
+	out, err := runCompose(t, file, "up", "-d")
+	if err != nil {
+		t.Fatalf("up after the tag moved: %v\n%s", err, out)
+	}
+	if n := strings.Count(out, "recreated in"); n != 3 {
+		t.Errorf("output = %q, want each instance recreated", out)
+	}
+	for _, instance := range d.instances {
+		if got := instance.GetImageDigest(); got != "sha256:fedcba9876543210fedc" {
+			t.Errorf("%s is pinned to %s, want the image its tag names now", instance.GetName(), got)
+		}
 	}
 }
 

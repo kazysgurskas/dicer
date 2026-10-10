@@ -50,7 +50,9 @@ service DaemonService {
   // policy says, reporting no progress: to show a pull's progress, call
   // PullImage first. Nothing is recorded if the image cannot be had.
   rpc CreateInstance(CreateInstanceRequest) returns (Instance);
-  // UpdateInstance modifies the definition of a stopped instance.
+  // UpdateInstance modifies the definition of a stopped instance. Its image
+  // cannot be changed: an instance always boots the image it was created
+  // with.
   rpc UpdateInstance(UpdateInstanceRequest) returns (Instance);
   // RenameInstance changes a stopped instance's name. The instance keeps its
   // ID, its disks and its address; only what people call it changes.
@@ -420,79 +422,79 @@ message Instance {
   string name = 2;
   string hostname = 3;
   string image_ref = 4;
+  // The digest of the image image_ref named when the instance was created.
+  // The instance always boots this image: pulling image_ref again does not
+  // change it.
+  string image_digest = 5;
   // The hypervisor the instance runs on: Cloud Hypervisor if it was created
   // without one.
-  HypervisorType hypervisor_type = 5;
+  HypervisorType hypervisor_type = 6;
   // A version that hypervisor ships. Empty is its default version, which
   // HypervisorInfo lists first.
-  string hypervisor_version = 6;
-  string kernel_name = 7;
-  string kernel_args = 8;
-  int32 vcpus = 9;
-  int64 memory_bytes = 10;
+  string hypervisor_version = 7;
+  string kernel_name = 8;
+  string kernel_args = 9;
+  int32 vcpus = 10;
+  int64 memory_bytes = 11;
   // The most ResizeInstance can give the running instance. Zero leaves it
   // no room to grow. See CreateInstanceRequest.max_vcpus.
-  int32 max_vcpus = 40;
-  int64 max_memory_bytes = 41;
-  int64 disk_bytes = 11;
+  int32 max_vcpus = 12;
+  int64 max_memory_bytes = 13;
+  int64 disk_bytes = 14;
   // Rate limits, of which zero is unlimited. See
   // CreateInstanceRequest.disk_bytes_per_second.
-  int64 disk_bytes_per_second = 42;
-  int64 disk_iops = 43;
-  int64 upload_bytes_per_second = 44;
-  int64 download_bytes_per_second = 45;
+  int64 disk_bytes_per_second = 15;
+  int64 disk_iops = 16;
+  int64 upload_bytes_per_second = 17;
+  int64 download_bytes_per_second = 18;
   // How long the instance may be idle before it is put on standby; unset
   // is never. See CreateInstanceRequest.standby_after.
-  google.protobuf.Duration standby_after = 46;
-  string network_name = 12;
-  string static_ip = 13;
-  reserved 14, 15;
-  reserved "volumes", "files";
-  repeated Mount mounts = 39;
-  map<string, string> env = 16;
-  repeated string cmd = 17;
-  map<string, string> labels = 18;
-  reserved 19;
-  reserved "autostart";
-  RestartPolicy restart_policy = 30;
-  google.protobuf.Timestamp create_time = 20;
-  google.protobuf.Timestamp update_time = 21;
+  google.protobuf.Duration standby_after = 19;
+  string network_name = 20;
+  string static_ip = 21;
+  repeated Mount mounts = 22;
+  map<string, string> env = 23;
+  repeated string cmd = 24;
+  map<string, string> labels = 25;
+  RestartPolicy restart_policy = 26;
+  google.protobuf.Timestamp create_time = 27;
+  google.protobuf.Timestamp update_time = 28;
 
-  InstanceState state = 22;
-  string state_error = 23;
-  int64 hypervisor_pid = 24;
-  int64 vsock_cid = 25;
-  string ip = 26;
-  string mac = 27;
-  google.protobuf.Timestamp start_time = 28;
+  InstanceState state = 29;
+  string state_error = 30;
+  int64 hypervisor_pid = 31;
+  int64 vsock_cid = 32;
+  string ip = 33;
+  string mac = 34;
+  google.protobuf.Timestamp start_time = 35;
 
-  repeated PortMapping ports = 29;
+  repeated PortMapping ports = 36;
 
   // The exit code the guest reported when it last ended on its own: its
   // workload's, or 0 for a guest that powered itself off. Unset if it has
   // not ended since it was last started, or ended without saying how.
-  optional int32 exit_code = 31;
+  optional int32 exit_code = 37;
   // When the guest last ended on its own.
-  google.protobuf.Timestamp finish_time = 33;
+  google.protobuf.Timestamp finish_time = 38;
   // How many times in a row the restart policy has started the instance
   // again. A start a user asks for resets it.
-  int32 restart_count = 32;
+  int32 restart_count = 39;
   // When a Restarting instance is due to start again.
-  google.protobuf.Timestamp next_restart_time = 34;
+  google.protobuf.Timestamp next_restart_time = 40;
 
   // How the instance's health is checked, overriding its image's. Unset
   // means the image's, if it declares one.
-  HealthCheck health_check = 35;
+  HealthCheck health_check = 41;
   // What the health check of the running instance has found. Unset if it
   // is not running, or has no check.
-  Health health = 36;
+  Health health = 42;
 
   // How the guest starts the command. See CreateInstanceRequest.init_mode.
-  InitMode init_mode = 37;
+  InitMode init_mode = 43;
 
   // Whether the instance is deleted once it stops. See
   // CreateInstanceRequest.remove_on_exit.
-  bool remove_on_exit = 38;
+  bool remove_on_exit = 44;
 }
 
 // HealthCheck is how an instance's health is checked: one probe, run inside
@@ -595,6 +597,8 @@ message PortMapping {
 
 message CreateInstanceRequest {
   string name = 1;
+  // The image to boot, by tag or digest. It is resolved to a digest when the
+  // instance is created, and the instance boots that image from then on.
   string image_ref = 2;
   // Unspecified means Cloud Hypervisor.
   HypervisorType hypervisor_type = 3;
@@ -660,42 +664,37 @@ message CreateInstanceRequest {
 // the existing value whole.
 message UpdateInstanceRequest {
   string name = 1;
-  optional string image_ref = 2;
-  HypervisorType hypervisor_type = 3;
-  optional string hypervisor_version = 4;
-  optional string kernel_name = 5;
-  optional string kernel_args = 6;
-  optional int32 vcpus = 7;
-  optional int64 memory_bytes = 8;
+  HypervisorType hypervisor_type = 2;
+  optional string hypervisor_version = 3;
+  optional string kernel_name = 4;
+  optional string kernel_args = 5;
+  optional int32 vcpus = 6;
+  optional int64 memory_bytes = 7;
   // Zero removes the maximum.
-  optional int32 max_vcpus = 25;
-  optional int64 max_memory_bytes = 26;
+  optional int32 max_vcpus = 8;
+  optional int64 max_memory_bytes = 9;
   // The overlay disk grows to it at the instance's next start. It cannot
   // shrink, so a size smaller than the overlay disk is refused.
-  optional int64 disk_bytes = 9;
+  optional int64 disk_bytes = 10;
   // Zero removes the limit.
-  optional int64 disk_bytes_per_second = 27;
-  optional int64 disk_iops = 28;
-  optional int64 upload_bytes_per_second = 29;
-  optional int64 download_bytes_per_second = 30;
+  optional int64 disk_bytes_per_second = 11;
+  optional int64 disk_iops = 12;
+  optional int64 upload_bytes_per_second = 13;
+  optional int64 download_bytes_per_second = 14;
   // Zero is never.
-  google.protobuf.Duration standby_after = 33;
-  optional string network_name = 10;
-  optional string static_ip = 11;
-  optional string hostname = 12;
-  reserved 13;
-  reserved "autostart";
-  RestartPolicy restart_policy = 20;
-  HealthCheck health_check = 21;
-  InitMode init_mode = 22;
-  optional bool remove_on_exit = 23;
-  reserved 14, 15;
-  reserved "volumes", "files";
-  repeated Mount mounts = 24;
-  map<string, string> env = 16;
-  repeated string cmd = 17;
-  map<string, string> labels = 18;
-  repeated PortMapping ports = 19;
+  google.protobuf.Duration standby_after = 15;
+  optional string network_name = 16;
+  optional string static_ip = 17;
+  optional string hostname = 18;
+  RestartPolicy restart_policy = 19;
+  HealthCheck health_check = 20;
+  InitMode init_mode = 21;
+  optional bool remove_on_exit = 22;
+  repeated Mount mounts = 23;
+  map<string, string> env = 24;
+  repeated string cmd = 25;
+  map<string, string> labels = 26;
+  repeated PortMapping ports = 27;
 }
 
 message StartInstanceRequest {

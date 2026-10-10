@@ -200,8 +200,8 @@ $ sudo systemctl start dicerd
 
 You can leave out the images and the layer cache, `/var/lib/dicer/images`
 and `/var/lib/dicer/oci-cache`, because the daemon pulls again what it
-needs. It pulls an instance's image by name, though, so if the tag has
-moved since, the instance boots the newer image.
+needs. It pulls each instance's image by its digest, so the instance boots
+the same image as before, as long as the registry still has it.
 
 To restore, stop the daemon, put both directories back where they were, and
 start it. Instances come back stopped, apart from those their restart

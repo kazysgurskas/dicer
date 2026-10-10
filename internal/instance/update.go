@@ -21,7 +21,6 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/health"
 	"github.com/konradasb/dicer/internal/humanize"
-	"github.com/konradasb/dicer/internal/image/reference"
 )
 
 // Update replaces a stopped instance's definition. A change to its restart
@@ -139,7 +138,6 @@ func definitionChanges(a, b Spec) []string {
 	byteRate := func(n int64) string { return limit(n, humanize.Bytes(n)+"/s") }
 	iops := func(n int64) string { return limit(n, strconv.FormatInt(n, 10)) }
 
-	from("image", reference.FamiliarString(a.ImageRef), reference.FamiliarString(b.ImageRef))
 	from("vCPUs", strconv.Itoa(a.VCPUs), strconv.Itoa(b.VCPUs))
 	from("memory", humanize.Bytes(a.MemoryBytes), humanize.Bytes(b.MemoryBytes))
 	from("max vCPUs", maximum(int64(a.MaxVCPUs), strconv.Itoa(a.MaxVCPUs)), maximum(int64(b.MaxVCPUs), strconv.Itoa(b.MaxVCPUs)))

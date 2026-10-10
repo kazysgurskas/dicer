@@ -917,69 +917,73 @@ type Instance struct {
 	Name     string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Hostname string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	ImageRef string                 `protobuf:"bytes,4,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
+	// The digest of the image image_ref named when the instance was created.
+	// The instance always boots this image: pulling image_ref again does not
+	// change it.
+	ImageDigest string `protobuf:"bytes,5,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
 	// The hypervisor the instance runs on: Cloud Hypervisor if it was created
 	// without one.
-	HypervisorType HypervisorType `protobuf:"varint,5,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
+	HypervisorType HypervisorType `protobuf:"varint,6,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
 	// A version that hypervisor ships. Empty is its default version, which
 	// HypervisorInfo lists first.
-	HypervisorVersion string `protobuf:"bytes,6,opt,name=hypervisor_version,json=hypervisorVersion,proto3" json:"hypervisor_version,omitempty"`
-	KernelName        string `protobuf:"bytes,7,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
-	KernelArgs        string `protobuf:"bytes,8,opt,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
-	Vcpus             int32  `protobuf:"varint,9,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
-	MemoryBytes       int64  `protobuf:"varint,10,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	HypervisorVersion string `protobuf:"bytes,7,opt,name=hypervisor_version,json=hypervisorVersion,proto3" json:"hypervisor_version,omitempty"`
+	KernelName        string `protobuf:"bytes,8,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
+	KernelArgs        string `protobuf:"bytes,9,opt,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
+	Vcpus             int32  `protobuf:"varint,10,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
+	MemoryBytes       int64  `protobuf:"varint,11,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
 	// The most ResizeInstance can give the running instance. Zero leaves it
 	// no room to grow. See CreateInstanceRequest.max_vcpus.
-	MaxVcpus       int32 `protobuf:"varint,40,opt,name=max_vcpus,json=maxVcpus,proto3" json:"max_vcpus,omitempty"`
-	MaxMemoryBytes int64 `protobuf:"varint,41,opt,name=max_memory_bytes,json=maxMemoryBytes,proto3" json:"max_memory_bytes,omitempty"`
-	DiskBytes      int64 `protobuf:"varint,11,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
+	MaxVcpus       int32 `protobuf:"varint,12,opt,name=max_vcpus,json=maxVcpus,proto3" json:"max_vcpus,omitempty"`
+	MaxMemoryBytes int64 `protobuf:"varint,13,opt,name=max_memory_bytes,json=maxMemoryBytes,proto3" json:"max_memory_bytes,omitempty"`
+	DiskBytes      int64 `protobuf:"varint,14,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
 	// Rate limits, of which zero is unlimited. See
 	// CreateInstanceRequest.disk_bytes_per_second.
-	DiskBytesPerSecond     int64 `protobuf:"varint,42,opt,name=disk_bytes_per_second,json=diskBytesPerSecond,proto3" json:"disk_bytes_per_second,omitempty"`
-	DiskIops               int64 `protobuf:"varint,43,opt,name=disk_iops,json=diskIops,proto3" json:"disk_iops,omitempty"`
-	UploadBytesPerSecond   int64 `protobuf:"varint,44,opt,name=upload_bytes_per_second,json=uploadBytesPerSecond,proto3" json:"upload_bytes_per_second,omitempty"`
-	DownloadBytesPerSecond int64 `protobuf:"varint,45,opt,name=download_bytes_per_second,json=downloadBytesPerSecond,proto3" json:"download_bytes_per_second,omitempty"`
+	DiskBytesPerSecond     int64 `protobuf:"varint,15,opt,name=disk_bytes_per_second,json=diskBytesPerSecond,proto3" json:"disk_bytes_per_second,omitempty"`
+	DiskIops               int64 `protobuf:"varint,16,opt,name=disk_iops,json=diskIops,proto3" json:"disk_iops,omitempty"`
+	UploadBytesPerSecond   int64 `protobuf:"varint,17,opt,name=upload_bytes_per_second,json=uploadBytesPerSecond,proto3" json:"upload_bytes_per_second,omitempty"`
+	DownloadBytesPerSecond int64 `protobuf:"varint,18,opt,name=download_bytes_per_second,json=downloadBytesPerSecond,proto3" json:"download_bytes_per_second,omitempty"`
 	// How long the instance may be idle before it is put on standby; unset
 	// is never. See CreateInstanceRequest.standby_after.
-	StandbyAfter  *durationpb.Duration   `protobuf:"bytes,46,opt,name=standby_after,json=standbyAfter,proto3" json:"standby_after,omitempty"`
-	NetworkName   string                 `protobuf:"bytes,12,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
-	StaticIp      string                 `protobuf:"bytes,13,opt,name=static_ip,json=staticIp,proto3" json:"static_ip,omitempty"`
-	Mounts        []*Mount               `protobuf:"bytes,39,rep,name=mounts,proto3" json:"mounts,omitempty"`
-	Env           map[string]string      `protobuf:"bytes,16,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Cmd           []string               `protobuf:"bytes,17,rep,name=cmd,proto3" json:"cmd,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,18,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	RestartPolicy *RestartPolicy         `protobuf:"bytes,30,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
-	CreateTime    *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
-	UpdateTime    *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
-	State         InstanceState          `protobuf:"varint,22,opt,name=state,proto3,enum=dicerd.v1.InstanceState" json:"state,omitempty"`
-	StateError    string                 `protobuf:"bytes,23,opt,name=state_error,json=stateError,proto3" json:"state_error,omitempty"`
-	HypervisorPid int64                  `protobuf:"varint,24,opt,name=hypervisor_pid,json=hypervisorPid,proto3" json:"hypervisor_pid,omitempty"`
-	VsockCid      int64                  `protobuf:"varint,25,opt,name=vsock_cid,json=vsockCid,proto3" json:"vsock_cid,omitempty"`
-	Ip            string                 `protobuf:"bytes,26,opt,name=ip,proto3" json:"ip,omitempty"`
-	Mac           string                 `protobuf:"bytes,27,opt,name=mac,proto3" json:"mac,omitempty"`
-	StartTime     *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
-	Ports         []*PortMapping         `protobuf:"bytes,29,rep,name=ports,proto3" json:"ports,omitempty"`
+	StandbyAfter  *durationpb.Duration   `protobuf:"bytes,19,opt,name=standby_after,json=standbyAfter,proto3" json:"standby_after,omitempty"`
+	NetworkName   string                 `protobuf:"bytes,20,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
+	StaticIp      string                 `protobuf:"bytes,21,opt,name=static_ip,json=staticIp,proto3" json:"static_ip,omitempty"`
+	Mounts        []*Mount               `protobuf:"bytes,22,rep,name=mounts,proto3" json:"mounts,omitempty"`
+	Env           map[string]string      `protobuf:"bytes,23,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Cmd           []string               `protobuf:"bytes,24,rep,name=cmd,proto3" json:"cmd,omitempty"`
+	Labels        map[string]string      `protobuf:"bytes,25,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	RestartPolicy *RestartPolicy         `protobuf:"bytes,26,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	CreateTime    *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	UpdateTime    *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	State         InstanceState          `protobuf:"varint,29,opt,name=state,proto3,enum=dicerd.v1.InstanceState" json:"state,omitempty"`
+	StateError    string                 `protobuf:"bytes,30,opt,name=state_error,json=stateError,proto3" json:"state_error,omitempty"`
+	HypervisorPid int64                  `protobuf:"varint,31,opt,name=hypervisor_pid,json=hypervisorPid,proto3" json:"hypervisor_pid,omitempty"`
+	VsockCid      int64                  `protobuf:"varint,32,opt,name=vsock_cid,json=vsockCid,proto3" json:"vsock_cid,omitempty"`
+	Ip            string                 `protobuf:"bytes,33,opt,name=ip,proto3" json:"ip,omitempty"`
+	Mac           string                 `protobuf:"bytes,34,opt,name=mac,proto3" json:"mac,omitempty"`
+	StartTime     *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
+	Ports         []*PortMapping         `protobuf:"bytes,36,rep,name=ports,proto3" json:"ports,omitempty"`
 	// The exit code the guest reported when it last ended on its own: its
 	// workload's, or 0 for a guest that powered itself off. Unset if it has
 	// not ended since it was last started, or ended without saying how.
-	ExitCode *int32 `protobuf:"varint,31,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"`
+	ExitCode *int32 `protobuf:"varint,37,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"`
 	// When the guest last ended on its own.
-	FinishTime *timestamppb.Timestamp `protobuf:"bytes,33,opt,name=finish_time,json=finishTime,proto3" json:"finish_time,omitempty"`
+	FinishTime *timestamppb.Timestamp `protobuf:"bytes,38,opt,name=finish_time,json=finishTime,proto3" json:"finish_time,omitempty"`
 	// How many times in a row the restart policy has started the instance
 	// again. A start a user asks for resets it.
-	RestartCount int32 `protobuf:"varint,32,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	RestartCount int32 `protobuf:"varint,39,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
 	// When a Restarting instance is due to start again.
-	NextRestartTime *timestamppb.Timestamp `protobuf:"bytes,34,opt,name=next_restart_time,json=nextRestartTime,proto3" json:"next_restart_time,omitempty"`
+	NextRestartTime *timestamppb.Timestamp `protobuf:"bytes,40,opt,name=next_restart_time,json=nextRestartTime,proto3" json:"next_restart_time,omitempty"`
 	// How the instance's health is checked, overriding its image's. Unset
 	// means the image's, if it declares one.
-	HealthCheck *HealthCheck `protobuf:"bytes,35,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
+	HealthCheck *HealthCheck `protobuf:"bytes,41,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
 	// What the health check of the running instance has found. Unset if it
 	// is not running, or has no check.
-	Health *Health `protobuf:"bytes,36,opt,name=health,proto3" json:"health,omitempty"`
+	Health *Health `protobuf:"bytes,42,opt,name=health,proto3" json:"health,omitempty"`
 	// How the guest starts the command. See CreateInstanceRequest.init_mode.
-	InitMode InitMode `protobuf:"varint,37,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
+	InitMode InitMode `protobuf:"varint,43,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
 	// Whether the instance is deleted once it stops. See
 	// CreateInstanceRequest.remove_on_exit.
-	RemoveOnExit  bool `protobuf:"varint,38,opt,name=remove_on_exit,json=removeOnExit,proto3" json:"remove_on_exit,omitempty"`
+	RemoveOnExit  bool `protobuf:"varint,44,opt,name=remove_on_exit,json=removeOnExit,proto3" json:"remove_on_exit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1038,6 +1042,13 @@ func (x *Instance) GetHostname() string {
 func (x *Instance) GetImageRef() string {
 	if x != nil {
 		return x.ImageRef
+	}
+	return ""
+}
+
+func (x *Instance) GetImageDigest() string {
+	if x != nil {
+		return x.ImageDigest
 	}
 	return ""
 }
@@ -1917,9 +1928,11 @@ func (x *PortMapping) GetProtocol() Protocol {
 }
 
 type CreateInstanceRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	ImageRef string                 `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// The image to boot, by tag or digest. It is resolved to a digest when the
+	// instance is created, and the instance boots that image from then on.
+	ImageRef string `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
 	// Unspecified means Cloud Hypervisor.
 	HypervisorType HypervisorType `protobuf:"varint,3,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
 	// A version that hypervisor ships. Empty is its default version, which
@@ -2223,38 +2236,37 @@ func (x *CreateInstanceRequest) GetStandbyAfter() *durationpb.Duration {
 type UpdateInstanceRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Name              string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	ImageRef          *string                `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3,oneof" json:"image_ref,omitempty"`
-	HypervisorType    HypervisorType         `protobuf:"varint,3,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
-	HypervisorVersion *string                `protobuf:"bytes,4,opt,name=hypervisor_version,json=hypervisorVersion,proto3,oneof" json:"hypervisor_version,omitempty"`
-	KernelName        *string                `protobuf:"bytes,5,opt,name=kernel_name,json=kernelName,proto3,oneof" json:"kernel_name,omitempty"`
-	KernelArgs        *string                `protobuf:"bytes,6,opt,name=kernel_args,json=kernelArgs,proto3,oneof" json:"kernel_args,omitempty"`
-	Vcpus             *int32                 `protobuf:"varint,7,opt,name=vcpus,proto3,oneof" json:"vcpus,omitempty"`
-	MemoryBytes       *int64                 `protobuf:"varint,8,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
+	HypervisorType    HypervisorType         `protobuf:"varint,2,opt,name=hypervisor_type,json=hypervisorType,proto3,enum=dicerd.v1.HypervisorType" json:"hypervisor_type,omitempty"`
+	HypervisorVersion *string                `protobuf:"bytes,3,opt,name=hypervisor_version,json=hypervisorVersion,proto3,oneof" json:"hypervisor_version,omitempty"`
+	KernelName        *string                `protobuf:"bytes,4,opt,name=kernel_name,json=kernelName,proto3,oneof" json:"kernel_name,omitempty"`
+	KernelArgs        *string                `protobuf:"bytes,5,opt,name=kernel_args,json=kernelArgs,proto3,oneof" json:"kernel_args,omitempty"`
+	Vcpus             *int32                 `protobuf:"varint,6,opt,name=vcpus,proto3,oneof" json:"vcpus,omitempty"`
+	MemoryBytes       *int64                 `protobuf:"varint,7,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
 	// Zero removes the maximum.
-	MaxVcpus       *int32 `protobuf:"varint,25,opt,name=max_vcpus,json=maxVcpus,proto3,oneof" json:"max_vcpus,omitempty"`
-	MaxMemoryBytes *int64 `protobuf:"varint,26,opt,name=max_memory_bytes,json=maxMemoryBytes,proto3,oneof" json:"max_memory_bytes,omitempty"`
+	MaxVcpus       *int32 `protobuf:"varint,8,opt,name=max_vcpus,json=maxVcpus,proto3,oneof" json:"max_vcpus,omitempty"`
+	MaxMemoryBytes *int64 `protobuf:"varint,9,opt,name=max_memory_bytes,json=maxMemoryBytes,proto3,oneof" json:"max_memory_bytes,omitempty"`
 	// The overlay disk grows to it at the instance's next start. It cannot
 	// shrink, so a size smaller than the overlay disk is refused.
-	DiskBytes *int64 `protobuf:"varint,9,opt,name=disk_bytes,json=diskBytes,proto3,oneof" json:"disk_bytes,omitempty"`
+	DiskBytes *int64 `protobuf:"varint,10,opt,name=disk_bytes,json=diskBytes,proto3,oneof" json:"disk_bytes,omitempty"`
 	// Zero removes the limit.
-	DiskBytesPerSecond     *int64 `protobuf:"varint,27,opt,name=disk_bytes_per_second,json=diskBytesPerSecond,proto3,oneof" json:"disk_bytes_per_second,omitempty"`
-	DiskIops               *int64 `protobuf:"varint,28,opt,name=disk_iops,json=diskIops,proto3,oneof" json:"disk_iops,omitempty"`
-	UploadBytesPerSecond   *int64 `protobuf:"varint,29,opt,name=upload_bytes_per_second,json=uploadBytesPerSecond,proto3,oneof" json:"upload_bytes_per_second,omitempty"`
-	DownloadBytesPerSecond *int64 `protobuf:"varint,30,opt,name=download_bytes_per_second,json=downloadBytesPerSecond,proto3,oneof" json:"download_bytes_per_second,omitempty"`
+	DiskBytesPerSecond     *int64 `protobuf:"varint,11,opt,name=disk_bytes_per_second,json=diskBytesPerSecond,proto3,oneof" json:"disk_bytes_per_second,omitempty"`
+	DiskIops               *int64 `protobuf:"varint,12,opt,name=disk_iops,json=diskIops,proto3,oneof" json:"disk_iops,omitempty"`
+	UploadBytesPerSecond   *int64 `protobuf:"varint,13,opt,name=upload_bytes_per_second,json=uploadBytesPerSecond,proto3,oneof" json:"upload_bytes_per_second,omitempty"`
+	DownloadBytesPerSecond *int64 `protobuf:"varint,14,opt,name=download_bytes_per_second,json=downloadBytesPerSecond,proto3,oneof" json:"download_bytes_per_second,omitempty"`
 	// Zero is never.
-	StandbyAfter  *durationpb.Duration `protobuf:"bytes,33,opt,name=standby_after,json=standbyAfter,proto3" json:"standby_after,omitempty"`
-	NetworkName   *string              `protobuf:"bytes,10,opt,name=network_name,json=networkName,proto3,oneof" json:"network_name,omitempty"`
-	StaticIp      *string              `protobuf:"bytes,11,opt,name=static_ip,json=staticIp,proto3,oneof" json:"static_ip,omitempty"`
-	Hostname      *string              `protobuf:"bytes,12,opt,name=hostname,proto3,oneof" json:"hostname,omitempty"`
-	RestartPolicy *RestartPolicy       `protobuf:"bytes,20,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
-	HealthCheck   *HealthCheck         `protobuf:"bytes,21,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
-	InitMode      InitMode             `protobuf:"varint,22,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
-	RemoveOnExit  *bool                `protobuf:"varint,23,opt,name=remove_on_exit,json=removeOnExit,proto3,oneof" json:"remove_on_exit,omitempty"`
-	Mounts        []*Mount             `protobuf:"bytes,24,rep,name=mounts,proto3" json:"mounts,omitempty"`
-	Env           map[string]string    `protobuf:"bytes,16,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Cmd           []string             `protobuf:"bytes,17,rep,name=cmd,proto3" json:"cmd,omitempty"`
-	Labels        map[string]string    `protobuf:"bytes,18,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Ports         []*PortMapping       `protobuf:"bytes,19,rep,name=ports,proto3" json:"ports,omitempty"`
+	StandbyAfter  *durationpb.Duration `protobuf:"bytes,15,opt,name=standby_after,json=standbyAfter,proto3" json:"standby_after,omitempty"`
+	NetworkName   *string              `protobuf:"bytes,16,opt,name=network_name,json=networkName,proto3,oneof" json:"network_name,omitempty"`
+	StaticIp      *string              `protobuf:"bytes,17,opt,name=static_ip,json=staticIp,proto3,oneof" json:"static_ip,omitempty"`
+	Hostname      *string              `protobuf:"bytes,18,opt,name=hostname,proto3,oneof" json:"hostname,omitempty"`
+	RestartPolicy *RestartPolicy       `protobuf:"bytes,19,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	HealthCheck   *HealthCheck         `protobuf:"bytes,20,opt,name=health_check,json=healthCheck,proto3" json:"health_check,omitempty"`
+	InitMode      InitMode             `protobuf:"varint,21,opt,name=init_mode,json=initMode,proto3,enum=dicerd.v1.InitMode" json:"init_mode,omitempty"`
+	RemoveOnExit  *bool                `protobuf:"varint,22,opt,name=remove_on_exit,json=removeOnExit,proto3,oneof" json:"remove_on_exit,omitempty"`
+	Mounts        []*Mount             `protobuf:"bytes,23,rep,name=mounts,proto3" json:"mounts,omitempty"`
+	Env           map[string]string    `protobuf:"bytes,24,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Cmd           []string             `protobuf:"bytes,25,rep,name=cmd,proto3" json:"cmd,omitempty"`
+	Labels        map[string]string    `protobuf:"bytes,26,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Ports         []*PortMapping       `protobuf:"bytes,27,rep,name=ports,proto3" json:"ports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2292,13 +2304,6 @@ func (*UpdateInstanceRequest) Descriptor() ([]byte, []int) {
 func (x *UpdateInstanceRequest) GetName() string {
 	if x != nil {
 		return x.Name
-	}
-	return ""
-}
-
-func (x *UpdateInstanceRequest) GetImageRef() string {
-	if x != nil && x.ImageRef != nil {
-		return *x.ImageRef
 	}
 	return ""
 }
@@ -7784,60 +7789,61 @@ var File_dicerd_v1_dicerd_proto protoreflect.FileDescriptor
 
 const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\n" +
-	"\x16dicerd/v1/dicerd.proto\x12\tdicerd.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb5\x0f\n" +
+	"\x16dicerd/v1/dicerd.proto\x12\tdicerd.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x0f\n" +
 	"\bInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x1b\n" +
-	"\timage_ref\x18\x04 \x01(\tR\bimageRef\x12B\n" +
-	"\x0fhypervisor_type\x18\x05 \x01(\x0e2\x19.dicerd.v1.HypervisorTypeR\x0ehypervisorType\x12-\n" +
-	"\x12hypervisor_version\x18\x06 \x01(\tR\x11hypervisorVersion\x12\x1f\n" +
-	"\vkernel_name\x18\a \x01(\tR\n" +
+	"\timage_ref\x18\x04 \x01(\tR\bimageRef\x12!\n" +
+	"\fimage_digest\x18\x05 \x01(\tR\vimageDigest\x12B\n" +
+	"\x0fhypervisor_type\x18\x06 \x01(\x0e2\x19.dicerd.v1.HypervisorTypeR\x0ehypervisorType\x12-\n" +
+	"\x12hypervisor_version\x18\a \x01(\tR\x11hypervisorVersion\x12\x1f\n" +
+	"\vkernel_name\x18\b \x01(\tR\n" +
 	"kernelName\x12\x1f\n" +
-	"\vkernel_args\x18\b \x01(\tR\n" +
+	"\vkernel_args\x18\t \x01(\tR\n" +
 	"kernelArgs\x12\x14\n" +
-	"\x05vcpus\x18\t \x01(\x05R\x05vcpus\x12!\n" +
-	"\fmemory_bytes\x18\n" +
-	" \x01(\x03R\vmemoryBytes\x12\x1b\n" +
-	"\tmax_vcpus\x18( \x01(\x05R\bmaxVcpus\x12(\n" +
-	"\x10max_memory_bytes\x18) \x01(\x03R\x0emaxMemoryBytes\x12\x1d\n" +
+	"\x05vcpus\x18\n" +
+	" \x01(\x05R\x05vcpus\x12!\n" +
+	"\fmemory_bytes\x18\v \x01(\x03R\vmemoryBytes\x12\x1b\n" +
+	"\tmax_vcpus\x18\f \x01(\x05R\bmaxVcpus\x12(\n" +
+	"\x10max_memory_bytes\x18\r \x01(\x03R\x0emaxMemoryBytes\x12\x1d\n" +
 	"\n" +
-	"disk_bytes\x18\v \x01(\x03R\tdiskBytes\x121\n" +
-	"\x15disk_bytes_per_second\x18* \x01(\x03R\x12diskBytesPerSecond\x12\x1b\n" +
-	"\tdisk_iops\x18+ \x01(\x03R\bdiskIops\x125\n" +
-	"\x17upload_bytes_per_second\x18, \x01(\x03R\x14uploadBytesPerSecond\x129\n" +
-	"\x19download_bytes_per_second\x18- \x01(\x03R\x16downloadBytesPerSecond\x12>\n" +
-	"\rstandby_after\x18. \x01(\v2\x19.google.protobuf.DurationR\fstandbyAfter\x12!\n" +
-	"\fnetwork_name\x18\f \x01(\tR\vnetworkName\x12\x1b\n" +
-	"\tstatic_ip\x18\r \x01(\tR\bstaticIp\x12(\n" +
-	"\x06mounts\x18' \x03(\v2\x10.dicerd.v1.MountR\x06mounts\x12.\n" +
-	"\x03env\x18\x10 \x03(\v2\x1c.dicerd.v1.Instance.EnvEntryR\x03env\x12\x10\n" +
-	"\x03cmd\x18\x11 \x03(\tR\x03cmd\x127\n" +
-	"\x06labels\x18\x12 \x03(\v2\x1f.dicerd.v1.Instance.LabelsEntryR\x06labels\x12?\n" +
-	"\x0erestart_policy\x18\x1e \x01(\v2\x18.dicerd.v1.RestartPolicyR\rrestartPolicy\x12;\n" +
-	"\vcreate_time\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"disk_bytes\x18\x0e \x01(\x03R\tdiskBytes\x121\n" +
+	"\x15disk_bytes_per_second\x18\x0f \x01(\x03R\x12diskBytesPerSecond\x12\x1b\n" +
+	"\tdisk_iops\x18\x10 \x01(\x03R\bdiskIops\x125\n" +
+	"\x17upload_bytes_per_second\x18\x11 \x01(\x03R\x14uploadBytesPerSecond\x129\n" +
+	"\x19download_bytes_per_second\x18\x12 \x01(\x03R\x16downloadBytesPerSecond\x12>\n" +
+	"\rstandby_after\x18\x13 \x01(\v2\x19.google.protobuf.DurationR\fstandbyAfter\x12!\n" +
+	"\fnetwork_name\x18\x14 \x01(\tR\vnetworkName\x12\x1b\n" +
+	"\tstatic_ip\x18\x15 \x01(\tR\bstaticIp\x12(\n" +
+	"\x06mounts\x18\x16 \x03(\v2\x10.dicerd.v1.MountR\x06mounts\x12.\n" +
+	"\x03env\x18\x17 \x03(\v2\x1c.dicerd.v1.Instance.EnvEntryR\x03env\x12\x10\n" +
+	"\x03cmd\x18\x18 \x03(\tR\x03cmd\x127\n" +
+	"\x06labels\x18\x19 \x03(\v2\x1f.dicerd.v1.Instance.LabelsEntryR\x06labels\x12?\n" +
+	"\x0erestart_policy\x18\x1a \x01(\v2\x18.dicerd.v1.RestartPolicyR\rrestartPolicy\x12;\n" +
+	"\vcreate_time\x18\x1b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"createTime\x12;\n" +
-	"\vupdate_time\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"\vupdate_time\x18\x1c \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"updateTime\x12.\n" +
-	"\x05state\x18\x16 \x01(\x0e2\x18.dicerd.v1.InstanceStateR\x05state\x12\x1f\n" +
-	"\vstate_error\x18\x17 \x01(\tR\n" +
+	"\x05state\x18\x1d \x01(\x0e2\x18.dicerd.v1.InstanceStateR\x05state\x12\x1f\n" +
+	"\vstate_error\x18\x1e \x01(\tR\n" +
 	"stateError\x12%\n" +
-	"\x0ehypervisor_pid\x18\x18 \x01(\x03R\rhypervisorPid\x12\x1b\n" +
-	"\tvsock_cid\x18\x19 \x01(\x03R\bvsockCid\x12\x0e\n" +
-	"\x02ip\x18\x1a \x01(\tR\x02ip\x12\x10\n" +
-	"\x03mac\x18\x1b \x01(\tR\x03mac\x129\n" +
+	"\x0ehypervisor_pid\x18\x1f \x01(\x03R\rhypervisorPid\x12\x1b\n" +
+	"\tvsock_cid\x18  \x01(\x03R\bvsockCid\x12\x0e\n" +
+	"\x02ip\x18! \x01(\tR\x02ip\x12\x10\n" +
+	"\x03mac\x18\" \x01(\tR\x03mac\x129\n" +
 	"\n" +
-	"start_time\x18\x1c \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x12,\n" +
-	"\x05ports\x18\x1d \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x12 \n" +
-	"\texit_code\x18\x1f \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12;\n" +
-	"\vfinish_time\x18! \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"start_time\x18# \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x12,\n" +
+	"\x05ports\x18$ \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x12 \n" +
+	"\texit_code\x18% \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12;\n" +
+	"\vfinish_time\x18& \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishTime\x12#\n" +
-	"\rrestart_count\x18  \x01(\x05R\frestartCount\x12F\n" +
-	"\x11next_restart_time\x18\" \x01(\v2\x1a.google.protobuf.TimestampR\x0fnextRestartTime\x129\n" +
-	"\fhealth_check\x18# \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x12)\n" +
-	"\x06health\x18$ \x01(\v2\x11.dicerd.v1.HealthR\x06health\x120\n" +
-	"\tinit_mode\x18% \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12$\n" +
-	"\x0eremove_on_exit\x18& \x01(\bR\fremoveOnExit\x1a6\n" +
+	"\rrestart_count\x18' \x01(\x05R\frestartCount\x12F\n" +
+	"\x11next_restart_time\x18( \x01(\v2\x1a.google.protobuf.TimestampR\x0fnextRestartTime\x129\n" +
+	"\fhealth_check\x18) \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x12)\n" +
+	"\x06health\x18* \x01(\v2\x11.dicerd.v1.HealthR\x06health\x120\n" +
+	"\tinit_mode\x18+ \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12$\n" +
+	"\x0eremove_on_exit\x18, \x01(\bR\fremoveOnExit\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
@@ -7845,7 +7851,7 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\f\n" +
 	"\n" +
-	"_exit_codeJ\x04\b\x0e\x10\x0fJ\x04\b\x0f\x10\x10J\x04\b\x13\x10\x14R\avolumesR\x05filesR\tautostart\"\x89\x03\n" +
+	"_exit_code\"\x89\x03\n" +
 	"\vHealthCheck\x120\n" +
 	"\x04exec\x18\x01 \x01(\v2\x1a.dicerd.v1.HealthCheckExecH\x00R\x04exec\x120\n" +
 	"\x04http\x18\x02 \x01(\v2\x1a.dicerd.v1.HealthCheckHTTPH\x00R\x04http\x12-\n" +
@@ -7928,49 +7934,46 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\r\x10\x0eJ\x04\b\x12\x10\x13R\avolumesR\x05filesR\tautostart\"\xe3\r\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\r\x10\x0eJ\x04\b\x12\x10\x13R\avolumesR\x05filesR\tautostart\"\x86\r\n" +
 	"\x15UpdateInstanceRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\timage_ref\x18\x02 \x01(\tH\x00R\bimageRef\x88\x01\x01\x12B\n" +
-	"\x0fhypervisor_type\x18\x03 \x01(\x0e2\x19.dicerd.v1.HypervisorTypeR\x0ehypervisorType\x122\n" +
-	"\x12hypervisor_version\x18\x04 \x01(\tH\x01R\x11hypervisorVersion\x88\x01\x01\x12$\n" +
-	"\vkernel_name\x18\x05 \x01(\tH\x02R\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12B\n" +
+	"\x0fhypervisor_type\x18\x02 \x01(\x0e2\x19.dicerd.v1.HypervisorTypeR\x0ehypervisorType\x122\n" +
+	"\x12hypervisor_version\x18\x03 \x01(\tH\x00R\x11hypervisorVersion\x88\x01\x01\x12$\n" +
+	"\vkernel_name\x18\x04 \x01(\tH\x01R\n" +
 	"kernelName\x88\x01\x01\x12$\n" +
-	"\vkernel_args\x18\x06 \x01(\tH\x03R\n" +
+	"\vkernel_args\x18\x05 \x01(\tH\x02R\n" +
 	"kernelArgs\x88\x01\x01\x12\x19\n" +
-	"\x05vcpus\x18\a \x01(\x05H\x04R\x05vcpus\x88\x01\x01\x12&\n" +
-	"\fmemory_bytes\x18\b \x01(\x03H\x05R\vmemoryBytes\x88\x01\x01\x12 \n" +
-	"\tmax_vcpus\x18\x19 \x01(\x05H\x06R\bmaxVcpus\x88\x01\x01\x12-\n" +
-	"\x10max_memory_bytes\x18\x1a \x01(\x03H\aR\x0emaxMemoryBytes\x88\x01\x01\x12\"\n" +
+	"\x05vcpus\x18\x06 \x01(\x05H\x03R\x05vcpus\x88\x01\x01\x12&\n" +
+	"\fmemory_bytes\x18\a \x01(\x03H\x04R\vmemoryBytes\x88\x01\x01\x12 \n" +
+	"\tmax_vcpus\x18\b \x01(\x05H\x05R\bmaxVcpus\x88\x01\x01\x12-\n" +
+	"\x10max_memory_bytes\x18\t \x01(\x03H\x06R\x0emaxMemoryBytes\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"disk_bytes\x18\t \x01(\x03H\bR\tdiskBytes\x88\x01\x01\x126\n" +
-	"\x15disk_bytes_per_second\x18\x1b \x01(\x03H\tR\x12diskBytesPerSecond\x88\x01\x01\x12 \n" +
-	"\tdisk_iops\x18\x1c \x01(\x03H\n" +
-	"R\bdiskIops\x88\x01\x01\x12:\n" +
-	"\x17upload_bytes_per_second\x18\x1d \x01(\x03H\vR\x14uploadBytesPerSecond\x88\x01\x01\x12>\n" +
-	"\x19download_bytes_per_second\x18\x1e \x01(\x03H\fR\x16downloadBytesPerSecond\x88\x01\x01\x12>\n" +
-	"\rstandby_after\x18! \x01(\v2\x19.google.protobuf.DurationR\fstandbyAfter\x12&\n" +
-	"\fnetwork_name\x18\n" +
-	" \x01(\tH\rR\vnetworkName\x88\x01\x01\x12 \n" +
-	"\tstatic_ip\x18\v \x01(\tH\x0eR\bstaticIp\x88\x01\x01\x12\x1f\n" +
-	"\bhostname\x18\f \x01(\tH\x0fR\bhostname\x88\x01\x01\x12?\n" +
-	"\x0erestart_policy\x18\x14 \x01(\v2\x18.dicerd.v1.RestartPolicyR\rrestartPolicy\x129\n" +
-	"\fhealth_check\x18\x15 \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x120\n" +
-	"\tinit_mode\x18\x16 \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12)\n" +
-	"\x0eremove_on_exit\x18\x17 \x01(\bH\x10R\fremoveOnExit\x88\x01\x01\x12(\n" +
-	"\x06mounts\x18\x18 \x03(\v2\x10.dicerd.v1.MountR\x06mounts\x12;\n" +
-	"\x03env\x18\x10 \x03(\v2).dicerd.v1.UpdateInstanceRequest.EnvEntryR\x03env\x12\x10\n" +
-	"\x03cmd\x18\x11 \x03(\tR\x03cmd\x12D\n" +
-	"\x06labels\x18\x12 \x03(\v2,.dicerd.v1.UpdateInstanceRequest.LabelsEntryR\x06labels\x12,\n" +
-	"\x05ports\x18\x13 \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x1a6\n" +
+	"disk_bytes\x18\n" +
+	" \x01(\x03H\aR\tdiskBytes\x88\x01\x01\x126\n" +
+	"\x15disk_bytes_per_second\x18\v \x01(\x03H\bR\x12diskBytesPerSecond\x88\x01\x01\x12 \n" +
+	"\tdisk_iops\x18\f \x01(\x03H\tR\bdiskIops\x88\x01\x01\x12:\n" +
+	"\x17upload_bytes_per_second\x18\r \x01(\x03H\n" +
+	"R\x14uploadBytesPerSecond\x88\x01\x01\x12>\n" +
+	"\x19download_bytes_per_second\x18\x0e \x01(\x03H\vR\x16downloadBytesPerSecond\x88\x01\x01\x12>\n" +
+	"\rstandby_after\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\fstandbyAfter\x12&\n" +
+	"\fnetwork_name\x18\x10 \x01(\tH\fR\vnetworkName\x88\x01\x01\x12 \n" +
+	"\tstatic_ip\x18\x11 \x01(\tH\rR\bstaticIp\x88\x01\x01\x12\x1f\n" +
+	"\bhostname\x18\x12 \x01(\tH\x0eR\bhostname\x88\x01\x01\x12?\n" +
+	"\x0erestart_policy\x18\x13 \x01(\v2\x18.dicerd.v1.RestartPolicyR\rrestartPolicy\x129\n" +
+	"\fhealth_check\x18\x14 \x01(\v2\x16.dicerd.v1.HealthCheckR\vhealthCheck\x120\n" +
+	"\tinit_mode\x18\x15 \x01(\x0e2\x13.dicerd.v1.InitModeR\binitMode\x12)\n" +
+	"\x0eremove_on_exit\x18\x16 \x01(\bH\x0fR\fremoveOnExit\x88\x01\x01\x12(\n" +
+	"\x06mounts\x18\x17 \x03(\v2\x10.dicerd.v1.MountR\x06mounts\x12;\n" +
+	"\x03env\x18\x18 \x03(\v2).dicerd.v1.UpdateInstanceRequest.EnvEntryR\x03env\x12\x10\n" +
+	"\x03cmd\x18\x19 \x03(\tR\x03cmd\x12D\n" +
+	"\x06labels\x18\x1a \x03(\v2,.dicerd.v1.UpdateInstanceRequest.LabelsEntryR\x06labels\x12,\n" +
+	"\x05ports\x18\x1b \x03(\v2\x16.dicerd.v1.PortMappingR\x05ports\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\f\n" +
-	"\n" +
-	"_image_refB\x15\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x15\n" +
 	"\x13_hypervisor_versionB\x0e\n" +
 	"\f_kernel_nameB\x0e\n" +
 	"\f_kernel_argsB\b\n" +
@@ -7989,7 +7992,7 @@ const file_dicerd_v1_dicerd_proto_rawDesc = "" +
 	"\n" +
 	"_static_ipB\v\n" +
 	"\t_hostnameB\x11\n" +
-	"\x0f_remove_on_exitJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fJ\x04\b\x0f\x10\x10R\tautostartR\avolumesR\x05files\"*\n" +
+	"\x0f_remove_on_exit\"*\n" +
 	"\x14StartInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x89\x01\n" +
 	"\x15ResizeInstanceRequest\x12\x12\n" +

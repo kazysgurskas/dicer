@@ -485,6 +485,9 @@ type fakeImages struct {
 
 	// held, if set, is the image the host already has for every reference.
 	held *image.Image
+
+	// ensured are the references Ensure was asked for, in order.
+	ensured []string
 }
 
 func (f *fakeImages) Image(ref string) (*image.Image, error) {
@@ -495,6 +498,7 @@ func (f *fakeImages) Image(ref string) (*image.Image, error) {
 }
 
 func (f *fakeImages) Ensure(_ context.Context, ref string, policy image.PullPolicy) (*image.Image, error) {
+	f.ensured = append(f.ensured, ref)
 	if f.held != nil && policy != image.PullPolicyAlways {
 		return f.held, nil
 	}

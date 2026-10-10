@@ -10,6 +10,9 @@ leaves the rest as it was. A list or map given -- `--env`, `--label`,
 
 A command after -- replaces the one the instance runs.
 
+The image cannot be changed: an instance always boots the image it was
+created with. Create a new instance to run another.
+
 A larger `--disk` grows the overlay disk at the next start. The disk cannot
 shrink.
 
@@ -51,7 +54,6 @@ $ dicer update web -- /usr/sbin/nginx -g 'daemon off;'
 | `--hostname string` | Guest hostname (default: the instance name). |
 | `--hypervisor-type string` | Hypervisor: cloud-hypervisor or firecracker (default: cloud-hypervisor). |
 | `--hypervisor-version string` | Hypervisor version (default: the hypervisor's default version, which `dicer info` shows). |
-| `-i`, `--image string` | Container image reference. |
 | `--init-mode string` | How the guest starts the command: auto, exec (as PID 1 of its own PID namespace) or systemd (default auto). |
 | `--ip string` | Static IP address (default: assigned from the subnet). |
 | `--kernel string` | Kernel to boot with (default: the default kernel). |

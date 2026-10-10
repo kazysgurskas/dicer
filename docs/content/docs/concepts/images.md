@@ -63,8 +63,13 @@ set with `--pull` as with `docker run --pull`:
 - `never` uses the image the host holds, and refuses to create the instance
   if it holds none. Creating the instance then contacts no registry.
 
-Starting an instance pulls its image again if the host no longer holds it,
-for example because it was deleted with `--force`.
+When an instance is created, its image reference is resolved to a digest,
+and the instance is pinned to that image. It boots the same image every
+time, even after the tag moves to a newer one. An instance's image cannot
+be changed: to run a different image, create a new instance.
+
+If the host no longer has the image, for example because it was deleted
+with `--force`, starting the instance pulls it again by its digest.
 
 ## Keeping and removing images
 

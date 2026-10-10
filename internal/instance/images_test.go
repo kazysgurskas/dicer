@@ -24,10 +24,12 @@ func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 		t.Errorf("in use = %v, want the running guest's image, used by instance web", inUse)
 	}
 
-	// Stopped, the guest no longer needs its image, but its snapshot does.
+	// Stopped and deleted, the instance no longer needs its image, but its
+	// snapshot does.
 	if err := h.manager.removeRuntimeDir(h.instance.ID); err != nil {
 		t.Fatal(err)
 	}
+	delete(h.store.instances, h.instance.Name)
 	if inUse, err = h.manager.ImagesInUse(); err != nil {
 		t.Fatal(err)
 	}
@@ -36,36 +38,32 @@ func TestImagesInUseKeepsWhatGuestsAndSnapshotsNeed(t *testing.T) {
 	}
 }
 
-// A stopped instance keeps the image its reference resolves to here: it is
-// what it boots from next. A reference to an image this host does not hold
-// keeps nothing.
-func TestImagesInUseKeepsWhatDefinitionsName(t *testing.T) {
+// TestImagesInUseKeepsThePinnedImage checks that a stopped instance keeps
+// the image it was created with, which it boots from next, and not the one
+// its reference names now.
+func TestImagesInUseKeepsThePinnedImage(t *testing.T) {
 	h := newHarness(t)
 	images, ok := h.manager.images.(*fakeImages)
 	if !ok {
 		t.Fatalf("images is %T", h.manager.images)
 	}
+	images.held = &image.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
 
 	inUse, err := h.manager.ImagesInUse()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inUse) != 0 {
-		t.Errorf("in use = %v, want nothing while the image is not held", inUse)
+	if _, ok := inUse["sha256:aaaa"]; !ok {
+		t.Errorf("in use = %v, want sha256:aaaa, the image the instance was created with", inUse)
 	}
-
-	images.held = &image.Image{Name: h.instance.ImageRef, Digest: "sha256:bbbb"}
-	if inUse, err = h.manager.ImagesInUse(); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := inUse["sha256:bbbb"]; !ok {
-		t.Errorf("in use = %v, want the image the definition names", inUse)
+	if _, ok := inUse["sha256:bbbb"]; ok {
+		t.Errorf("in use = %v, want not sha256:bbbb, which the instance never boots", inUse)
 	}
 }
 
 // TestImagesInUseKeepsWhatStandbyNeeds checks that an instance on standby
 // keeps the image its frozen guest booted from, even once its reference
-// resolves to a newer image: resuming it needs the old one.
+// names a newer image: resuming it needs the old one.
 func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
@@ -83,9 +81,7 @@ func TestImagesInUseKeepsWhatStandbyNeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ImagesInUse: %v", err)
 	}
-	for _, digest := range []string{"sha256:aaaa", "sha256:bbbb"} {
-		if _, ok := inUse[digest]; !ok {
-			t.Errorf("in use = %v, want %s", inUse, digest)
-		}
+	if _, ok := inUse["sha256:aaaa"]; !ok {
+		t.Errorf("in use = %v, want sha256:aaaa", inUse)
 	}
 }

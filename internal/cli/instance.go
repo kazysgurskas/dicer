@@ -245,6 +245,8 @@ func newInstanceUpdateCommand() *cobra.Command {
 			"leaves the rest as it was. A list or map given -- --env, --label,\n" +
 			"--publish, --mount -- replaces the old one whole.\n\n" +
 			"A command after -- replaces the one the instance runs.\n\n" +
+			"The image cannot be changed: an instance always boots the image it was\n" +
+			"created with. Create a new instance to run another.\n\n" +
 			"A larger --disk grows the overlay disk at the next start. The disk cannot\n" +
 			"shrink.\n\n" +
 			"The restart policy and --standby-after alone can be changed while the\n" +
@@ -286,8 +288,6 @@ func newInstanceUpdateCommand() *cobra.Command {
 	}
 
 	cmd.Flags().SortFlags = false
-	cmd.Flags().StringP("image", "i", "", "Container image reference")
-	_ = cmd.RegisterFlagCompletionFunc("image", complete(0, listImages))
 	addInstanceSpecFlags(cmd, false)
 
 	return cmd
