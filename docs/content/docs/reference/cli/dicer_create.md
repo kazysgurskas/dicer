@@ -6,7 +6,8 @@ description: "Define an instance without starting it"
 
 Records an instance definition, pulling the image first as `--pull` says:
 by default, only if the host does not hold it. Nothing is booted until
-you run `dicer start`, unless `--start` is given.
+you run `dicer start`, unless `--start` is given. The instance is named after
+the image unless NAME is given.
 
 A command after -- replaces the image's ENTRYPOINT and CMD.
 

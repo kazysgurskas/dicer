@@ -4,6 +4,7 @@
 package grpcserver
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/konradasb/dicer/internal/errdefs"
@@ -137,5 +138,18 @@ func TestInstanceGetsTheDefaultKernelAndNetwork(t *testing.T) {
 	}
 	if spec.KernelName != kernel.DefaultName || spec.NetworkName != network.DefaultName {
 		t.Errorf("kernel %q, network %q; want both %q", spec.KernelName, spec.NetworkName, "default")
+	}
+}
+
+// An instance created without a name is named after its image.
+func TestCreateInstanceWithoutANameNamesItAfterItsImage(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	spec, err := s.newInstance(&dicerdv1.CreateInstanceRequest{ImageRef: "ghcr.io/acme/api-server:v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(spec.Name, "api-server-") || len(spec.Name) != len("api-server-")+4 {
+		t.Errorf("name = %q, want api-server- and four characters", spec.Name)
 	}
 }

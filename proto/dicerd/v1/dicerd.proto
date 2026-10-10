@@ -602,6 +602,8 @@ message PortMapping {
 }
 
 message CreateInstanceRequest {
+  // The instance's name. When it is empty, the daemon makes one from the
+  // image's name, such as nginx-k3x9.
   string name = 1;
   // The image to boot, by tag or digest. It is resolved to a digest when the
   // instance is created, and the instance boots that image from then on.
@@ -734,7 +736,8 @@ message StandbyInstanceRequest {
 message ForkInstanceRequest {
   // The instance to fork.
   string name = 1;
-  // The new instance's name.
+  // The new instance's name. When it is empty, the daemon makes one from the
+  // instance's name and a random suffix, such as web-k3x9.
   string fork_name = 2;
   // The network the new instance joins, and its address on it. The
   // instance's network, and an address it assigns, when empty.
@@ -1055,7 +1058,8 @@ message RestoreSnapshotRequest {
 message ForkSnapshotRequest {
   // The snapshot's name or ID.
   string name = 1;
-  // The new instance's name.
+  // The new instance's name. When it is empty, the daemon makes one from the
+  // snapshot's name and a random suffix, such as web-golden-k3x9.
   string fork_name = 2;
   // The network the new instance joins, and its address on it. The
   // snapshot's network, and an address it assigns, when empty.

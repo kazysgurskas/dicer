@@ -1929,7 +1929,9 @@ func (x *PortMapping) GetProtocol() Protocol {
 
 type CreateInstanceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// The instance's name. When it is empty, the daemon makes one from the
+	// image's name, such as nginx-k3x9.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The image to boot, by tag or digest. It is resolved to a digest when the
 	// instance is created, and the instance boots that image from then on.
 	ImageRef string `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
@@ -2776,7 +2778,8 @@ type ForkInstanceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The instance to fork.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// The new instance's name.
+	// The new instance's name. When it is empty, the daemon makes one from the
+	// instance's name and a random suffix, such as web-k3x9.
 	ForkName string `protobuf:"bytes,2,opt,name=fork_name,json=forkName,proto3" json:"fork_name,omitempty"`
 	// The network the new instance joins, and its address on it. The
 	// instance's network, and an address it assigns, when empty.
@@ -4856,7 +4859,8 @@ type ForkSnapshotRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The snapshot's name or ID.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// The new instance's name.
+	// The new instance's name. When it is empty, the daemon makes one from the
+	// snapshot's name and a random suffix, such as web-golden-k3x9.
 	ForkName string `protobuf:"bytes,2,opt,name=fork_name,json=forkName,proto3" json:"fork_name,omitempty"`
 	// The network the new instance joins, and its address on it. The
 	// snapshot's network, and an address it assigns, when empty.

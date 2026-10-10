@@ -13,7 +13,7 @@ import (
 
 func newInstanceForkCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "fork INSTANCE NAME",
+		Use:   "fork INSTANCE [NAME]",
 		Short: "Create an instance as a copy of another",
 		Long: "Creates an instance called NAME as a copy of INSTANCE. It is the same as\n" +
 			"taking a snapshot of INSTANCE and forking it, except that no snapshot is kept.\n" +
@@ -22,13 +22,16 @@ func newInstanceForkCommand() *cobra.Command {
 			"disk.\n\n" +
 			"The copy has an address of its own, on the same network unless --network is\n" +
 			"given. It publishes no ports unless -p is given: two instances cannot publish\n" +
-			"the same host port.",
-		Example: "  dicer instance fork web web-2\n" +
+			"the same host port.\n\n" +
+			"Without NAME, the copy is named after INSTANCE, with a random suffix, such\n" +
+			"as web-k3x9.",
+		Example: "  dicer instance fork web\n" +
+			"  dicer instance fork web web-2\n" +
 			"  dicer instance fork web web-3 -p 8081:80",
-		Args:              needs([]string{"an instance name", "a name for the new instance"}),
+		Args:              needs([]string{"an instance name"}, "a name for the new instance"),
 		ValidArgsFunction: complete(1, instancesIn()),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts, err := forkFlags(cmd, args[1])
+			opts, err := forkFlags(cmd, args)
 			if err != nil {
 				return err
 			}
@@ -60,10 +63,14 @@ func addForkFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("network", complete(0, listNetworks))
 }
 
-// forkFlags returns the network, address and published ports that the
-// flags from addForkFlags give.
-func forkFlags(cmd *cobra.Command, name string) (dicer.ForkOptions, error) {
-	opts := dicer.ForkOptions{Name: name}
+// forkFlags returns the name that a fork command's arguments give, if
+// any, and the network, address and published ports that the flags from
+// addForkFlags give.
+func forkFlags(cmd *cobra.Command, args []string) (dicer.ForkOptions, error) {
+	var opts dicer.ForkOptions
+	if len(args) > 1 {
+		opts.Name = args[1]
+	}
 	opts.NetworkName, _ = cmd.Flags().GetString("network")
 	opts.StaticIP, _ = cmd.Flags().GetString("ip")
 	specs, _ := cmd.Flags().GetStringArray("publish")

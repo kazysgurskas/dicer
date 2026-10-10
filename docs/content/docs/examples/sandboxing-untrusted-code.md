@@ -119,29 +119,25 @@ func main() {
 	}
 	defer client.Close()
 
-	name := fmt.Sprintf("job-%d", time.Now().UnixNano())
-	code, err := runJob(context.Background(), client, name, script)
+	code, err := runJob(context.Background(), client, script)
 	if err != nil {
 		log.Fatal(err)
 	}
 	os.Exit(code)
 }
 
-// runJob forks a sandbox called name, runs script in it with python3, and
-// deletes the sandbox, whatever happens.
-func runJob(ctx context.Context, client *dicer.Client, name string, script []byte) (int, error) {
-	_, err := client.Snapshots.Fork(ctx, "python-base", dicer.ForkOptions{
-		Name:        name,
-		NetworkName: "sandbox",
-	})
+// runJob forks a sandbox, runs script in it with python3, and deletes the
+// sandbox, whatever happens.
+func runJob(ctx context.Context, client *dicer.Client, script []byte) (int, error) {
+	sandbox, err := client.Snapshots.Fork(ctx, "python-base", dicer.ForkOptions{NetworkName: "sandbox"})
 	if err != nil {
 		return 0, fmt.Errorf("fork a sandbox: %w", err)
 	}
 	defer func() {
-		_ = client.Instances.Delete(context.WithoutCancel(ctx), name, dicer.DeleteOptions{Force: true})
+		_ = client.Instances.Delete(context.WithoutCancel(ctx), sandbox.Name, dicer.DeleteOptions{Force: true})
 	}()
 
-	cmd := client.Instances.Command(name, "python3", "-")
+	cmd := client.Instances.Command(sandbox.Name, "python3", "-")
 	cmd.Stdin = bytes.NewReader(script)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	cmd.Timeout = 30 * time.Second

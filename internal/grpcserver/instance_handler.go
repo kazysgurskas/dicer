@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/nrednav/cuid2"
@@ -18,6 +19,7 @@ import (
 	"github.com/konradasb/dicer/internal/image/reference"
 	"github.com/konradasb/dicer/internal/instance"
 	"github.com/konradasb/dicer/internal/kernel"
+	"github.com/konradasb/dicer/internal/naming"
 	"github.com/konradasb/dicer/internal/network"
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
@@ -129,8 +131,26 @@ func (h *instanceHandler) newInstance(req *dicerdv1.CreateInstanceRequest) (inst
 		return instance.Spec{}, errdefs.InvalidArgument("invalid image %q: %v", spec.ImageRef, err)
 	}
 	spec.ImageRef = imageRef.String()
+	if spec.Name == "" {
+		spec.Name = generateInstanceName(h.instanceManager, path.Base(imageRef.Repository()))
+	}
 
 	return spec, nil
+}
+
+// generateInstanceName returns a name made from base that no instance has
+// now, such as web-k3x9 for web.
+func generateInstanceName(instances *instance.Manager, base string) string {
+	name := naming.Generate(base)
+	// A name that is taken by chance is replaced. If every name tried is
+	// taken, creating the instance fails with the last one.
+	for range 10 {
+		if _, err := instances.Instance(name); errors.Is(err, errdefs.ErrNotFound) {
+			break
+		}
+		name = naming.Generate(base)
+	}
+	return name
 }
 
 // UpdateInstance modifies an instance's definition. See

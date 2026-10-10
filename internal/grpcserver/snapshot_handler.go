@@ -110,7 +110,11 @@ func (h *snapshotHandler) ForkSnapshot(
 	if err != nil {
 		return nil, err
 	}
-	fork, err := forkDefinition(snapshot.Instance, req)
+	name := req.GetForkName()
+	if name == "" {
+		name = generateInstanceName(h.instanceManager, snapshot.Name)
+	}
+	fork, err := forkDefinition(snapshot.Instance, name, req)
 	if err != nil {
 		return nil, err
 	}

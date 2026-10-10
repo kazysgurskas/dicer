@@ -9,6 +9,9 @@ with its definition and disk but an address of its own, on the same network
 unless `--network` is given. It publishes no ports unless -p is given: two
 instances cannot publish the same host port.
 
+Without NAME, the copy is named after the snapshot, with a random suffix,
+such as web-golden-k3x9.
+
 A memory snapshot's copy runs, resumed where the snapshot's guest was and
 given its own name and address before it can reach the network. A disk
 snapshot's copy is stopped, to boot from the snapshot's disk.
@@ -16,12 +19,13 @@ snapshot's copy is stopped, to boot from the snapshot's disk.
 ## Usage
 
 ```console
-$ dicer snapshot fork SNAPSHOT NAME [flags]
+$ dicer snapshot fork SNAPSHOT [NAME] [flags]
 ```
 
 ## Examples
 
 ```console
+$ dicer snapshot fork web-golden
 $ dicer snapshot fork web-golden web-2
 $ dicer snapshot fork web-golden web-3 -p 8081:80
 ```

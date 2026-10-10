@@ -88,11 +88,12 @@ type Instance struct {
 }
 
 // InstanceSpec is the definition of an instance: what it boots, and with
-// what. Name, ImageRef, VCPUs, MemoryBytes and DiskBytes must be set. Other
-// empty fields take the daemon's defaults.
+// what. ImageRef, VCPUs, MemoryBytes and DiskBytes must be set. Other empty
+// fields take the daemon's defaults.
 type InstanceSpec struct {
 	// Name is the instance's name: letters, digits and hyphens, in
 	// dot-separated parts that each start and end with a letter or digit.
+	// Empty means one made from the image's name, such as nginx-k3x9.
 	Name string `json:"name,omitzero"`
 
 	// Hostname is the guest's hostname. Empty means the instance's name.
@@ -545,7 +546,8 @@ type InstanceUpdate struct {
 // ForkOptions are the identity a fork is given, by Instances.Fork and
 // Snapshots.Fork.
 type ForkOptions struct {
-	// Name is the new instance's name.
+	// Name is the new instance's name. Empty means one made from the name
+	// of the instance or snapshot forked, such as web-k3x9.
 	Name string
 
 	// NetworkName is the network the new instance joins. Empty means the

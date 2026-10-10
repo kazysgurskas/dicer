@@ -3,11 +3,14 @@
 
 // Package naming is the rule every name Dicer gives a resource follows: an
 // instance's, a network's, a snapshot's, a remote's; and a guest's
-// hostname, which follows the same rule.
+// hostname, which follows the same rule. It also makes up names that follow
+// it.
 package naming
 
 import (
+	"crypto/rand"
 	"regexp"
+	"strings"
 
 	"github.com/konradasb/dicer/internal/errdefs"
 )
@@ -46,4 +49,47 @@ func ValidateHostname(hostname string) error {
 		return errdefs.InvalidArgument("invalid hostname %q: %s", hostname, nameRule)
 	}
 	return nil
+}
+
+// notNameChars are what a generated name cannot have, and are replaced
+// with hyphens.
+var notNameChars = regexp.MustCompile(`[^a-z0-9-]+`)
+
+// maxGeneratedBaseLength is the most of its base a generated name keeps.
+const maxGeneratedBaseLength = 40
+
+// generatedSuffixChars are what a generated name's suffix is drawn from.
+const generatedSuffixChars = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+// Generate returns a new valid name made of base and a random suffix, such
+// as web-k3x9 for web. Base is lowercased and shortened, and characters
+// such as dots become hyphens. A base with nothing usable left gives a name
+// such as instance-k3x9.
+func Generate(base string) string {
+	base = strings.Trim(notNameChars.ReplaceAllString(strings.ToLower(base), "-"), "-")
+	if len(base) > maxGeneratedBaseLength {
+		base = strings.TrimRight(base[:maxGeneratedBaseLength], "-")
+	}
+	if base == "" {
+		base = "instance"
+	}
+
+	suffix := make([]byte, 4)
+	_, _ = rand.Read(suffix)
+	for i, b := range suffix {
+		suffix[i] = generatedSuffixChars[int(b)%len(generatedSuffixChars)]
+	}
+
+	return base + "-" + string(suffix)
+}
+
+// GenerateFromImage returns a new name made from an image reference's last
+// path component, as Generate does from a base: nginx-k3x9 for
+// docker.io/library/nginx:1.27.
+func GenerateFromImage(imageRef string) string {
+	base, _, _ := strings.Cut(imageRef, "@")
+	base = base[strings.LastIndexByte(base, '/')+1:]
+	base, _, _ = strings.Cut(base, ":")
+
+	return Generate(base)
 }

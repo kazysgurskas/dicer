@@ -71,9 +71,7 @@ package dbtest
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"strings"
 	"sync"
 	"testing"
 
@@ -96,15 +94,14 @@ func Postgres(t testing.TB) *sql.DB {
 		t.Fatalf("connect to dicer: %v", err)
 	}
 
-	name := forkName(t)
-	instance, err := c.Snapshots.Fork(t.Context(), "pg-base", dicer.ForkOptions{Name: name})
+	instance, err := c.Snapshots.Fork(t.Context(), "pg-base", dicer.ForkOptions{})
 	if err != nil {
 		t.Fatalf("fork a database: %v", err)
 	}
 	t.Cleanup(func() {
-		err := c.Instances.Delete(context.Background(), name, dicer.DeleteOptions{Force: true})
+		err := c.Instances.Delete(context.Background(), instance.Name, dicer.DeleteOptions{Force: true})
 		if err != nil {
-			t.Errorf("delete database %s: %v", name, err)
+			t.Errorf("delete database %s: %v", instance.Name, err)
 		}
 	})
 
@@ -115,29 +112,16 @@ func Postgres(t testing.TB) *sql.DB {
 	t.Cleanup(func() { db.Close() })
 
 	if err := db.PingContext(t.Context()); err != nil {
-		t.Fatalf("connect to database %s: %v", name, err)
+		t.Fatalf("connect to database %s: %v", instance.Name, err)
 	}
 
 	return db
 }
-
-// forkName returns a name for t's database that says which test it is for,
-// such as testcreateuser-k3v9q2.
-func forkName(t testing.TB) string {
-	name := strings.Map(func(r rune) rune {
-		if 'a' <= r && r <= 'z' || '0' <= r && r <= '9' {
-			return r
-		}
-		return '-'
-	}, strings.ToLower(t.Name()))
-	name = strings.Trim(name[:min(len(name), 40)], "-")
-
-	return name + "-" + strings.ToLower(rand.Text()[:6])
-}
 ```
 
-`Snapshots.Fork` returns once the fork has its own address, which is in
-`instance.IP`, and Postgres is already accepting connections there. Cleanups
+`Snapshots.Fork` names the fork after the snapshot, such as `pg-base-k3v9`,
+and returns once the fork has its own address, which is in `instance.IP`.
+Postgres is already accepting connections there. Cleanups
 run in reverse order, so the connection is closed before the fork is
 deleted. The cleanup uses its own context, because `t.Context()` is
 cancelled just before cleanups run.

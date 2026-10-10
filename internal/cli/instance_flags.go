@@ -8,13 +8,11 @@ package cli
 
 import (
 	"bufio"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -161,14 +159,15 @@ func buildCreate(cmd *cobra.Command, args []string) (instanceCreate, error) {
 		return c, usagef(cmd, "%s", err)
 	}
 	c.opts.Start, _ = cmd.Flags().GetBool("start")
+	// Named here rather than by the daemon, so that it can be shown while
+	// the image is pulled and the instance starts.
+	if c.spec.Name == "" {
+		c.spec.Name = naming.GenerateFromImage(c.spec.ImageRef)
+	}
 
 	var err error
 	if c.opts.PullPolicy, err = pullPolicyFlag(cmd); err != nil {
 		return c, err
-	}
-
-	if c.spec.Name == "" {
-		return c, usagef(cmd, "%s needs an instance name", cmd.CommandPath())
 	}
 
 	return c, nil
@@ -184,7 +183,7 @@ func buildRun(cmd *cobra.Command, args []string) (instanceCreate, error) {
 
 	c.spec.Name, _ = cmd.Flags().GetString("name")
 	if c.spec.Name == "" {
-		c.spec.Name = generateName(c.spec.ImageRef)
+		c.spec.Name = naming.GenerateFromImage(c.spec.ImageRef)
 	}
 
 	if err := applySpecFlags(cmd, &c.spec); err != nil {
@@ -692,48 +691,4 @@ func parseLabels(specs []string) (map[string]string, error) {
 		labels[key] = value
 	}
 	return labels, nil
-}
-
-// notNameChars are what cannot be in a name, and are replaced with hyphens
-// when one is made from an image's.
-var notNameChars = regexp.MustCompile(`[^a-z0-9-]+`)
-
-// nameSuffixChars are what a generated name's suffix is drawn from.
-const nameSuffixChars = "abcdefghijklmnopqrstuvwxyz0123456789"
-
-// generateName makes an instance name from an image reference: its last
-// path component and a random suffix, "nginx-k3x9" for
-// docker.io/library/nginx:1.27.
-func generateName(imageRef string) string {
-	base := imageRef
-	if i := strings.IndexByte(base, '@'); i >= 0 {
-		base = base[:i]
-	}
-	if i := strings.LastIndexByte(base, '/'); i >= 0 {
-		base = base[i+1:]
-	}
-	if i := strings.IndexByte(base, ':'); i >= 0 {
-		base = base[:i]
-	}
-
-	base = strings.Trim(notNameChars.ReplaceAllString(strings.ToLower(base), "-"), "-")
-	const maxBase = 40
-	if len(base) > maxBase {
-		base = strings.TrimRight(base[:maxBase], "-")
-	}
-	if base == "" {
-		base = "instance"
-	}
-
-	suffix := make([]byte, 4)
-	_, _ = rand.Read(suffix)
-	for i, b := range suffix {
-		suffix[i] = nameSuffixChars[int(b)%len(nameSuffixChars)]
-	}
-
-	name := base + "-" + string(suffix)
-	if naming.Validate(name) != nil {
-		return "instance-" + string(suffix)
-	}
-	return name
 }

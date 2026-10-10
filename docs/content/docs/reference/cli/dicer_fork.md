@@ -14,15 +14,19 @@ The copy has an address of its own, on the same network unless `--network` is
 given. It publishes no ports unless -p is given: two instances cannot publish
 the same host port.
 
+Without NAME, the copy is named after INSTANCE, with a random suffix, such
+as web-k3x9.
+
 ## Usage
 
 ```console
-$ dicer fork INSTANCE NAME [flags]
+$ dicer fork INSTANCE [NAME] [flags]
 ```
 
 ## Examples
 
 ```console
+$ dicer instance fork web
 $ dicer instance fork web web-2
 $ dicer instance fork web web-3 -p 8081:80
 ```

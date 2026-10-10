@@ -179,21 +179,24 @@ func newSnapshotRestoreCommand() *cobra.Command {
 
 func newSnapshotForkCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "fork SNAPSHOT NAME",
+		Use:   "fork SNAPSHOT [NAME]",
 		Short: "Create an instance as a copy of a snapshot's",
 		Long: "Creates an instance called NAME as a copy of the one a snapshot was taken of,\n" +
 			"with its definition and disk but an address of its own, on the same network\n" +
 			"unless --network is given. It publishes no ports unless -p is given: two\n" +
 			"instances cannot publish the same host port.\n\n" +
+			"Without NAME, the copy is named after the snapshot, with a random suffix,\n" +
+			"such as web-golden-k3x9.\n\n" +
 			"A memory snapshot's copy runs, resumed where the snapshot's guest was and\n" +
 			"given its own name and address before it can reach the network. A disk\n" +
 			"snapshot's copy is stopped, to boot from the snapshot's disk.",
-		Example: "  dicer snapshot fork web-golden web-2\n" +
+		Example: "  dicer snapshot fork web-golden\n" +
+			"  dicer snapshot fork web-golden web-2\n" +
 			"  dicer snapshot fork web-golden web-3 -p 8081:80",
-		Args:              needs([]string{"a snapshot name", "a name for the new instance"}),
+		Args:              needs([]string{"a snapshot name"}, "a name for the new instance"),
 		ValidArgsFunction: complete(1, listSnapshots),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts, err := forkFlags(cmd, args[1])
+			opts, err := forkFlags(cmd, args)
 			if err != nil {
 				return err
 			}

@@ -23,7 +23,11 @@ func (h *instanceHandler) ForkInstance(
 	if err != nil {
 		return nil, err
 	}
-	fork, err := forkDefinition(source, req)
+	name := req.GetForkName()
+	if name == "" {
+		name = generateInstanceName(h.instanceManager, source.Name)
+	}
+	fork, err := forkDefinition(source, name, req)
 	if err != nil {
 		return nil, err
 	}
@@ -35,18 +39,17 @@ func (h *instanceHandler) ForkInstance(
 }
 
 // forkRequest is what a request to fork an instance or a snapshot says of
-// the new instance.
+// the new instance, besides its name.
 type forkRequest interface {
-	GetForkName() string
 	GetNetworkName() string
 	GetStaticIp() string
 	GetPorts() []*dicerdv1.PortMapping
 }
 
-// forkDefinition returns the definition of the instance a fork request makes
-// of source: source's, less what was source's alone, its ID and name, its
-// address, and its host ports.
-func forkDefinition(source instance.Spec, req forkRequest) (instance.Spec, error) {
+// forkDefinition returns the definition of the instance called name that a
+// fork request makes of source: source's, less what was source's alone, its
+// ID and name, its address, and its host ports.
+func forkDefinition(source instance.Spec, name string, req forkRequest) (instance.Spec, error) {
 	ports, err := portMappingsFromProto(req.GetPorts())
 	if err != nil {
 		return instance.Spec{}, err
@@ -54,7 +57,7 @@ func forkDefinition(source instance.Spec, req forkRequest) (instance.Spec, error
 
 	now := time.Now()
 	fork := source
-	fork.ID, fork.Name = cuid2.Generate(), req.GetForkName()
+	fork.ID, fork.Name = cuid2.Generate(), name
 	fork.NetworkName = cmp.Or(req.GetNetworkName(), fork.NetworkName)
 	fork.StaticIP = req.GetStaticIp()
 	fork.Ports = ports

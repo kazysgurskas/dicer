@@ -163,7 +163,8 @@ func newInstanceCreateCommand() *cobra.Command {
 		Short: "Define an instance without starting it",
 		Long: "Records an instance definition, pulling the image first as --pull says:\n" +
 			"by default, only if the host does not hold it. Nothing is booted until\n" +
-			"you run 'dicer start', unless --start is given.\n\n" +
+			"you run 'dicer start', unless --start is given. The instance is named after\n" +
+			"the image unless NAME is given.\n\n" +
 			"A command after -- replaces the image's ENTRYPOINT and CMD.",
 		Example: "  dicer instance create web -i nginx:1.27 --network default -p 8080:80\n" +
 			"  dicer instance create web -i nginx:1.27 --start\n" +

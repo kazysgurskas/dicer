@@ -139,7 +139,7 @@ CopyToInstanceStart is the first message on a CopyToInstance stream.
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` |  |
+| `name` | `string` | The instance's name. When it is empty, the daemon makes one from the image's name, such as nginx-k3x9. |
 | `image_ref` | `string` | The image to boot, by tag or digest. It is resolved to a digest when the instance is created, and the instance boots that image from then on. |
 | `hypervisor_type` | [`HypervisorType`](#hypervisortype) | Unspecified means Cloud Hypervisor. |
 | `hypervisor_version` | `string` | A version that hypervisor ships. Empty is its default version, which HypervisorInfo lists first. |
@@ -349,7 +349,7 @@ ExecInstanceStart is the first message on an ExecInstance stream.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | The instance to fork. |
-| `fork_name` | `string` | The new instance's name. |
+| `fork_name` | `string` | The new instance's name. When it is empty, the daemon makes one from the instance's name and a random suffix, such as web-k3x9. |
 | `network_name` | `string` | The network the new instance joins, and its address on it. The instance's network, and an address it assigns, when empty. |
 | `static_ip` | `string` |  |
 | `ports` | repeated [`PortMapping`](#portmapping) | The host ports the new instance publishes. The instance's are not copied: two instances cannot publish the same host port. |
@@ -359,7 +359,7 @@ ExecInstanceStart is the first message on an ExecInstance stream.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | The snapshot's name or ID. |
-| `fork_name` | `string` | The new instance's name. |
+| `fork_name` | `string` | The new instance's name. When it is empty, the daemon makes one from the snapshot's name and a random suffix, such as web-golden-k3x9. |
 | `network_name` | `string` | The network the new instance joins, and its address on it. The snapshot's network, and an address it assigns, when empty. |
 | `static_ip` | `string` |  |
 | `ports` | repeated [`PortMapping`](#portmapping) | The host ports the new instance publishes. The snapshot's instance's are not copied: two instances cannot publish the same host port. |

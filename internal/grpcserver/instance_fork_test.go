@@ -35,13 +35,13 @@ func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
 	}{
 		{
 			name:        "nothing given",
-			req:         &dicerdv1.ForkInstanceRequest{Name: "web", ForkName: "copy"},
+			req:         &dicerdv1.ForkInstanceRequest{Name: "web"},
 			wantNetwork: "default",
 		},
 		{
 			name: "network, address and ports given",
 			req: &dicerdv1.ForkInstanceRequest{
-				Name: "web", ForkName: "copy", NetworkName: "lan", StaticIp: "10.1.0.9",
+				Name: "web", NetworkName: "lan", StaticIp: "10.1.0.9",
 				Ports: []*dicerdv1.PortMapping{{HostPort: 8081, GuestPort: 80}},
 			},
 			wantNetwork: "lan",
@@ -51,7 +51,7 @@ func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fork, err := forkDefinition(source, tt.req)
+			fork, err := forkDefinition(source, "copy", tt.req)
 			if err != nil {
 				t.Fatalf("forkDefinition: %v", err)
 			}
@@ -74,7 +74,7 @@ func TestForkDefinitionLeavesWhatWasTheSourcesAlone(t *testing.T) {
 		})
 	}
 
-	if _, err := forkDefinition(source, &dicerdv1.ForkInstanceRequest{Name: "web", ForkName: "../bad"}); !errors.Is(err, errdefs.ErrInvalidArgument) {
+	if _, err := forkDefinition(source, "../bad", &dicerdv1.ForkInstanceRequest{Name: "web"}); !errors.Is(err, errdefs.ErrInvalidArgument) {
 		t.Errorf("forkDefinition with an invalid name = %v, want ErrInvalidArgument", err)
 	}
 }

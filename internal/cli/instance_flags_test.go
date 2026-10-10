@@ -86,25 +86,6 @@ func TestBuildCreateRequestEnvAndLabels(t *testing.T) {
 	}
 }
 
-func TestGenerateName(t *testing.T) {
-	for _, tc := range []struct{ ref, prefix string }{
-		{"nginx", "nginx-"},
-		{"docker.io/library/nginx:1.27", "nginx-"},
-		{"localhost:5000/team/api-server:v2", "api-server-"},
-		{"ghcr.io/acme/Web_App@sha256:0123", "web-app-"},
-		{"___", "instance-"},
-	} {
-		got := generateName(tc.ref)
-		if !strings.HasPrefix(got, tc.prefix) || len(got) != len(tc.prefix)+4 {
-			t.Errorf("generateName(%q) = %q, want %s and four characters", tc.ref, got, tc.prefix)
-		}
-	}
-
-	if a, b := generateName("nginx"), generateName("nginx"); a == b {
-		t.Errorf("two names for the same image are both %q", a)
-	}
-}
-
 func TestWantTTY(t *testing.T) {
 	for _, tc := range []struct {
 		force, never, stdin, stdout, want bool

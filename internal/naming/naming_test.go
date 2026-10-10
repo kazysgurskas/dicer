@@ -52,3 +52,51 @@ func TestValidateHostnameAllowsNoneOrAnRFC1123Name(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateMakesAValidNameFromAnyBase checks a generated name keeps what
+// it can of its base, is valid however unusable the base, and differs each
+// time.
+func TestGenerateMakesAValidNameFromAnyBase(t *testing.T) {
+	for _, tc := range []struct{ base, prefix string }{
+		{"web", "web-"},
+		{"Web_App", "web-app-"},
+		{"vmlinux-6.1", "vmlinux-6-1-"},
+		{"web-20260102t150405z", "web-20260102t150405z-"},
+		{strings.Repeat("a", 39) + "-b", strings.Repeat("a", 39) + "-"},
+		{"___", "instance-"},
+		{"", "instance-"},
+	} {
+		t.Run(tc.base, func(t *testing.T) {
+			got := Generate(tc.base)
+			if !strings.HasPrefix(got, tc.prefix) || len(got) != len(tc.prefix)+4 {
+				t.Errorf("Generate(%q) = %q, want %s and four characters", tc.base, got, tc.prefix)
+			}
+			if err := Validate(got); err != nil {
+				t.Errorf("Generate(%q) = %q, which is invalid: %v", tc.base, got, err)
+			}
+		})
+	}
+
+	if a, b := Generate("web"), Generate("web"); a == b {
+		t.Errorf("two names for the same base are both %q", a)
+	}
+}
+
+// TestGenerateFromImageUsesTheRepositorysLastComponent checks a name made
+// from an image keeps neither its registry, path, tag nor digest.
+func TestGenerateFromImageUsesTheRepositorysLastComponent(t *testing.T) {
+	for _, tc := range []struct{ ref, prefix string }{
+		{"nginx", "nginx-"},
+		{"docker.io/library/nginx:1.27", "nginx-"},
+		{"localhost:5000/team/api-server:v2", "api-server-"},
+		{"ghcr.io/acme/Web_App@sha256:0123", "web-app-"},
+		{"___", "instance-"},
+	} {
+		t.Run(tc.ref, func(t *testing.T) {
+			got := GenerateFromImage(tc.ref)
+			if !strings.HasPrefix(got, tc.prefix) || len(got) != len(tc.prefix)+4 {
+				t.Errorf("GenerateFromImage(%q) = %q, want %s and four characters", tc.ref, got, tc.prefix)
+			}
+		})
+	}
+}

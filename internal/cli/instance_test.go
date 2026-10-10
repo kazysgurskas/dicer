@@ -74,10 +74,13 @@ func TestBuildCreateRequestFromFlagsOnly(t *testing.T) {
 	}
 }
 
-func TestBuildCreateRequestRequiresName(t *testing.T) {
-	_, err := runBuild(t, "--image", "alpine", "--kernel", "k", "--network", "default")
-	if err == nil {
-		t.Fatal("expected an error when no name is given")
+func TestBuildCreateRequestNamesAnUnnamedInstanceAfterItsImage(t *testing.T) {
+	got, err := runBuild(t, "--image", "alpine:3.21", "--kernel", "k", "--network", "default")
+	if err != nil {
+		t.Fatalf("buildCreate: %v", err)
+	}
+	if !strings.HasPrefix(got.spec.Name, "alpine-") {
+		t.Errorf("name = %q, want alpine- and a suffix", got.spec.Name)
 	}
 }
 

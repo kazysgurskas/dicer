@@ -137,7 +137,8 @@ Instance web-2 forked from snapshot before-upgrade in 804ms (172.20.0.7)
 The fork has the same definition and overlay disk as the source instance,
 but an identity of its own:
 
-- its own ID and name;
+- its own ID and name. Without a name, the fork is named after the
+  snapshot, with a random suffix, such as `before-upgrade-k3x9`;
 - its own address and MAC, on the same network, or on another given with
   `--network`, at an address given with `--ip` if you want a fixed one;
 - no published host ports, since two instances cannot publish the same
@@ -180,7 +181,8 @@ Instance web-2 forked from instance web in 1.1s (172.20.0.8)
 ```
 
 This is the same as taking a snapshot of `web` and forking it, except that
-no snapshot is kept. `dicer fork` is short for `dicer instance fork`, and
+no snapshot is kept. Without a name, the fork is named after the instance,
+such as `web-k3x9`. `dicer fork` is short for `dicer instance fork`, and
 takes the same flags as `dicer snapshot fork`.
 
 The fork of a running or paused instance runs. As with a snapshot, a
