@@ -74,19 +74,32 @@ func TestNewClientWithNoSocket(t *testing.T) {
 }
 
 // TestNewClientDefaultsToTheLocalDaemon checks that a client goes to the
-// local daemon's socket unless told otherwise.
+// local daemon's socket unless told otherwise, and that an empty address and
+// token, as an unset setting passed on gives them, tell it nothing.
 func TestNewClientDefaultsToTheLocalDaemon(t *testing.T) {
 	if DefaultAddress != "unix:///run/dicer/dicer.sock" {
 		t.Errorf("DefaultAddress = %q", DefaultAddress)
 	}
 
-	c, err := NewClient()
-	if err == nil {
-		_ = c.Close()
-		t.Skip("a daemon is running on this machine")
+	tests := []struct {
+		name string
+		opts []Option
+	}{
+		{"no options", nil},
+		{"an empty address", []Option{WithAddress("")}},
+		{"an empty address and token", []Option{WithAddress(""), WithToken("")}},
 	}
-	if !strings.Contains(err.Error(), "/run/dicer/dicer.sock") {
-		t.Errorf("NewClient() = %v, want it to name the default socket", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := NewClient(tt.opts...)
+			if err == nil {
+				_ = c.Close()
+				t.Skip("a daemon is running on this machine")
+			}
+			if !strings.Contains(err.Error(), "/run/dicer/dicer.sock") {
+				t.Errorf("NewClient = %v, want it to name the default socket", err)
+			}
+		})
 	}
 }
 

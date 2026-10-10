@@ -85,7 +85,8 @@ type Option func(*options)
 
 // WithAddress sets the daemon's address, as a gRPC target:
 // "unix:///path/to/socket", or "host:port" for its TCP listener. The default
-// is DefaultAddress.
+// is DefaultAddress. An empty target means the default too, so that an
+// address that may be unset can be passed as it is.
 func WithAddress(target string) Option {
 	return func(o *options) { o.address = target }
 }
@@ -154,6 +155,7 @@ func NewClient(opts ...Option) (*Client, error) {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	o.address = cmp.Or(o.address, DefaultAddress)
 
 	if path, ok := strings.CutPrefix(o.address, "unix://"); ok {
 		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {

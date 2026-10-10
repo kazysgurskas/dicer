@@ -76,6 +76,10 @@ $ export DICER_TOKEN=dicer_…
 $ export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…
 ```
 
+`dicer` also takes the name of a
+[remote](../../guides/remote-access) in `DICER_REMOTE`, but `claude-sandbox`
+needs the address itself, which it passes to the Go client.
+
 `CLAUDE_CODE_OAUTH_TOKEN` takes a token for a Claude subscription, which
 `claude setup-token` makes. Set `ANTHROPIC_API_KEY` instead to use an API
 key from the [Claude Console](https://platform.claude.com/settings/keys).
@@ -158,9 +162,10 @@ Once Claude is done, the sandbox is gone.
 //	claude-sandbox "make the failing tests in ./slug pass"
 //
 // The sandbox is a fork of the claude-base snapshot, given the files of the
-// repository's last commit, and deleted when Claude is done. $DICER_REMOTE
-// and $DICER_TOKEN say which host, as they do for dicer. Claude
-// authenticates with $ANTHROPIC_API_KEY or $CLAUDE_CODE_OAUTH_TOKEN.
+// repository's last commit, and deleted when Claude is done. $DICER_REMOTE,
+// the host's address rather than a remote's name, and $DICER_TOKEN say which
+// host. Unset, they mean the daemon on this machine. Claude authenticates
+// with $ANTHROPIC_API_KEY or $CLAUDE_CODE_OAUTH_TOKEN.
 package main
 
 import (

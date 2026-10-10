@@ -1964,7 +1964,7 @@ An Option configures a Client.
 func WithAddress(target string) Option
 ```
 
-WithAddress sets the daemon's address, as a gRPC target: "unix:///path/to/socket", or "host:port" for its TCP listener. The default is DefaultAddress.
+WithAddress sets the daemon's address, as a gRPC target: "unix:///path/to/socket", or "host:port" for its TCP listener. The default is DefaultAddress. An empty target means the default too, so that an address that may be unset can be passed as it is.
 
 #### func WithDialOptions {#withdialoptions}
 
