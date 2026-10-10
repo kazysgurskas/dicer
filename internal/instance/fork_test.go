@@ -222,6 +222,21 @@ func TestRefusedForkOfInstanceDefinesNothing(t *testing.T) {
 	}
 }
 
+// TestForkOfInstanceIntoATakenNameLeavesTheSourceRunning checks that a fork
+// whose name is taken is refused before the source is paused to copy it.
+func TestForkOfInstanceIntoATakenNameLeavesTheSourceRunning(t *testing.T) {
+	h := newHarness(t)
+	h.running(t)
+
+	err := h.manager.forkInstance(t.Context(), h.instance, forkOf(h.instance, h.instance.Name))
+	if !errors.Is(err, errdefs.ErrExists) {
+		t.Errorf("ForkInstance into a taken name = %v, want ErrExists", err)
+	}
+	if h.hv.paused != 0 {
+		t.Error("the refused fork paused its source")
+	}
+}
+
 // forkOf defines an instance named name as a fork of source, as the API
 // does.
 func forkOf(source Spec, name string) Spec {

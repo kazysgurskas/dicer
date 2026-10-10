@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/diskfile"
+	"github.com/konradasb/dicer/internal/errdefs"
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/humanize"
 )
@@ -50,6 +51,11 @@ func (m *Manager) forkInstance(ctx context.Context, source, instance Spec) (err 
 
 	if err := m.checkCanStart(instance); err != nil {
 		return err
+	}
+	// Refused before the source is paused to copy it, rather than after.
+	// Creating the fork checks again.
+	if _, err := m.store.Instance(instance.Name); err == nil {
+		return errdefs.Exists("instance %q already exists", instance.Name)
 	}
 
 	staged, err := m.store.StageSnapshot()
