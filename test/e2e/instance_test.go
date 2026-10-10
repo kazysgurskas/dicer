@@ -6,6 +6,8 @@
 package e2e
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -641,6 +643,11 @@ type instanceView struct {
 	} `json:"health"`
 }
 
+// maxInstanceNameLength leaves the tests room to add a suffix, such as
+// -fork, to the name instanceName returns, within the 63 characters a name
+// can have.
+const maxInstanceNameLength = 50
+
 // instanceName returns a name unique to this test, so that a run which fails
 // before its cleanup cannot collide with the next one.
 func instanceName(t *testing.T) string {
@@ -651,8 +658,16 @@ func instanceName(t *testing.T) string {
 	name := strings.ToLower(t.Name())
 	name = strings.ReplaceAll(name, "_", "-")
 	name = strings.ReplaceAll(name, "/", "-")
+	name = "e2e-" + name
 
-	return "e2e-" + name
+	// A long name is cut short, and keeps a hash of the whole to stay
+	// unique.
+	if len(name) > maxInstanceNameLength {
+		sum := sha256.Sum256([]byte(name))
+		hash := hex.EncodeToString(sum[:4])
+		name = strings.TrimRight(name[:maxInstanceNameLength-len(hash)-1], "-") + "-" + hash
+	}
+	return name
 }
 
 // instance reads an instance's current state through the CLI.

@@ -52,7 +52,7 @@ func TestDirectoryMountIsSharedLive(t *testing.T) {
 	}
 
 	// It cannot be snapshotted while it runs.
-	if _, err := env.tryDicer(t, "instance", "snapshot", "create", name); err == nil ||
+	if _, err := env.tryDicer(t, "snapshot", "create", name); err == nil ||
 		!strings.Contains(err.Error(), "mounts a host directory") {
 		t.Errorf("snapshot of an instance with a shared directory = %v, want it refused", err)
 	}
@@ -79,7 +79,13 @@ func TestDirectoryMountOutsideTheAllowedIsRefused(t *testing.T) {
 	name := instanceName(t)
 	link := env.paths.shared + "/" + name + "-link"
 	env.hostShell(t, "mkdir -p "+env.paths.shared+" && ln -sfn /etc "+link)
-	t.Cleanup(func() { env.hostShell(t, "rm -f "+link) })
+	t.Cleanup(func() {
+		ctx, cancel := cleanupContext()
+		defer cancel()
+		if _, err := env.host.runShell(ctx, "rm -f "+link); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
+	})
 
 	for _, source := range []string{"/etc", env.paths.shared + "/../config", link} {
 		_, err := env.tryDicer(t, "instance", "create", name,
