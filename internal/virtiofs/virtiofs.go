@@ -13,6 +13,11 @@
 // systemd's ProtectSystem makes it; a directory shared with a guest must be
 // writable, so virtiofsd is started in the host's mount namespace, PID 1's,
 // rather than the daemon's.
+//
+// virtiofsd is given the directory by its path, which a symbolic link put in
+// its way could point elsewhere once the directory has been checked. Its
+// sandbox makes the directory it shares its root, so Start checks that root
+// is the directory that was checked.
 package virtiofs
 
 import (
@@ -44,6 +49,9 @@ const (
 type Share struct {
 	// Dir is the host directory, as the host's mount namespace has it.
 	Dir string
+	// DirInfo is the directory Dir named when it was checked, which is the
+	// one virtiofsd must share.
+	DirInfo fs.FileInfo
 	// Socket is the path virtiofsd listens on for the VMM.
 	Socket string
 	// ReadOnly makes virtiofsd refuse the guest's writes.
@@ -95,9 +103,13 @@ func (d *Daemon) args(s Share) []string {
 	return argv
 }
 
-// Start runs virtiofsd for s and waits for it to listen. The process ends
-// when the VMM that connects to it does, or when it is terminated.
+// Start runs virtiofsd for s, and waits until it listens and shares the
+// directory s.DirInfo describes. The process ends when the VMM that connects
+// to it does, or when it is terminated.
 func (d *Daemon) Start(ctx context.Context, s Share) (*process.Process, error) {
+	if s.DirInfo == nil {
+		return nil, fmt.Errorf("share %s: the directory was not checked", s.Dir)
+	}
 	if len(s.Socket) > maxSocketPath {
 		return nil, fmt.Errorf("share %s: socket path %s is longer than %d bytes: choose a shorter run_dir",
 			s.Dir, s.Socket, maxSocketPath)
@@ -128,7 +140,11 @@ func (d *Daemon) Start(ctx context.Context, s Share) (*process.Process, error) {
 		return nil, fmt.Errorf("start virtiofsd: %w", err)
 	}
 
-	if err := waitForSocket(ctx, s.Socket, p.Done()); err != nil {
+	err = waitForSocket(ctx, s.Socket, p.Done())
+	if err == nil {
+		err = waitForSandbox(ctx, p.PID(), s.DirInfo, p.Done())
+	}
+	if err != nil {
 		p.Terminate()
 		if out, readErr := os.ReadFile(s.Log); readErr == nil && len(out) > 0 {
 			return nil, fmt.Errorf("share %s: %w: %s", s.Dir, err, strings.TrimSpace(string(out)))
@@ -136,6 +152,38 @@ func (d *Daemon) Start(ctx context.Context, s Share) (*process.Process, error) {
 		return nil, fmt.Errorf("share %s: %w", s.Dir, err)
 	}
 	return p, nil
+}
+
+// waitForSandbox waits for virtiofsd to enter its sandbox, whose root is the
+// directory it shares, and checks that directory is dir. Until it does, its
+// root is the host's.
+func waitForSandbox(ctx context.Context, pid int, dir fs.FileInfo, exited <-chan struct{}) error {
+	hostRoot, err := os.Stat(hostfs.Path("/"))
+	if err != nil {
+		return fmt.Errorf("read the host's root: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, socketWaitTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(socketPollInterval)
+	defer ticker.Stop()
+	for {
+		root, err := os.Stat(fmt.Sprintf("/proc/%d/root", pid))
+		switch {
+		case err == nil && os.SameFile(root, dir):
+			return nil
+		case err == nil && !os.SameFile(root, hostRoot):
+			return errors.New("virtiofsd shares a directory other than the one checked: a link was put in its way")
+		}
+		select {
+		case <-exited:
+			return errors.New("virtiofsd exited")
+		case <-ctx.Done():
+			return fmt.Errorf("virtiofsd did not share the directory checked: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 // waitForSocket waits for virtiofsd to create its socket, or to exit.

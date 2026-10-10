@@ -94,11 +94,20 @@ func TestAllowedDirectoriesResolve(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Resolve(%q): %v", tt.path, err)
 			}
-			if got != tt.want {
-				t.Errorf("Resolve(%q) = %q, want %q", tt.path, got, tt.want)
+			if got.Path != tt.want {
+				t.Errorf("Resolve(%q) = %q, want %q", tt.path, got.Path, tt.want)
 			}
-			if !strings.HasPrefix(got+"/", allowed+"/") {
-				t.Errorf("Resolve(%q) = %q, outside %s", tt.path, got, allowed)
+			if !strings.HasPrefix(got.Path+"/", allowed+"/") {
+				t.Errorf("Resolve(%q) = %q, outside %s", tt.path, got.Path, allowed)
+			}
+			// It says which directory the path named, to check against
+			// whatever opens it later.
+			want, err := os.Stat(tt.want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(got.Info, want) {
+				t.Errorf("Resolve(%q) found %v, want the directory %s", tt.path, got.Info, tt.want)
 			}
 		})
 	}
@@ -117,7 +126,7 @@ func TestAllowedDirectoriesResolve(t *testing.T) {
 		t.Run("refuses "+name, func(t *testing.T) {
 			got, err := dirs.Resolve(path)
 			if err == nil {
-				t.Fatalf("Resolve(%q) = %q, want it refused", path, got)
+				t.Fatalf("Resolve(%q) = %q, want it refused", path, got.Path)
 			}
 			if !errors.Is(err, errdefs.ErrInvalidArgument) {
 				t.Errorf("Resolve(%q) = %v, want an invalid argument", path, err)

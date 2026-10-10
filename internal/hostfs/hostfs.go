@@ -9,7 +9,6 @@ package hostfs
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -48,27 +47,8 @@ func pathIn(separate bool, path string) string {
 	return filepath.Join(hostRoot, path)
 }
 
-// Stat is os.Stat of the host's path, with errors that name it as given.
-func Stat(path string) (fs.FileInfo, error) {
-	info, err := os.Stat(Path(path))
-	return info, named(err, path)
-}
-
-// ErrNotDirectory is CheckDir's error for a path that is not a directory.
+// ErrNotDirectory is the error for a path that is not a directory.
 var ErrNotDirectory = errors.New("not a directory")
-
-// CheckDir returns an error, naming path as given, unless path is a
-// directory on the host.
-func CheckDir(path string) error {
-	info, err := Stat(path)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("%s: %w", path, ErrNotDirectory)
-	}
-	return nil
-}
 
 // named makes a file error name path, rather than where the daemon found it.
 func named(err error, path string) error {

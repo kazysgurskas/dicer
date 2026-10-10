@@ -18,6 +18,7 @@ import (
 	"github.com/konradasb/dicer/internal/event"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/hostfs"
 	"github.com/konradasb/dicer/internal/humanize"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
@@ -279,8 +280,9 @@ func (m *Manager) vmSpec(instance Spec, b bootAssets, nic hypervisor.NetworkInte
 // directoryShare is a host directory an instance mounts, by the tag the
 // guest mounts it with.
 type directoryShare struct {
-	tag, source, target string
-	readOnly            bool
+	tag, target string
+	source      hostfs.Directory
+	readOnly    bool
 }
 
 // resolvedMounts is what an instance's mounts become at start.
@@ -375,7 +377,8 @@ func (m *Manager) startShares(
 	filesystems := make([]hypervisor.FilesystemConfig, 0, len(shares))
 	for i, share := range shares {
 		p, err := m.shares.Start(ctx, virtiofs.Share{
-			Dir:      share.source,
+			Dir:      share.source.Path,
+			DirInfo:  share.source.Info,
 			Socket:   m.shareSocketPath(instance.ID, i),
 			ReadOnly: share.readOnly,
 			Log:      m.shareLogPath(instance, i),

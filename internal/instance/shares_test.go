@@ -130,7 +130,7 @@ func TestResolveMountsSharesDirectories(t *testing.T) {
 	if len(mounts) != 1 || mounts[0].Directory == nil || mounts[0].Directory.Tag != "dicerfs0" || !mounts[0].ReadOnly {
 		t.Errorf("mounts = %+v, want the share mounted read-only by its tag", mounts)
 	}
-	if len(shares) != 1 || shares[0].source != dir || shares[0].tag != "dicerfs0" {
+	if len(shares) != 1 || shares[0].source.Path != dir || shares[0].tag != "dicerfs0" {
 		t.Errorf("shares = %+v, want the directory", shares)
 	}
 

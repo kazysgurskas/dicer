@@ -4,11 +4,8 @@
 package hostfs
 
 import (
-	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -21,35 +18,6 @@ func TestPathIn(t *testing.T) {
 	}
 	if got := pathIn(true, "site"); got != "site" {
 		t.Errorf("a relative path = %s, want it left alone", got)
-	}
-}
-
-func TestErrorsNameThePathGiven(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing")
-	for _, err := range []error{
-		func() error { _, err := Stat(missing); return err }(),
-	} {
-		if err == nil || !strings.Contains(err.Error(), missing) || strings.Contains(err.Error(), "/proc/1/root") {
-			t.Errorf("error = %v, want it to name %s as given", err, missing)
-		}
-	}
-}
-
-func TestCheckDir(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "file")
-	if err := os.WriteFile(file, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := CheckDir(dir); err != nil {
-		t.Errorf("CheckDir(directory) = %v, want nil", err)
-	}
-	if err := CheckDir(file); !errors.Is(err, ErrNotDirectory) || !strings.Contains(err.Error(), file) {
-		t.Errorf("CheckDir(file) = %v, want ErrNotDirectory naming it", err)
-	}
-	if err := CheckDir(filepath.Join(dir, "missing")); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("CheckDir(missing) = %v, want fs.ErrNotExist", err)
 	}
 }
 

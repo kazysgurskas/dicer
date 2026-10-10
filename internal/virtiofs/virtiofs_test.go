@@ -6,9 +6,11 @@ package virtiofs
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -86,6 +88,21 @@ func TestArgs(t *testing.T) {
 	}
 }
 
+// rootDir is what the fake virtiofsd shares: the root it runs in, as it has
+// no sandbox to enter. Checking it needs /proc.
+func rootDir(t *testing.T) fs.FileInfo {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("a process's root is read from /proc")
+	}
+
+	info, err := os.Stat("/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info
+}
+
 func TestStart(t *testing.T) {
 	d := fake(t, "listen")
 	dir := t.TempDir()
@@ -95,7 +112,9 @@ func TestStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := d.Start(t.Context(), Share{Dir: t.TempDir(), Socket: socket, Log: filepath.Join(dir, "logs", "fs0.log")})
+	p, err := d.Start(t.Context(), Share{
+		Dir: "/", DirInfo: rootDir(t), Socket: socket, Log: filepath.Join(dir, "logs", "fs0.log"),
+	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -118,9 +137,10 @@ func TestStart(t *testing.T) {
 func TestStartRefusesSocketPathTooLong(t *testing.T) {
 	dir := t.TempDir()
 	long := Share{
-		Dir:    t.TempDir(),
-		Socket: "/" + strings.Repeat("x", maxSocketPath) + ".sock",
-		Log:    filepath.Join(dir, "fs0.log"),
+		Dir:     dir,
+		DirInfo: dirInfo(t, dir),
+		Socket:  "/" + strings.Repeat("x", maxSocketPath) + ".sock",
+		Log:     filepath.Join(dir, "fs0.log"),
 	}
 	if _, err := fake(t, "listen").Start(t.Context(), long); err == nil || !strings.Contains(err.Error(), "longer than") {
 		t.Errorf("Start on a socket path too long to bind = %v, want it refused", err)
@@ -131,8 +151,53 @@ func TestStartReportsWhyItFailed(t *testing.T) {
 	d := fake(t, "fail")
 	dir := t.TempDir()
 
-	_, err := d.Start(t.Context(), Share{Dir: "/nope", Socket: filepath.Join(dir, "fs0.sock"), Log: filepath.Join(dir, "fs0.log")})
+	_, err := d.Start(t.Context(), Share{
+		Dir: "/nope", DirInfo: dirInfo(t, dir), Socket: filepath.Join(dir, "fs0.sock"), Log: filepath.Join(dir, "fs0.log"),
+	})
 	if err == nil || !strings.Contains(err.Error(), "shared directory is not a directory") {
 		t.Errorf("Start = %v, want virtiofsd's own error", err)
 	}
+}
+
+// TestStartRefusesToShareAnotherDirectory checks that virtiofsd is not left
+// sharing a directory other than the one checked, as it would once a link
+// put in the way of the checked one's path pointed elsewhere.
+func TestStartRefusesToShareAnotherDirectory(t *testing.T) {
+	rootDir(t)
+	d := fake(t, "listen")
+	dir := t.TempDir()
+
+	// The fake shares the root it runs in, never the directory checked.
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	p, err := d.Start(ctx, Share{
+		Dir: dir, DirInfo: dirInfo(t, dir), Socket: filepath.Join(dir, "fs0.sock"), Log: filepath.Join(dir, "fs0.log"),
+	})
+	if err == nil {
+		p.Terminate()
+		t.Fatal("Start shared a directory other than the one checked")
+	}
+	if !strings.Contains(err.Error(), "did not share the directory checked") {
+		t.Errorf("Start = %v, want it refused for sharing another directory", err)
+	}
+}
+
+// TestStartRefusesAnUncheckedDirectory checks that a share must say which
+// directory was checked.
+func TestStartRefusesAnUncheckedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	_, err := fake(t, "listen").Start(t.Context(), Share{Dir: dir, Socket: filepath.Join(dir, "fs0.sock"), Log: filepath.Join(dir, "fs0.log")})
+	if err == nil || !strings.Contains(err.Error(), "not checked") {
+		t.Errorf("Start = %v, want it refused", err)
+	}
+}
+
+func dirInfo(t *testing.T, dir string) fs.FileInfo {
+	t.Helper()
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info
 }

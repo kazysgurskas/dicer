@@ -4,8 +4,11 @@
 package hostfs
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -36,15 +39,25 @@ func (a AllowedDirectories) Validate() error {
 	return nil
 }
 
-// Resolve returns the host path of the directory at path, which must be one
-// of the allowed directories or under one. Symbolic links under the allowed
-// directory are followed only as far as it, as though it were the root
-// directory: a link to /etc resolves to etc in it. The error, an invalid
-// argument, names path as given, and says when path is not allowed, missing
-// or not a directory.
-func (a AllowedDirectories) Resolve(path string) (string, error) {
+// Directory is a host directory found for a mount.
+type Directory struct {
+	// Path is where the host has it, with no symbolic links.
+	Path string
+
+	// Info is the directory Path named when it was found. Path may name
+	// another directory by the time it is used, if a link is put in its
+	// way. Whatever opens Path checks that it opened this one.
+	Info fs.FileInfo
+}
+
+// Resolve finds the directory at path, which must be one of the allowed
+// directories or under one. Symbolic links under the allowed directory are
+// followed only as far as it, as though it were the root directory: a link
+// to /etc resolves to etc in it. The error, an invalid argument, names path
+// as given, and says when path is not allowed, missing or not a directory.
+func (a AllowedDirectories) Resolve(path string) (Directory, error) {
 	if !filepath.IsAbs(path) {
-		return "", errdefs.InvalidArgument("directory %q is not an absolute path", path)
+		return Directory{}, errdefs.InvalidArgument("directory %q is not an absolute path", path)
 	}
 	path = filepath.Clean(path)
 
@@ -57,19 +70,39 @@ func (a AllowedDirectories) Resolve(path string) (string, error) {
 		hostRoot := Path(root)
 		resolved, err := securejoin.SecureJoin(hostRoot, rel)
 		if err != nil {
-			return "", errdefs.InvalidArgument("directory %q: %v", path, err)
+			return Directory{}, errdefs.InvalidArgument("directory %q: %v", path, err)
 		}
-		hostPath := filepath.Join(root, strings.TrimPrefix(resolved, hostRoot))
+		resolvedRel := strings.TrimPrefix(resolved, hostRoot)
 
-		if err := CheckDir(hostPath); err != nil {
-			return "", errdefs.InvalidArgument("directory %q: %v", path, err)
+		info, err := statDirIn(hostRoot, resolvedRel)
+		if err != nil {
+			return Directory{}, errdefs.InvalidArgument("directory %q: %v", path, named(err, path))
 		}
-		return hostPath, nil
+		return Directory{Path: filepath.Join(root, resolvedRel), Info: info}, nil
 	}
 
-	return "", errdefs.InvalidArgument(
+	return Directory{}, errdefs.InvalidArgument(
 		"directory %q is not one this daemon allows instances to mount: its host's administrator lists them in mounts.allowed_directories",
 		path)
+}
+
+// statDirIn returns the directory at rel under root, without following a
+// link out of root: a path that had no links a moment ago may have one now.
+func statDirIn(root, rel string) (fs.FileInfo, error) {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = r.Close() }()
+
+	info, err := r.Stat(cmp.Or(strings.TrimPrefix(rel, "/"), "."))
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, ErrNotDirectory
+	}
+	return info, nil
 }
 
 // under returns path relative to root, if path is root or under it.
