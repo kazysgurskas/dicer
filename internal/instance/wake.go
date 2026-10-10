@@ -5,6 +5,7 @@ package instance
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"strconv"
@@ -29,6 +30,10 @@ const wakeDialTimeout = 10 * time.Second
 type waker struct {
 	listeners []wakeListener
 }
+
+// wakeAcceptRetryDelay is how long a wake listener waits after failing to
+// accept a connection before it tries again.
+const wakeAcceptRetryDelay = 100 * time.Millisecond
 
 // wakeListener listens on one of an instance's published TCP ports.
 type wakeListener struct {
@@ -122,8 +127,17 @@ func (w *waker) close() {
 func (m *Manager) serveWakeListener(ctx context.Context, l wakeListener) {
 	for {
 		conn, err := l.Accept()
-		if err != nil {
+		if errors.Is(err, net.ErrClosed) {
 			return
+		}
+		if err != nil {
+			// Accept fails when the daemon runs out of file descriptors,
+			// for one, which passes. Until then, connections wait in the
+			// backlog.
+			m.logger.WarnContext(ctx, "cannot accept a connection to wake an instance on standby",
+				"instance", l.instance.Name, "error", err)
+			time.Sleep(wakeAcceptRetryDelay)
+			continue
 		}
 		// A port published on every address is not forwarded from the
 		// host's loopback address, so a connection to it there does not
