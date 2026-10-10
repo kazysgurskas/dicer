@@ -110,6 +110,11 @@ func TestFailedWakeLeavesInstanceToBeWokenAgain(t *testing.T) {
 	if !h.listening() {
 		t.Fatal("the daemon stopped listening after a failed wake")
 	}
+	// Still frozen, it is still on standby: a restore must not change its
+	// disk under it.
+	if status, err := h.manager.Status(h.instance.ID); err != nil || status.State != StateStandby {
+		t.Errorf("after a failed wake, status = %v, %v; want %s", status.State, err, StateStandby)
+	}
 
 	lock.Lock()
 	h.starter.restoreErr = nil

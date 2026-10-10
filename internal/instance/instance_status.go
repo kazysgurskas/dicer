@@ -28,8 +28,9 @@ func (m *Manager) statusOf(instance Spec) (Status, error) {
 		return Status{}, err
 	}
 	// Standby leaves no runtime status, which a reboot would lose: the guest
-	// frozen to disk is what says the instance is on standby.
-	if status.State == StateStopped && m.onStandby(instance) {
+	// frozen to disk is what says the instance is on standby. A failed
+	// resume leaves it frozen, to be resumed again, so it is on standby too.
+	if (status.State == StateStopped || status.State == StateFailed) && m.onStandby(instance) {
 		status.State = StateStandby
 	}
 	return status, nil
