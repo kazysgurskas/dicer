@@ -24,11 +24,12 @@ var (
 	restartModes    = []dicer.RestartMode{
 		dicer.RestartModeNo, dicer.RestartModeOnFailure, dicer.RestartModeUnlessStopped, dicer.RestartModeAlways,
 	}
-	mountTypes    = []dicer.MountType{dicer.MountTypeVolume, dicer.MountTypeFile, dicer.MountTypeDirectory, dicer.MountTypeTmpfs}
-	protocols     = []dicer.Protocol{dicer.ProtocolTCP, dicer.ProtocolUDP}
-	architectures = []dicer.Architecture{dicer.ArchitectureX86_64, dicer.ArchitectureAArch64}
-	logSources    = []dicer.LogSource{dicer.LogSourceGuest, dicer.LogSourceHypervisor}
-	eventKinds    = []dicer.EventKind{
+	mountTypes     = []dicer.MountType{dicer.MountTypeVolume, dicer.MountTypeFile, dicer.MountTypeDirectory, dicer.MountTypeTmpfs}
+	protocols      = []dicer.Protocol{dicer.ProtocolTCP, dicer.ProtocolUDP}
+	architectures  = []dicer.Architecture{dicer.ArchitectureX86_64, dicer.ArchitectureAArch64}
+	logSources     = []dicer.LogSource{dicer.LogSourceGuest, dicer.LogSourceHypervisor}
+	waitConditions = []dicer.WaitCondition{dicer.WaitConditionStopped, dicer.WaitConditionHealthy}
+	eventKinds     = []dicer.EventKind{
 		dicer.EventKindInstance, dicer.EventKindImage, dicer.EventKindNetwork,
 		dicer.EventKindVolume, dicer.EventKindKernel, dicer.EventKindSnapshot,
 	}

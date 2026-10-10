@@ -100,7 +100,8 @@ service DaemonService {
   // the stream's one message. A restart is not a stop, and nor is standby.
   // The daemon sends the response headers once it is waiting, so a caller
   // that reads them before starting the instance cannot miss how it ends,
-  // even if it is deleted as it stops.
+  // even if it is deleted as it stops. With WAIT_CONDITION_HEALTHY, it waits
+  // instead for the running instance's health check to pass.
   rpc WaitInstance(WaitInstanceRequest) returns (stream WaitInstanceResponse);
   // GetInstanceLogs streams an instance's log. The guest's console is kept
   // with the instance, so it can be read after a stop to explain one.
@@ -322,6 +323,19 @@ enum RestartMode {
   // Restart it however it ended, and start it when the daemon starts, even
   // if a user stopped it.
   RESTART_MODE_ALWAYS = 4;
+}
+
+// WaitCondition is what WaitInstance waits for.
+enum WaitCondition {
+  WAIT_CONDITION_UNSPECIFIED = 0;
+  // The instance stopping. The default.
+  WAIT_CONDITION_STOPPED = 1;
+  // The running instance's health check passing. The wait ends at once if
+  // the check has passed already. It goes on while the instance is
+  // unhealthy, because a later probe or a restart can make it healthy. It
+  // fails with FAILED_PRECONDITION if the instance has no health check, is
+  // not running, or stops first.
+  WAIT_CONDITION_HEALTHY = 2;
 }
 
 // MountType is what a Mount attaches.
@@ -773,10 +787,12 @@ message WaitInstanceRequest {
   // caller about to start it. Otherwise a stopped instance is not waited
   // for.
   bool next_stop = 3;
+  // What to wait for. Unspecified means a stop.
+  WaitCondition condition = 4;
 }
 
 message WaitInstanceResponse {
-  // STOPPED, or FAILED.
+  // STOPPED or FAILED, or RUNNING after a wait for WAIT_CONDITION_HEALTHY.
   InstanceState state = 1;
   // Why it failed.
   string state_error = 2;

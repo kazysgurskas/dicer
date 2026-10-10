@@ -91,6 +91,9 @@ func (m *Manager) probeOnce(ctx context.Context, instance Spec, vmm *process.Pro
 		m.logger.InfoContext(ctx, "instance health changed", "instance", instance.Name,
 			"health", after.Status, "check", check.String(), "output", firstLine(after.LastOutput))
 		m.recordHealth(instance, check, after)
+		if after.Status == health.StatusHealthy {
+			m.notifyHealthy(instance.ID)
+		}
 	}
 	// Checked on every probe: the restart policy may have changed.
 	if after.Status == health.StatusUnhealthy {

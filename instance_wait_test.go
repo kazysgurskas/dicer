@@ -120,3 +120,28 @@ func TestWaitForAnInstanceThatDoesNotExistIsNotFound(t *testing.T) {
 		t.Errorf("Wait = %v, want ErrNotFound", err)
 	}
 }
+
+// TestWaitForHealthAsksTheDaemonForIt checks that a wait for
+// WaitConditionHealthy is sent as such, and returns 0 once the daemon says
+// the instance is healthy.
+func TestWaitForHealthAsksTheDaemonForIt(t *testing.T) {
+	host := newWaitHost(&dicerdv1.WaitInstanceResponse{State: dicerdv1.InstanceState_INSTANCE_STATE_RUNNING})
+	close(host.stop)
+	c := connect(t, host.daemon())
+
+	got, err := c.Instances.Wait(t.Context(), "job", WaitOptions{Condition: WaitConditionHealthy})
+	if err != nil || got != 0 {
+		t.Errorf("Wait = %d, %v; want 0", got, err)
+	}
+	if host.req.GetCondition() != dicerdv1.WaitCondition_WAIT_CONDITION_HEALTHY {
+		t.Errorf("the daemon was asked %v", host.req)
+	}
+}
+
+func TestWaitForAnUnknownConditionIsInvalid(t *testing.T) {
+	c := connect(t, newWaitHost(nil).daemon())
+
+	if _, err := c.Instances.Wait(t.Context(), "job", WaitOptions{Condition: "ready"}); !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("Wait = %v, want ErrInvalidArgument", err)
+	}
+}

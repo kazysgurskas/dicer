@@ -127,3 +127,28 @@ func TestWaitOnAMissingInstance(t *testing.T) {
 		t.Errorf("wait printed %q, want an error for a and the status of b", out)
 	}
 }
+
+// With --condition healthy, a healthy instance's wait prints nothing, and one
+// that cannot become healthy fails the command.
+func TestWaitForHealthy(t *testing.T) {
+	serveFakeDaemon(t, newFakeInstanceDaemon(
+		&dicerdv1.Instance{
+			Id: "id-web", Name: "web", ImageRef: "nginx:1.27", State: stateRunning,
+			Health: &dicerdv1.Health{Status: dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY},
+		},
+		&dicerdv1.Instance{Id: "id-job", Name: "job", ImageRef: "alpine:3.21", State: stateRunning},
+	))
+
+	out, err := run(t, "wait", "--condition", "healthy", "web")
+	if err != nil || strings.TrimSpace(out) != "" {
+		t.Errorf("wait --condition healthy = %q, %v; want nothing printed", out, err)
+	}
+
+	if out, err := run(t, "wait", "--condition", "healthy", "job"); err == nil {
+		t.Errorf("wait --condition healthy for an instance without a check succeeded:\n%s", out)
+	}
+
+	if _, err := run(t, "wait", "--condition", "ready", "web"); err == nil || !strings.Contains(err.Error(), "stopped or healthy") {
+		t.Errorf("wait --condition ready = %v, want the conditions listed", err)
+	}
+}

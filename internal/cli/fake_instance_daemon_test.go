@@ -343,6 +343,14 @@ func (d *fakeInstanceDaemon) WaitInstance(
 	if err := stream.SendHeader(nil); err != nil {
 		return err
 	}
+	// A wait for health ends at once here: the instance is healthy or it
+	// never will be.
+	if req.GetCondition() == dicerdv1.WaitCondition_WAIT_CONDITION_HEALTHY {
+		if instance.GetHealth().GetStatus() != dicerdv1.HealthStatus_HEALTH_STATUS_HEALTHY {
+			return status.Errorf(codes.FailedPrecondition, "instance %q has no health check to wait for", instance.GetName())
+		}
+		return stream.Send(&dicerdv1.WaitInstanceResponse{State: stateRunning})
+	}
 	if !req.GetNextStop() && (now.GetState() == stateStopped || now.GetState() == stateFailed) {
 		return stream.Send(now)
 	}

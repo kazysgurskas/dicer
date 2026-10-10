@@ -170,7 +170,8 @@ type DaemonServiceClient interface {
 	// the stream's one message. A restart is not a stop, and nor is standby.
 	// The daemon sends the response headers once it is waiting, so a caller
 	// that reads them before starting the instance cannot miss how it ends,
-	// even if it is deleted as it stops.
+	// even if it is deleted as it stops. With WAIT_CONDITION_HEALTHY, it waits
+	// instead for the running instance's health check to pass.
 	WaitInstance(ctx context.Context, in *WaitInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WaitInstanceResponse], error)
 	// GetInstanceLogs streams an instance's log. The guest's console is kept
 	// with the instance, so it can be read after a stop to explain one.
@@ -990,7 +991,8 @@ type DaemonServiceServer interface {
 	// the stream's one message. A restart is not a stop, and nor is standby.
 	// The daemon sends the response headers once it is waiting, so a caller
 	// that reads them before starting the instance cannot miss how it ends,
-	// even if it is deleted as it stops.
+	// even if it is deleted as it stops. With WAIT_CONDITION_HEALTHY, it waits
+	// instead for the running instance's health check to pass.
 	WaitInstance(*WaitInstanceRequest, grpc.ServerStreamingServer[WaitInstanceResponse]) error
 	// GetInstanceLogs streams an instance's log. The guest's console is kept
 	// with the instance, so it can be read after a stop to explain one.

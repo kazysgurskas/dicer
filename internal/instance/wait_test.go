@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/konradasb/dicer/internal/errdefs"
+	"github.com/konradasb/dicer/internal/health"
 )
 
 // waitInBackground waits for the harness instance to stop, and returns where
@@ -160,4 +161,101 @@ func TestWaitGivesUpWithItsContext(t *testing.T) {
 	if _, err := w.Wait(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Wait = %v, want the context's error", err)
 	}
+}
+
+// waitHealthyInBackground waits for the harness instance to be healthy, and
+// returns where the wait's error arrives.
+func waitHealthyInBackground(t *testing.T, h *harness) <-chan error {
+	t.Helper()
+
+	w, err := h.manager.Waiter(h.instance.Name, WaitOptions{Condition: WaitConditionHealthy})
+	if err != nil {
+		t.Fatalf("Waiter: %v", err)
+	}
+	t.Cleanup(w.Close)
+
+	done := make(chan error, 1)
+	go func() {
+		status, err := w.Wait(t.Context())
+		if err == nil && status.State != StateRunning {
+			err = errors.New("the wait ended with the instance " + string(status.State))
+		}
+		done <- err
+	}()
+	return done
+}
+
+// waitEndsWithin returns the error the wait ended with, failing the test if
+// it does not end in time.
+func waitEndsWithin(t *testing.T, done <-chan error) error {
+	t.Helper()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("the wait did not end")
+		return nil
+	}
+}
+
+// An unhealthy instance is waited for until a probe passes.
+func TestWaitForHealthyEndsOnceTheCheckPasses(t *testing.T) {
+	h, probe := monitored(t, RestartPolicy{}, false)
+	h.start(t)
+	h.waitForHealth(t, health.StatusUnhealthy)
+
+	done := waitHealthyInBackground(t, h)
+	select {
+	case err := <-done:
+		t.Fatalf("the wait ended with %v while the instance was unhealthy", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	probe.set(true, nil)
+	if err := waitEndsWithin(t, done); err != nil {
+		t.Errorf("Wait = %v, want the instance healthy", err)
+	}
+}
+
+func TestWaitForHealthyEndsAtOnceForAHealthyInstance(t *testing.T) {
+	h, _ := monitored(t, RestartPolicy{}, true)
+	h.start(t)
+	h.waitForHealth(t, health.StatusHealthy)
+
+	if err := waitEndsWithin(t, waitHealthyInBackground(t, h)); err != nil {
+		t.Errorf("Wait = %v, want the instance healthy", err)
+	}
+}
+
+// A wait that could never end well is refused rather than left hanging.
+func TestWaitForHealthyFailsForAnInstanceThatCannotBecomeHealthy(t *testing.T) {
+	t.Run("no check", func(t *testing.T) {
+		h := newHarness(t)
+		h.start(t)
+
+		if err := waitEndsWithin(t, waitHealthyInBackground(t, h)); !errors.Is(err, errdefs.ErrInvalidState) {
+			t.Errorf("Wait = %v, want errdefs.ErrInvalidState", err)
+		}
+	})
+
+	t.Run("stopped", func(t *testing.T) {
+		h, _ := monitored(t, RestartPolicy{}, true)
+		h.define()
+
+		if err := waitEndsWithin(t, waitHealthyInBackground(t, h)); !errors.Is(err, errdefs.ErrInvalidState) {
+			t.Errorf("Wait = %v, want errdefs.ErrInvalidState", err)
+		}
+	})
+
+	t.Run("stops while waited for", func(t *testing.T) {
+		h, _ := monitored(t, RestartPolicy{}, false)
+		h.start(t)
+		done := waitHealthyInBackground(t, h)
+
+		h.exit(t, 0)
+		if err := waitEndsWithin(t, done); !errors.Is(err, errdefs.ErrInvalidState) {
+			t.Errorf("Wait = %v, want errdefs.ErrInvalidState", err)
+		}
+	})
 }

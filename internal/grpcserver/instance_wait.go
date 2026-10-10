@@ -12,11 +12,18 @@ import (
 	dicerdv1 "github.com/konradasb/dicer/proto/dicerd/v1"
 )
 
-// WaitInstance waits for an instance to stop, and sends how it ended.
+// WaitInstance waits for an instance to stop and sends how it ended, or waits
+// for it to be healthy.
 func (h *instanceHandler) WaitInstance(
 	req *dicerdv1.WaitInstanceRequest, stream grpc.ServerStreamingServer[dicerdv1.WaitInstanceResponse],
 ) error {
-	w, err := h.instanceManager.Waiter(req.GetName(), instance.WaitOptions{ID: req.GetId(), NextStop: req.GetNextStop()})
+	condition, err := waitConditions.fromProto(req.GetCondition())
+	if err != nil {
+		return err
+	}
+	w, err := h.instanceManager.Waiter(req.GetName(), instance.WaitOptions{
+		ID: req.GetId(), Condition: condition, NextStop: req.GetNextStop(),
+	})
 	if err != nil {
 		return err
 	}

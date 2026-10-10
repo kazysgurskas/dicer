@@ -43,7 +43,7 @@ The common commands are shortcuts for the management commands most used: `dicer 
 | [`dicer stop`]({{< relref "/docs/reference/cli/dicer_stop" >}}) | Stop one or more running instances, keeping their definitions and disks. |
 | [`dicer top`]({{< relref "/docs/reference/cli/dicer_top" >}}) | List the processes running in an instance. |
 | [`dicer update`]({{< relref "/docs/reference/cli/dicer_update" >}}) | Change a stopped instance's definition. |
-| [`dicer wait`]({{< relref "/docs/reference/cli/dicer_wait" >}}) | Wait until one or more instances stop, and print their exit codes. |
+| [`dicer wait`]({{< relref "/docs/reference/cli/dicer_wait" >}}) | Wait until one or more instances stop, or are healthy. |
 
 ### Management commands
 

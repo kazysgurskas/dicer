@@ -84,6 +84,22 @@ Each change of health is also an [event](../monitoring#events), `healthy` or
 A paused instance is not probed. Each new start, of the instance or of the
 daemon, begins again at `starting`.
 
+## Waiting until an instance is healthy
+
+To wait for an instance to be ready, for example in a script that uses it
+next, wait for its health check to pass:
+
+```console
+$ dicer wait --condition healthy --timeout 2m api
+```
+
+`dicer wait --condition healthy` returns as soon as the check passes, or at
+once if it already has. It keeps waiting while the instance is unhealthy,
+because a later probe or a restart can still make it healthy. Use
+`--timeout` so that it gives up. It fails if the instance has no health
+check, is not running, or stops before it is healthy. From Go, call
+`Instances.Wait` with `WaitOptions{Condition: dicer.WaitConditionHealthy}`.
+
 ## When an instance is unhealthy
 
 What happens depends on the instance's [restart policy](../restarts):

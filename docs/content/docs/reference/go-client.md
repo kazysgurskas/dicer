@@ -1578,7 +1578,7 @@ Update changes the definition of a stopped instance.
 func (s *Instances) Wait(ctx context.Context, name string, opts WaitOptions) (int, error)
 ```
 
-Wait waits for an instance to stop, and returns the status its guest ended with, as Waiter.Wait does. Without opts.NextStop, an instance that has already stopped is not waited for: its last status is returned at once. One that has been deleted is not found, so a caller that wants the status of an instance deleted as it stops, as RemoveOnExit does, waits for it with a Waiter made before it starts.
+Wait waits for an instance to stop, or for what opts.Condition says, and returns the status its guest ended with, as Waiter.Wait does. Without opts.NextStop, an instance that has already stopped is not waited for: its last status is returned at once. One that has been deleted is not found, so a caller that wants the status of an instance deleted as it stops, as RemoveOnExit does, waits for it with a Waiter made before it starts.
 
 #### func (*Instances) Waiter {#instances-waiter}
 
@@ -1586,7 +1586,7 @@ Wait waits for an instance to stop, and returns the status its guest ended with,
 func (s *Instances) Waiter(ctx context.Context, name string, opts WaitOptions) (*Waiter, error)
 ```
 
-Waiter begins waiting for an instance to stop, and returns once the daemon is waiting. An instance started after it returns cannot end unheard, even if it is deleted as it stops, so a caller that starts an instance and waits for it makes its Waiter, with NextStop, first. The caller must Close it. ctx bounds the whole wait.
+Waiter begins waiting for an instance to stop, or for what opts.Condition says, and returns once the daemon is waiting. An instance started after it returns cannot end unheard, even if it is deleted as it stops, so a caller that starts an instance and waits for it makes its Waiter, with NextStop, first. The caller must Close it. ctx bounds the whole wait.
 
 #### func (*Instances) WriteFile {#instances-writefile}
 
@@ -2606,6 +2606,30 @@ func (s *Volumes) List(ctx context.Context) ([]Volume, error)
 
 List returns every volume.
 
+### type WaitCondition {#waitcondition}
+
+```go
+type WaitCondition string
+```
+
+WaitCondition is what a wait waits for an instance to do.
+
+```go
+const (
+	// WaitConditionStopped waits for the instance to stop.
+	WaitConditionStopped WaitCondition = "stopped"
+
+	// WaitConditionHealthy waits for the running instance's health check to
+	// pass. The wait ends at once if the check has passed already. It goes on
+	// while the instance is unhealthy, because a later probe or a restart can
+	// make it healthy. It fails with ErrFailedPrecondition if the instance has
+	// no health check, is not running, or stops first.
+	WaitConditionHealthy WaitCondition = "healthy"
+)
+```
+
+The wait conditions.
+
 ### type WaitOptions {#waitoptions}
 
 ```go
@@ -2615,13 +2639,16 @@ type WaitOptions struct {
 	// name.
 	ID string
 
+	// Condition is what to wait for. Empty means WaitConditionStopped.
+	Condition WaitCondition
+
 	// NextStop waits for the instance's next stop, even if it is stopped
 	// now: for a caller about to start it, with Instances.Waiter.
 	NextStop bool
 }
 ```
 
-WaitOptions say which instance, and which of its stops, a wait is for.
+WaitOptions say which instance a wait is for, and what it waits for.
 
 ### type Waiter {#waiter}
 
@@ -2631,7 +2658,7 @@ type Waiter struct {
 }
 ```
 
-Waiter is a wait for an instance to stop that the daemon has begun. See Instances.Waiter.
+Waiter is a wait for an instance that the daemon has begun. See Instances.Waiter.
 
 #### func (*Waiter) Close {#waiter-close}
 
@@ -2647,4 +2674,4 @@ Close ends the wait.
 func (w *Waiter) Wait() (int, error)
 ```
 
-Wait returns the status the instance's guest ended with: its workload's exit code, 0 for a guest that powered itself off or was stopped, or UnknownExitCode for one that failed without saying how. An instance its restart policy starts again has not stopped, so the wait goes on.
+Wait returns the status the instance's guest ended with: its workload's exit code, 0 for a guest that powered itself off or was stopped, or UnknownExitCode for one that failed without saying how. An instance its restart policy starts again has not stopped, so the wait goes on. A wait for WaitConditionHealthy returns 0 once the instance is healthy.

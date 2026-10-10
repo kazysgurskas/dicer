@@ -109,6 +109,11 @@ var snapshotKinds = enum[instance.SnapshotKind, dicerdv1.SnapshotKind]{"snapshot
 	instance.SnapshotKindDisk:   dicerdv1.SnapshotKind_SNAPSHOT_KIND_DISK,
 }}
 
+var waitConditions = enum[instance.WaitCondition, dicerdv1.WaitCondition]{"wait condition", map[instance.WaitCondition]dicerdv1.WaitCondition{
+	instance.WaitConditionStopped: dicerdv1.WaitCondition_WAIT_CONDITION_STOPPED,
+	instance.WaitConditionHealthy: dicerdv1.WaitCondition_WAIT_CONDITION_HEALTHY,
+}}
+
 var eventKinds = enum[event.Kind, dicerdv1.EventKind]{"event kind", map[event.Kind]dicerdv1.EventKind{
 	event.KindInstance: dicerdv1.EventKind_EVENT_KIND_INSTANCE,
 	event.KindSnapshot: dicerdv1.EventKind_EVENT_KIND_SNAPSHOT,

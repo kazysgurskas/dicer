@@ -213,7 +213,7 @@ var sentByName = map[protoreflect.Name][]protoreflect.Name{
 	"DeleteInstanceRequest":         {"name", "force"},
 	"ListInstancesRequest":          {},
 	"GetInstanceRequest":            {"name"},
-	"WaitInstanceRequest":           {"name", "id", "next_stop"},
+	"WaitInstanceRequest":           {"name", "id", "next_stop", "condition"},
 	"GetInstanceStatsRequest":       {"names", "follow"},
 	"ListInstanceProcessesRequest":  {"name"},
 	"CreateSnapshotRequest":         {"instance", "name"},

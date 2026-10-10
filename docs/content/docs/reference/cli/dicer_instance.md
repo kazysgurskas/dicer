@@ -30,4 +30,4 @@ Manage instances.
 | [`dicer instance stop`]({{< relref "/docs/reference/cli/dicer_instance_stop" >}}) | Stop one or more running instances, keeping their definitions and disks. |
 | [`dicer instance top`]({{< relref "/docs/reference/cli/dicer_instance_top" >}}) | List the processes running in an instance. |
 | [`dicer instance update`]({{< relref "/docs/reference/cli/dicer_instance_update" >}}) | Change a stopped instance's definition. |
-| [`dicer instance wait`]({{< relref "/docs/reference/cli/dicer_instance_wait" >}}) | Wait until one or more instances stop, and print their exit codes. |
+| [`dicer instance wait`]({{< relref "/docs/reference/cli/dicer_instance_wait" >}}) | Wait until one or more instances stop, or are healthy. |

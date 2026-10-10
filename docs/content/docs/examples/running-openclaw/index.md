@@ -24,7 +24,7 @@ $ dicer run -d --name openclaw --vcpus 2 --memory 4GiB --disk 20GiB \
     -p 18789:18789 ghcr.io/openclaw/openclaw:2026.9.3 \
     sh -c 'openclaw doctor --fix --non-interactive; exec openclaw gateway --allow-unconfigured'
 Instance openclaw started in 1s (172.20.55.87)
-$ until dicer ps --filter name=openclaw | grep -q '(healthy)'; do sleep 2; done
+$ dicer wait --condition healthy --timeout 3m openclaw
 ```
 
 The command runs `openclaw doctor`, which checks and repairs OpenClaw's
@@ -54,7 +54,7 @@ Updated config: ~/.openclaw/openclaw.json
   Backup: ~/.openclaw/openclaw.json.bak
 $ dicer restart openclaw
 Instance openclaw restarted in 2.5s (172.20.55.87)
-$ until dicer ps --filter name=openclaw | grep -q '(healthy)'; do sleep 2; done
+$ dicer wait --condition healthy --timeout 3m openclaw
 $ dicer ps --wide --filter name=openclaw
 NAME      IMAGE                               STATE    STATUS                   VCPU  MEMORY  DISK    NETWORK  IP            PORTS  CREATED
 openclaw  ghcr.io/openclaw/openclaw:2026.9.3  Running  Up 20 seconds (healthy)  2     4 GiB   20 GiB  default  172.20.55.87  -      51 seconds ago
