@@ -163,7 +163,7 @@ func ask(t *testing.T, transport, addr, name string, qtype dnsmessage.Type) dnsm
 	t.Helper()
 
 	q := dnsmessage.Message{
-		Header:    dnsmessage.Header{ID: 4242, RecursionDesired: true},
+		ID: 4242, RecursionDesired: true,
 		Questions: []dnsmessage.Question{{Name: dnsmessage.MustNewName(name), Type: qtype, Class: dnsmessage.ClassINET}},
 	}
 	query, err := q.Pack()
@@ -522,7 +522,7 @@ func TestServerRefusesWhatIsNotAQuery(t *testing.T) {
 
 	// Two questions in one query: format error.
 	q := dnsmessage.Message{
-		Header: dnsmessage.Header{ID: 4242},
+		ID: 4242,
 		Questions: []dnsmessage.Question{
 			{Name: dnsmessage.MustNewName("a."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET},
 			{Name: dnsmessage.MustNewName("b."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET},

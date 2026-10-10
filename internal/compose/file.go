@@ -751,8 +751,7 @@ func checkMerged(n *yaml.Node, t reflect.Type) error {
 // yamlFields maps the keys a struct decodes to the types of their fields.
 func yamlFields(t reflect.Type) map[string]reflect.Type {
 	fields := make(map[string]reflect.Type)
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		if !f.IsExported() {
 			continue
 		}

@@ -19,15 +19,15 @@ const mediatedDeviceDir = "/sys/bus/mdev/devices"
 func vmConfig(spec hypervisor.VMSpec) VmConfig {
 	return VmConfig{
 		Payload: PayloadConfig{
-			Kernel:    ptr(spec.Boot.KernelPath),
-			Cmdline:   ptr(spec.Boot.KernelArgs),
-			Initramfs: ptr(spec.Boot.InitrdPath),
+			Kernel:    new(spec.Boot.KernelPath),
+			Cmdline:   new(spec.Boot.KernelArgs),
+			Initramfs: new(spec.Boot.InitrdPath),
 		},
-		Cpus:    ptr(cpusConfig(spec.CPU)),
-		Memory:  ptr(memoryConfig(spec.Memory, len(spec.Filesystems) > 0)),
-		Disks:   ptr(mapSlice(spec.Disks, diskConfig)),
+		Cpus:    new(cpusConfig(spec.CPU)),
+		Memory:  new(memoryConfig(spec.Memory, len(spec.Filesystems) > 0)),
+		Disks:   new(mapSlice(spec.Disks, diskConfig)),
 		Fs:      optionalSlice(mapSlice(spec.Filesystems, fsConfig)),
-		Serial:  &SerialConfig{Mode: ConsoleModeFile, File: ptr(spec.Console.Path)},
+		Serial:  &SerialConfig{Mode: ConsoleModeFile, File: new(spec.Console.Path)},
 		Console: &ConsoleConfig{Mode: ConsoleModeOff},
 		Net:     optionalSlice(mapSlice(spec.NetworkInterfaces, netConfig)),
 		Vsock:   vsockConfig(spec.Vsock),
@@ -41,16 +41,16 @@ func cpusConfig(c hypervisor.CPUConfig) CpusConfig {
 		cpus.MaxVcpus = c.MaxCount
 	}
 	if len(c.Affinity) > 0 {
-		cpus.Affinity = ptr(mapSlice(c.Affinity, func(a hypervisor.CPUAffinity) CpuAffinity {
+		cpus.Affinity = new(mapSlice(c.Affinity, func(a hypervisor.CPUAffinity) CpuAffinity {
 			return CpuAffinity{Vcpu: a.VCPU, HostCpus: a.HostCPUs}
 		}))
 	}
 	if t := c.Topology; t != nil {
 		cpus.Topology = &CpuTopology{
-			ThreadsPerCore: ptr(t.ThreadsPerCore),
-			CoresPerDie:    ptr(t.CoresPerDie),
-			DiesPerPackage: ptr(t.DiesPerPackage),
-			Packages:       ptr(t.Packages),
+			ThreadsPerCore: new(t.ThreadsPerCore),
+			CoresPerDie:    new(t.CoresPerDie),
+			DiesPerPackage: new(t.DiesPerPackage),
+			Packages:       new(t.Packages),
 		}
 	}
 	return cpus
@@ -67,11 +67,11 @@ const virtioMemAlignment = 128 << 20
 func memoryConfig(m hypervisor.MemoryConfig, shared bool) MemoryConfig {
 	memory := MemoryConfig{Size: m.SizeBytes}
 	if shared {
-		memory.Shared = ptr(true)
+		memory.Shared = new(true)
 	}
 	if m.HotplugBytes > 0 {
-		memory.HotplugSize = ptr((m.HotplugBytes + virtioMemAlignment - 1) / virtioMemAlignment * virtioMemAlignment)
-		memory.HotplugMethod = ptr("VirtioMem")
+		memory.HotplugSize = new((m.HotplugBytes + virtioMemAlignment - 1) / virtioMemAlignment * virtioMemAlignment)
+		memory.HotplugMethod = new("VirtioMem")
 	}
 	return memory
 }
@@ -83,9 +83,9 @@ func memoryConfig(m hypervisor.MemoryConfig, shared bool) MemoryConfig {
 // sector 0 of a raw disk whose type it had to guess, and ext4 writes its
 // superblock there. Older versions ignore the field.
 func diskConfig(d hypervisor.DiskConfig) DiskConfig {
-	disk := DiskConfig{Path: ptr(d.Path), ImageType: ptr(Raw)}
+	disk := DiskConfig{Path: new(d.Path), ImageType: new(Raw)}
 	if d.ReadOnly {
-		disk.Readonly = ptr(true)
+		disk.Readonly = new(true)
 	}
 	if d.RateLimitBytesPerSecond > 0 || d.RateLimitIOPS > 0 {
 		disk.RateLimiterConfig = &RateLimiterConfig{
@@ -117,9 +117,9 @@ func fsConfig(f hypervisor.FilesystemConfig) FsConfig {
 }
 
 func netConfig(n hypervisor.NetworkInterfaceConfig) NetConfig {
-	net := NetConfig{Tap: ptr(n.TAPDevice), Ip: ptr(n.IP), Mac: ptr(n.MAC), Mask: ptr(n.Netmask)}
+	net := NetConfig{Tap: new(n.TAPDevice), Ip: new(n.IP), Mac: new(n.MAC), Mask: new(n.Netmask)}
 	if n.MTU > 0 {
-		net.Mtu = ptr(n.MTU)
+		net.Mtu = new(n.MTU)
 	}
 	return net
 }
@@ -135,11 +135,11 @@ func vsockConfig(v *hypervisor.VsockConfig) *VsockConfig {
 // VFIO: the PCI devices, then the GPU's mediated device.
 func deviceConfigs(spec hypervisor.VMSpec) []DeviceConfig {
 	devices := mapSlice(spec.PCIDevices, func(d hypervisor.PCIDeviceConfig) DeviceConfig {
-		return DeviceConfig{Path: ptr(d.Path)}
+		return DeviceConfig{Path: new(d.Path)}
 	})
 	if spec.GPU != nil {
 		devices = append(devices, DeviceConfig{
-			Path: ptr(path.Join(mediatedDeviceDir, spec.GPU.MediatedDeviceUUID)),
+			Path: new(path.Join(mediatedDeviceDir, spec.GPU.MediatedDeviceUUID)),
 		})
 	}
 	return devices
@@ -163,6 +163,7 @@ func optionalSlice[T any](s []T) *[]T {
 	return &s
 }
 
+//go:fix inline
 func ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }

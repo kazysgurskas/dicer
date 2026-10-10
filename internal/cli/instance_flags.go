@@ -656,8 +656,7 @@ func parseEnv(specs, files []string) (map[string]string, error) {
 
 // osCause strips the operation and path from a file error.
 func osCause(err error) error {
-	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
 		return pathErr.Err
 	}
 	return err

@@ -134,20 +134,6 @@ if errors.Is(err, dicer.ErrNotFound) {
 
 The error's message is the daemon's, written for a person to read.
 
-## Functions {#functions}
-
-### func Ptr {#ptr}
-
-```go
-func Ptr[T any](v T) *T
-```
-
-Ptr returns a pointer to v, for the fields of an InstanceUpdate:
-
-```go
-update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4)}
-```
-
 ## Types {#types}
 
 ### type Architecture {#architecture}
@@ -1386,10 +1372,10 @@ type InstanceUpdate struct {
 }
 ```
 
-InstanceUpdate is a change to a stopped instance's definition. Only the fields that are set change: a pointer that is not nil, an enumeration that is not empty, and a slice or map that is not empty, which replaces the existing value whole. The image cannot be changed: an instance always boots the image it was created with. Ptr makes the pointers:
+InstanceUpdate is a change to a stopped instance's definition. Only the fields that are set change: a pointer that is not nil, an enumeration that is not empty, and a slice or map that is not empty, which replaces the existing value whole. The image cannot be changed: an instance always boots the image it was created with. new makes the pointers:
 
 ```go
-update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4), Labels: map[string]string{"tier": "web"}}
+update := dicer.InstanceUpdate{VCPUs: new(4), Labels: map[string]string{"tier": "web"}}
 ```
 
 ### type Instances {#instances}

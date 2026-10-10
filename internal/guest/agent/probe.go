@@ -71,8 +71,7 @@ func probeExec(ctx context.Context, command []string) (string, error) {
 	cmd.WaitDelay = time.Second
 
 	err := cmd.Run()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		err = fmt.Errorf("exited with code %d", exitErr.ExitCode())
 	}
 	return out.String(), err

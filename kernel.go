@@ -142,13 +142,11 @@ func importKernelStart(spec KernelSpec) (*dicerdv1.ImportKernelStart, error) {
 // kernelFromProto returns the kernel p describes.
 func kernelFromProto(p *dicerdv1.Kernel) Kernel {
 	return Kernel{
-		ID: p.GetId(),
-		KernelSpec: KernelSpec{
-			Name:         p.GetName(),
-			Architecture: architectures.fromProto(p.GetArch()),
-			SHA256:       p.GetSha256(),
-		},
-		CreateTime: timeFromProto(p.GetCreateTime()),
-		UpdateTime: timeFromProto(p.GetUpdateTime()),
+		ID:           p.GetId(),
+		Name:         p.GetName(),
+		Architecture: architectures.fromProto(p.GetArch()),
+		SHA256:       p.GetSha256(),
+		CreateTime:   timeFromProto(p.GetCreateTime()),
+		UpdateTime:   timeFromProto(p.GetUpdateTime()),
 	}
 }

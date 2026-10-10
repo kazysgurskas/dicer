@@ -46,8 +46,7 @@ func (e *PullError) Unwrap() []error {
 func (e *PullError) describe() (string, error) {
 	host := registryHost(e.Ref)
 
-	var httpErr *transport.Error
-	if errors.As(e.Cause, &httpErr) {
+	if httpErr, ok := errors.AsType[*transport.Error](e.Cause); ok {
 		switch httpErr.StatusCode {
 		case http.StatusNotFound:
 			return fmt.Sprintf("image %q not found on %s", e.Ref, host), errdefs.ErrNotFound
@@ -62,13 +61,11 @@ func (e *PullError) describe() (string, error) {
 
 	// Checked before network errors: credentials are resolved inside the
 	// HTTP transport, which wraps their failure as if it were the network's.
-	var credentialsErr *registry.CredentialsError
-	if errors.As(e.Cause, &credentialsErr) {
+	if credentialsErr, ok := errors.AsType[*registry.CredentialsError](e.Cause); ok {
 		return fmt.Sprintf("cannot log in to %s: %v", host, credentialsErr.Err), errdefs.ErrUnavailable
 	}
 
-	var netErr net.Error
-	if errors.As(e.Cause, &netErr) {
+	if _, ok := errors.AsType[net.Error](e.Cause); ok {
 		return fmt.Sprintf("cannot reach %s: %v", host, innermost(e.Cause)), errdefs.ErrUnavailable
 	}
 

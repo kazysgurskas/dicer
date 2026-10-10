@@ -141,11 +141,9 @@ func (s *Tokens) Delete(ctx context.Context, name string) error {
 // tokenFromProto returns the token p describes.
 func tokenFromProto(p *dicerdv1.Token) Token {
 	return Token{
-		ID: p.GetId(),
-		TokenSpec: TokenSpec{
-			Name:   p.GetName(),
-			Scopes: convertAll(p.GetScopes(), func(s string) Scope { return Scope(s) }),
-		},
+		ID:          p.GetId(),
+		Name:        p.GetName(),
+		Scopes:      convertAll(p.GetScopes(), func(s string) Scope { return Scope(s) }),
 		CreateTime:  timeFromProto(p.GetCreateTime()),
 		UpdateTime:  timeFromProto(p.GetUpdateTime()),
 		LastUseTime: timeFromProto(p.GetLastUseTime()),

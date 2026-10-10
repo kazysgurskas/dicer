@@ -131,11 +131,9 @@ func TestShellJoin(t *testing.T) {
 
 func TestInstanceFilters(t *testing.T) {
 	instance := dicer.Instance{
-		InstanceSpec: dicer.InstanceSpec{
-			Name: "web-1", ImageRef: "nginx:1.27", NetworkName: "default",
-			Labels: map[string]string{"team": "web"},
-		},
-		State: dicer.InstanceStateRunning,
+		Name: "web-1", ImageRef: "nginx:1.27", NetworkName: "default",
+		Labels: map[string]string{"team": "web"},
+		State:  dicer.InstanceStateRunning,
 	}
 
 	for _, tc := range []struct {

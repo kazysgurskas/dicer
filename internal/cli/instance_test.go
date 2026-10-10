@@ -244,7 +244,7 @@ func TestCommandLinesShowTheInitModeOnlyWhenChosen(t *testing.T) {
 		dicer.InitModeAuto:    {"the image's"},
 		dicer.InitModeSystemd: {"the image's", "in systemd mode"},
 	} {
-		got := commandLines(dicer.Instance{InstanceSpec: dicer.InstanceSpec{InitMode: mode}})
+		got := commandLines(dicer.Instance{InitMode: mode})
 		if strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("init mode %q: %q, want %q", mode, got, want)
 		}
@@ -643,9 +643,9 @@ func TestInstanceStatusForAnInstanceThatEnded(t *testing.T) {
 		instance dicer.Instance
 		want     string
 	}{
-		{dicer.Instance{State: dicer.InstanceStateStopped, ExitCode: dicer.Ptr(0), FinishTime: ago}, "Exited (0) 2 minutes ago"},
+		{dicer.Instance{State: dicer.InstanceStateStopped, ExitCode: new(0), FinishTime: ago}, "Exited (0) 2 minutes ago"},
 		{
-			dicer.Instance{State: dicer.InstanceStateFailed, StateError: "exit code 1", ExitCode: dicer.Ptr(1), FinishTime: ago},
+			dicer.Instance{State: dicer.InstanceStateFailed, StateError: "exit code 1", ExitCode: new(1), FinishTime: ago},
 			"Exited (1) 2 minutes ago",
 		},
 		{dicer.Instance{State: dicer.InstanceStateFailed, StateError: "the guest reset"}, "Failed: the guest reset"},

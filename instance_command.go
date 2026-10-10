@@ -295,7 +295,7 @@ func (c *Cmd) receiveOutput() {
 		case *dicerdv1.ExecInstanceResponse_Stderr:
 			write(c.Stderr, p.Stderr)
 		case *dicerdv1.ExecInstanceResponse_ExitCode:
-			code = Ptr(int(p.ExitCode))
+			code = new(int(p.ExitCode))
 		}
 	}
 }

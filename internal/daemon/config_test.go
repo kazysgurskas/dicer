@@ -522,8 +522,7 @@ func referenceEntry(page, key string) (string, bool) {
 // configKeys returns the dotted YAML path of every leaf key in t.
 func configKeys(t reflect.Type, prefix string) []string {
 	var keys []string
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		name, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
 		if name == "" || name == "-" {
 			continue

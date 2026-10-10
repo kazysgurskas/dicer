@@ -119,9 +119,9 @@ func (s *Starter) RestoreVM(
 	}
 	defer cu.Clean()
 
-	config := RestoreConfig{SourceUrl: "file://" + snapshotPath, Prefault: ptr(false)}
+	config := RestoreConfig{SourceUrl: "file://" + snapshotPath, Prefault: new(false)}
 	if s.restoresMemoryOnDemand {
-		config.MemoryRestoreMode = ptr(OnDemand)
+		config.MemoryRestoreMode = new(OnDemand)
 	}
 	if _, err := hv.client.PutVmRestoreWithResponse(ctx, config); err != nil {
 		return nil, nil, fmt.Errorf("restore snapshot: %w", err)

@@ -38,13 +38,11 @@ func exitStatus(cmd *cobra.Command, stderr io.Writer) int {
 		return 0
 	}
 
-	var exitErr *exitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exitError](err); ok {
 		return exitErr.code
 	}
 
-	var usageErr *usageError
-	if errors.As(err, &usageErr) {
+	if usageErr, ok := errors.AsType[*usageError](err); ok {
 		writeUsageError(stderr, usageErr)
 		return 1
 	}

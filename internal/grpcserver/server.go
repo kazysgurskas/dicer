@@ -134,7 +134,7 @@ func NewServer(cfg Config) *Server {
 			instanceManager: cfg.InstanceManager,
 		},
 		volumeHandler: volumeHandler{volumeManager: cfg.VolumeManager},
-		kernelHandler: kernelHandler{kernelManager: cfg.KernelManager},
+		kernelManager: cfg.KernelManager,
 		tokenHandler: tokenHandler{
 			tokenManager: cfg.TokenManager,
 			servesTCP:    cfg.ListenAddress != "",
@@ -156,7 +156,7 @@ func NewServer(cfg Config) *Server {
 			hostAddresses: cfg.HostAddresses,
 			fingerprint:   cfg.Fingerprint,
 		},
-		eventsHandler:  eventsHandler{events: cfg.Events},
+		events:         cfg.Events,
 		metrics:        newMetrics(),
 		auditLog:       newAuditLog(logger),
 		authentication: newAuthentication(cfg.TokenManager, logger),

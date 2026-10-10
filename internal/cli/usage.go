@@ -178,8 +178,7 @@ var unknownCommand = regexp.MustCompile(`^unknown command "(.*)" for "(.*)"(?s:\
 //
 // It returns false for any other error.
 func unknownCommandMessage(err error) (string, bool) {
-	var e *usageError
-	if errors.As(err, &e) {
+	if _, ok := errors.AsType[*usageError](err); ok {
 		return "", false
 	}
 

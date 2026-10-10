@@ -127,8 +127,8 @@ func TestWriteEventJSON(t *testing.T) {
 // inspect ends with what happened to the instance lately, lined up.
 func TestInspectShowsRecentEvents(t *testing.T) {
 	instance := dicer.Instance{
-		InstanceSpec: dicer.InstanceSpec{Name: "grafana", ImageRef: "grafana/grafana"},
-		State:        dicer.InstanceStateRunning,
+		Name: "grafana", ImageRef: "grafana/grafana",
+		State: dicer.InstanceStateRunning,
 	}
 	recent := []dicer.Event{
 		testEvent("unhealthy", "Check failed 3 times: timed out after 5s"),

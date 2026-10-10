@@ -72,8 +72,7 @@ func CheckDir(path string) error {
 
 // named makes a file error name path, rather than where the daemon found it.
 func named(err error, path string) error {
-	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
 		return &fs.PathError{Op: pathErr.Op, Path: path, Err: pathErr.Err}
 	}
 	return err

@@ -25,7 +25,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/opencontainers/go-digest"
-	specs "github.com/opencontainers/image-spec/specs-go"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/umoci/oci/cas/dir"
@@ -396,8 +395,8 @@ func ociManifest(gcrManifest *gcr.Manifest) ispec.Manifest {
 	}
 
 	return ispec.Manifest{
-		Versioned: specs.Versioned{SchemaVersion: int(gcrManifest.SchemaVersion)},
-		MediaType: ociMediaType(string(gcrManifest.MediaType)),
+		SchemaVersion: int(gcrManifest.SchemaVersion),
+		MediaType:     ociMediaType(string(gcrManifest.MediaType)),
 		Config: ispec.Descriptor{
 			MediaType:   ociMediaType(string(gcrManifest.Config.MediaType)),
 			Digest:      ociDigest(gcrManifest.Config.Digest),

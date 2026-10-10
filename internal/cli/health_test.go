@@ -117,8 +117,8 @@ func TestHealthRendering(t *testing.T) {
 
 	// A stopped instance shows the check it is configured with.
 	stopped := dicer.Instance{
-		InstanceSpec: dicer.InstanceSpec{HealthCheck: &dicer.HealthCheck{Disabled: true}},
-		State:        dicer.InstanceStateStopped,
+		HealthCheck: &dicer.HealthCheck{Disabled: true},
+		State:       dicer.InstanceStateStopped,
 	}
 	if got := healthLines(stopped, palette{}); !slices.Equal(got, []string{"disabled"}) {
 		t.Errorf("health of a stopped instance = %q, want its configured check", got)

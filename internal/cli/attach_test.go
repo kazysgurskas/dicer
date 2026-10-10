@@ -63,8 +63,7 @@ func awaitState(t *testing.T, d *fakeInstanceDaemon, name string, state dicerdv1
 
 // exitCode is the status err makes the process exit with.
 func exitCode(err error) int {
-	var exitErr *exitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exitError](err); ok {
 		return exitErr.code
 	}
 	if err != nil {

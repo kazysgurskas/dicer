@@ -114,7 +114,7 @@ func TestInstanceView(t *testing.T) {
 			name: "failed, with why",
 			instance: dicer.Instance{
 				InstanceSpec: dicer.InstanceSpec{Name: "job", ImageRef: "app"},
-				State:        dicer.InstanceStateFailed, ExitCode: dicer.Ptr(1), FinishTime: ago(5 * time.Minute),
+				State:        dicer.InstanceStateFailed, ExitCode: new(1), FinishTime: ago(5 * time.Minute),
 				StateError: "gave up after 3 restarts: exit code 1",
 			},
 			want: []string{

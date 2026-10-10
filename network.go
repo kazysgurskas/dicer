@@ -151,21 +151,19 @@ func createNetworkRequest(spec NetworkSpec) *dicerdv1.CreateNetworkRequest {
 // networkFromProto returns the network p describes.
 func networkFromProto(p *dicerdv1.Network) Network {
 	return Network{
-		ID: p.GetId(),
-		NetworkSpec: NetworkSpec{
-			Name:        p.GetName(),
-			Subnet:      p.GetSubnet(),
-			Gateway:     p.GetGateway(),
-			MTU:         int(p.GetMtu()),
-			Nameservers: p.GetNameservers(),
-			Isolated:    p.GetIsolated(),
-			Internal:    p.GetInternal(),
-		},
-		Bridge:     p.GetBridge(),
-		TotalIPs:   p.GetTotalIps(),
-		FreeIPs:    p.GetFreeIps(),
-		CreateTime: timeFromProto(p.GetCreateTime()),
-		UpdateTime: timeFromProto(p.GetUpdateTime()),
+		ID:          p.GetId(),
+		Name:        p.GetName(),
+		Subnet:      p.GetSubnet(),
+		Gateway:     p.GetGateway(),
+		MTU:         int(p.GetMtu()),
+		Nameservers: p.GetNameservers(),
+		Isolated:    p.GetIsolated(),
+		Internal:    p.GetInternal(),
+		Bridge:      p.GetBridge(),
+		TotalIPs:    p.GetTotalIps(),
+		FreeIPs:     p.GetFreeIps(),
+		CreateTime:  timeFromProto(p.GetCreateTime()),
+		UpdateTime:  timeFromProto(p.GetUpdateTime()),
 	}
 }
 

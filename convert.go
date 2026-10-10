@@ -54,10 +54,3 @@ func convertAll[In, Out any](in []In, convert func(In) Out) []Out {
 	}
 	return out
 }
-
-// Ptr returns a pointer to v, for the fields of an InstanceUpdate:
-//
-//	update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4)}
-func Ptr[T any](v T) *T {
-	return &v
-}

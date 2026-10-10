@@ -69,7 +69,7 @@ func (h *Host) ensureBridge(ctx context.Context, nw *network.Network, ipNet *net
 	switch {
 	case isLinkNotFound(err):
 		h.logger.InfoContext(ctx, "setting up bridge", "network_id", nw.ID, "bridge", nw.Bridge)
-		br = &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: nw.Bridge}}
+		br = &netlink.Bridge{Name: nw.Bridge}
 		if err := netlink.LinkAdd(br); err != nil {
 			return fmt.Errorf("create bridge %s: %w", nw.Bridge, err)
 		}

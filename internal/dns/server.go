@@ -452,17 +452,15 @@ func reply(
 	query dnsmessage.Header, questions []dnsmessage.Question, rcode dnsmessage.RCode, answers []dnsmessage.Resource,
 ) []byte {
 	msg := dnsmessage.Message{
-		Header: dnsmessage.Header{
-			ID:                 query.ID,
-			Response:           true,
-			OpCode:             query.OpCode,
-			Authoritative:      rcode != dnsmessage.RCodeServerFailure && rcode != dnsmessage.RCodeFormatError,
-			RecursionDesired:   query.RecursionDesired,
-			RecursionAvailable: true,
-			RCode:              rcode,
-		},
-		Questions: questions,
-		Answers:   answers,
+		ID:                 query.ID,
+		Response:           true,
+		OpCode:             query.OpCode,
+		Authoritative:      rcode != dnsmessage.RCodeServerFailure && rcode != dnsmessage.RCodeFormatError,
+		RecursionDesired:   query.RecursionDesired,
+		RecursionAvailable: true,
+		RCode:              rcode,
+		Questions:          questions,
+		Answers:            answers,
 	}
 	out, err := msg.Pack()
 	if err != nil {

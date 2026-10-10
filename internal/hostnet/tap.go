@@ -97,10 +97,10 @@ func (h *Host) RemoveTAP(ctx context.Context, nw *network.Network, instanceID st
 func addTAP(name, bridge string, isolated bool) error {
 	uid, gid := os.Getuid(), os.Getgid()
 	tap := &netlink.Tuntap{
-		LinkAttrs: netlink.LinkAttrs{Name: name},
-		Mode:      netlink.TUNTAP_MODE_TAP,
-		Owner:     uint32(uid),
-		Group:     uint32(gid),
+		Name:  name,
+		Mode:  netlink.TUNTAP_MODE_TAP,
+		Owner: uint32(uid),
+		Group: uint32(gid),
 	}
 	if err := netlink.LinkAdd(tap); err != nil {
 		return fmt.Errorf("create TAP %s: %w", name, err)

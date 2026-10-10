@@ -139,7 +139,7 @@ func (h *Hypervisor) ResumeVM(ctx context.Context) error {
 // and refuses to snapshot it. SnapshotVM then fails with
 // hypervisor.ErrRestoringMemory.
 func (h *Hypervisor) SnapshotVM(ctx context.Context, destPath string) error {
-	_, err := h.client.PutVmSnapshotWithResponse(ctx, VmSnapshotConfig{DestinationUrl: ptr("file://" + destPath)})
+	_, err := h.client.PutVmSnapshotWithResponse(ctx, VmSnapshotConfig{DestinationUrl: new("file://" + destPath)})
 	if isRestoringMemory(err) {
 		return fmt.Errorf("snapshot vm: %w", hypervisor.ErrRestoringMemory)
 	}

@@ -451,9 +451,9 @@ type CreateOptions struct {
 // fields that are set change: a pointer that is not nil, an enumeration
 // that is not empty, and a slice or map that is not empty, which replaces
 // the existing value whole. The image cannot be changed: an instance always
-// boots the image it was created with. Ptr makes the pointers:
+// boots the image it was created with. new makes the pointers:
 //
-//	update := dicer.InstanceUpdate{VCPUs: dicer.Ptr(4), Labels: map[string]string{"tier": "web"}}
+//	update := dicer.InstanceUpdate{VCPUs: new(4), Labels: map[string]string{"tier": "web"}}
 type InstanceUpdate struct {
 	// HypervisorType replaces the hypervisor the instance runs on.
 	HypervisorType HypervisorType
@@ -730,54 +730,52 @@ func instanceOf(p *dicerdv1.Instance, err error) (Instance, error) {
 // instanceFromProto returns the instance p describes.
 func instanceFromProto(p *dicerdv1.Instance) Instance {
 	instance := Instance{
-		ID:          p.GetId(),
-		ImageDigest: p.GetImageDigest(),
-		InstanceSpec: InstanceSpec{
-			Name:                   p.GetName(),
-			Hostname:               p.GetHostname(),
-			ImageRef:               p.GetImageRef(),
-			HypervisorType:         hypervisorTypes.fromProto(p.GetHypervisorType()),
-			HypervisorVersion:      p.GetHypervisorVersion(),
-			KernelName:             p.GetKernelName(),
-			KernelArgs:             p.GetKernelArgs(),
-			VCPUs:                  int(p.GetVcpus()),
-			MemoryBytes:            p.GetMemoryBytes(),
-			MaxVCPUs:               int(p.GetMaxVcpus()),
-			MaxMemoryBytes:         p.GetMaxMemoryBytes(),
-			DiskBytes:              p.GetDiskBytes(),
-			DiskBytesPerSecond:     p.GetDiskBytesPerSecond(),
-			DiskIOPS:               p.GetDiskIops(),
-			UploadBytesPerSecond:   p.GetUploadBytesPerSecond(),
-			DownloadBytesPerSecond: p.GetDownloadBytesPerSecond(),
-			StandbyAfter:           durationFromProto(p.GetStandbyAfter()),
-			NetworkName:            p.GetNetworkName(),
-			StaticIP:               p.GetStaticIp(),
-			Mounts:                 convertAll(p.GetMounts(), mountFromProto),
-			Env:                    p.GetEnv(),
-			Cmd:                    p.GetCmd(),
-			Labels:                 p.GetLabels(),
-			RestartPolicy:          restartPolicyFromProto(p.GetRestartPolicy()),
-			HealthCheck:            healthCheckFromProto(p.GetHealthCheck()),
-			InitMode:               initModes.fromProto(p.GetInitMode()),
-			Ports:                  convertAll(p.GetPorts(), portMappingFromProto),
-			RemoveOnExit:           p.GetRemoveOnExit(),
-		},
-		CreateTime:      timeFromProto(p.GetCreateTime()),
-		UpdateTime:      timeFromProto(p.GetUpdateTime()),
-		State:           instanceStates.fromProto(p.GetState()),
-		StateError:      p.GetStateError(),
-		HypervisorPID:   int(p.GetHypervisorPid()),
-		VsockCID:        p.GetVsockCid(),
-		IP:              p.GetIp(),
-		MAC:             p.GetMac(),
-		StartTime:       timeFromProto(p.GetStartTime()),
-		FinishTime:      timeFromProto(p.GetFinishTime()),
-		RestartCount:    int(p.GetRestartCount()),
-		NextRestartTime: timeFromProto(p.GetNextRestartTime()),
-		Health:          healthFromProto(p.GetHealth()),
+		ID:                     p.GetId(),
+		ImageDigest:            p.GetImageDigest(),
+		Name:                   p.GetName(),
+		Hostname:               p.GetHostname(),
+		ImageRef:               p.GetImageRef(),
+		HypervisorType:         hypervisorTypes.fromProto(p.GetHypervisorType()),
+		HypervisorVersion:      p.GetHypervisorVersion(),
+		KernelName:             p.GetKernelName(),
+		KernelArgs:             p.GetKernelArgs(),
+		VCPUs:                  int(p.GetVcpus()),
+		MemoryBytes:            p.GetMemoryBytes(),
+		MaxVCPUs:               int(p.GetMaxVcpus()),
+		MaxMemoryBytes:         p.GetMaxMemoryBytes(),
+		DiskBytes:              p.GetDiskBytes(),
+		DiskBytesPerSecond:     p.GetDiskBytesPerSecond(),
+		DiskIOPS:               p.GetDiskIops(),
+		UploadBytesPerSecond:   p.GetUploadBytesPerSecond(),
+		DownloadBytesPerSecond: p.GetDownloadBytesPerSecond(),
+		StandbyAfter:           durationFromProto(p.GetStandbyAfter()),
+		NetworkName:            p.GetNetworkName(),
+		StaticIP:               p.GetStaticIp(),
+		Mounts:                 convertAll(p.GetMounts(), mountFromProto),
+		Env:                    p.GetEnv(),
+		Cmd:                    p.GetCmd(),
+		Labels:                 p.GetLabels(),
+		RestartPolicy:          restartPolicyFromProto(p.GetRestartPolicy()),
+		HealthCheck:            healthCheckFromProto(p.GetHealthCheck()),
+		InitMode:               initModes.fromProto(p.GetInitMode()),
+		Ports:                  convertAll(p.GetPorts(), portMappingFromProto),
+		RemoveOnExit:           p.GetRemoveOnExit(),
+		CreateTime:             timeFromProto(p.GetCreateTime()),
+		UpdateTime:             timeFromProto(p.GetUpdateTime()),
+		State:                  instanceStates.fromProto(p.GetState()),
+		StateError:             p.GetStateError(),
+		HypervisorPID:          int(p.GetHypervisorPid()),
+		VsockCID:               p.GetVsockCid(),
+		IP:                     p.GetIp(),
+		MAC:                    p.GetMac(),
+		StartTime:              timeFromProto(p.GetStartTime()),
+		FinishTime:             timeFromProto(p.GetFinishTime()),
+		RestartCount:           int(p.GetRestartCount()),
+		NextRestartTime:        timeFromProto(p.GetNextRestartTime()),
+		Health:                 healthFromProto(p.GetHealth()),
 	}
 	if p.ExitCode != nil {
-		instance.ExitCode = Ptr(int(p.GetExitCode()))
+		instance.ExitCode = new(int(p.GetExitCode()))
 	}
 
 	return instance
@@ -866,10 +864,10 @@ func updateInstanceRequest(name string, update InstanceUpdate) (*dicerdv1.Update
 		Labels:                 update.Labels,
 	}
 	if update.VCPUs != nil {
-		req.Vcpus = Ptr(int32(*update.VCPUs))
+		req.Vcpus = new(int32(*update.VCPUs))
 	}
 	if update.MaxVCPUs != nil {
-		req.MaxVcpus = Ptr(int32(*update.MaxVCPUs))
+		req.MaxVcpus = new(int32(*update.MaxVCPUs))
 	}
 	if update.StandbyAfter != nil {
 		// Present even at zero, which the API reads as never.
@@ -923,7 +921,7 @@ func forkInstanceRequest(name string, opts ForkOptions) (*dicerdv1.ForkInstanceR
 func resizeInstanceRequest(name string, opts ResizeOptions) *dicerdv1.ResizeInstanceRequest {
 	req := &dicerdv1.ResizeInstanceRequest{Name: name}
 	if opts.VCPUs != 0 {
-		req.Vcpus = Ptr(int32(opts.VCPUs))
+		req.Vcpus = new(int32(opts.VCPUs))
 	}
 	if opts.MemoryBytes != 0 {
 		req.MemoryBytes = &opts.MemoryBytes

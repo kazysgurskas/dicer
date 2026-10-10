@@ -97,7 +97,7 @@ func TestConfigHash(t *testing.T) {
 func TestServiceFor(t *testing.T) {
 	p := mustLoad(t, "services: {web: {image: nginx}}", nil)
 
-	ours := dicer.Instance{InstanceSpec: dicer.InstanceSpec{Labels: map[string]string{LabelProject: "shop", LabelService: "web"}}}
+	ours := dicer.Instance{Labels: map[string]string{LabelProject: "shop", LabelService: "web"}}
 	if s, ok := p.ServiceFor(ours); !ok || s.Name != "web" {
 		t.Errorf("ServiceFor(ours) = %v, %v", s, ok)
 	}
@@ -107,7 +107,7 @@ func TestServiceFor(t *testing.T) {
 		{LabelProject: "shop", LabelService: "gone"},
 		nil,
 	} {
-		if _, ok := p.ServiceFor(dicer.Instance{InstanceSpec: dicer.InstanceSpec{Labels: labels}}); ok {
+		if _, ok := p.ServiceFor(dicer.Instance{Labels: labels}); ok {
 			t.Errorf("ServiceFor(%v) found a service", labels)
 		}
 	}

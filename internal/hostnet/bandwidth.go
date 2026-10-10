@@ -52,21 +52,18 @@ func limitUpload(tap, ifb string, bytesPerSecond int64, burstMultiplier int) err
 		return err
 	}
 
-	if err := netlink.QdiscAdd(&netlink.Ingress{QdiscAttrs: netlink.QdiscAttrs{
+	if err := netlink.QdiscAdd(&netlink.Ingress{
 		LinkIndex: tapLink.Attrs().Index,
 		Handle:    ingressHandle,
-		Parent:    netlink.HANDLE_INGRESS,
-	}}); err != nil {
+		Parent:    netlink.HANDLE_INGRESS}); err != nil {
 		return fmt.Errorf("add ingress qdisc on %s: %w", tap, err)
 	}
 	if err := netlink.FilterAdd(&netlink.MatchAll{
-		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: tapLink.Attrs().Index,
-			Parent:    ingressHandle,
-			Priority:  1,
-			Protocol:  unix.ETH_P_ALL,
-		},
-		Actions: []netlink.Action{netlink.NewMirredAction(ifbLink.Attrs().Index)},
+		LinkIndex: tapLink.Attrs().Index,
+		Parent:    ingressHandle,
+		Priority:  1,
+		Protocol:  unix.ETH_P_ALL,
+		Actions:   []netlink.Action{netlink.NewMirredAction(ifbLink.Attrs().Index)},
 	}); err != nil {
 		return fmt.Errorf("redirect %s to %s: %w", tap, ifb, err)
 	}
@@ -108,13 +105,11 @@ func limitEgressRate(device string, bytesPerSecond int64, burstMultiplier int) e
 	limitBytes := uint32(bytesPerSecond/20) + burstBytes
 
 	if err := netlink.QdiscAdd(&netlink.Tbf{
-		QdiscAttrs: netlink.QdiscAttrs{
-			LinkIndex: link.Attrs().Index,
-			Handle:    netlink.MakeHandle(1, 0),
-			Parent:    netlink.HANDLE_ROOT,
-		},
-		Rate:  rate,
-		Limit: limitBytes,
+		LinkIndex: link.Attrs().Index,
+		Handle:    netlink.MakeHandle(1, 0),
+		Parent:    netlink.HANDLE_ROOT,
+		Rate:      rate,
+		Limit:     limitBytes,
 		// The kernel takes the bucket as the time the rate takes to fill it.
 		Buffer: netlink.Xmittime(rate, burstBytes),
 	}); err != nil {

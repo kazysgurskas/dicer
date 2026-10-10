@@ -261,8 +261,7 @@ func TestManager_Pull_ConvertError(t *testing.T) {
 		t.Fatal("Pull() should fail when convert fails")
 	}
 
-	var convertErr *ConvertError
-	if !errors.As(err, &convertErr) {
+	if _, ok := errors.AsType[*ConvertError](err); !ok {
 		t.Errorf("error should be ConvertError, got: %T", err)
 	}
 }
