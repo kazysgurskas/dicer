@@ -704,6 +704,9 @@ func (b *builder) mount(m rawMount) (dicer.Mount, error) {
 		}
 		return dicer.Mount{Type: dicer.MountTypeVolume, Source: v.Name, Target: target, ReadOnly: readOnly}, nil
 	case "bind", "directory":
+		if source == "" {
+			return dicer.Mount{}, fmt.Errorf("%s %s: give the path to mount as its source", kind, target)
+		}
 		path, err := b.resolvePath(source)
 		if err != nil {
 			return dicer.Mount{}, err
