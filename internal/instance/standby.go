@@ -89,8 +89,12 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 	// may move on from.
 	dir := m.standbyDir(instance)
 	staged := dir + ".tmp"
-	if err := os.RemoveAll(staged); err != nil {
-		return err
+	// A standby already in place is stale, since the instance is running.
+	// A resume that could not remove it left it.
+	for _, path := range []string{staged, dir} {
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(staged, 0o700); err != nil {
 		return fmt.Errorf("create standby directory: %w", err)

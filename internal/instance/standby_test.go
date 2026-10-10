@@ -70,6 +70,28 @@ func TestStandbyFreesTheHostAndStartResumes(t *testing.T) {
 
 // TestStandbyOutlivesTheRuntimeStatus checks that an instance is still on
 // standby once its runtime status is gone, as a host reboot takes it.
+// TestStandbyReplacesAStaleOne checks that a standby left in place by a
+// resume that could not remove it does not stop the instance going on
+// standby again.
+func TestStandbyReplacesAStaleOne(t *testing.T) {
+	h := newHarness(t)
+	h.start(t)
+	stale := filepath.Join(h.manager.standbyDir(h.instance), "stale")
+	if err := os.MkdirAll(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.manager.Standby(t.Context(), h.instance.Name); err != nil {
+		t.Fatalf("Standby: %v", err)
+	}
+	if status := h.status(t); status.State != StateStandby {
+		t.Errorf("state = %s, want %s", status.State, StateStandby)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the stale standby is still there: %v", err)
+	}
+}
+
 func TestStandbyOutlivesTheRuntimeStatus(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
