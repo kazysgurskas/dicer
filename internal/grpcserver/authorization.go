@@ -35,6 +35,7 @@ var methodScopes = map[string]token.Scope{
 	"DeleteInstance":         token.ScopeInstancesWrite,
 	"ListInstances":          token.ScopeInstancesRead,
 	"GetInstance":            token.ScopeInstancesRead,
+	"WaitInstance":           token.ScopeInstancesRead,
 	"GetInstanceLogs":        token.ScopeInstancesRead,
 	"GetInstanceStats":       token.ScopeInstancesRead,
 	"ListInstanceProcesses":  token.ScopeInstancesRead,

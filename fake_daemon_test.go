@@ -28,6 +28,7 @@ type fakeDaemon struct {
 	copyFromInstance func(*dicerdv1.CopyFromInstanceRequest, grpc.ServerStreamingServer[dicerdv1.CopyFromInstanceResponse]) error
 	pullImage        func(*dicerdv1.PullImageRequest, grpc.ServerStreamingServer[dicerdv1.PullImageProgress]) error
 	getEvents        func(*dicerdv1.GetEventsRequest, grpc.ServerStreamingServer[dicerdv1.GetEventsResponse]) error
+	waitInstance     func(*dicerdv1.WaitInstanceRequest, grpc.ServerStreamingServer[dicerdv1.WaitInstanceResponse]) error
 }
 
 // connect returns a client of daemon, served over loopback until the test
@@ -91,6 +92,15 @@ func (d *fakeDaemon) PullImage(req *dicerdv1.PullImageRequest, stream grpc.Serve
 		return d.UnimplementedDaemonServiceServer.PullImage(req, stream)
 	}
 	return d.pullImage(req, stream)
+}
+
+func (d *fakeDaemon) WaitInstance(
+	req *dicerdv1.WaitInstanceRequest, stream grpc.ServerStreamingServer[dicerdv1.WaitInstanceResponse],
+) error {
+	if d.waitInstance == nil {
+		return d.UnimplementedDaemonServiceServer.WaitInstance(req, stream)
+	}
+	return d.waitInstance(req, stream)
 }
 
 func (d *fakeDaemon) GetEvents(req *dicerdv1.GetEventsRequest, stream grpc.ServerStreamingServer[dicerdv1.GetEventsResponse]) error {

@@ -181,7 +181,7 @@ $ dicer token create ci --scopes instances:write,images:write
 
 | Scope | Allows |
 |---|---|
-| `instances:read` | Listing and showing instances, with their logs, stats and processes, and the host's capacity, which shows what each instance holds. |
+| `instances:read` | Listing and showing instances, with their logs, stats and processes, waiting for them to stop, and the host's capacity, which shows what each instance holds. |
 | `instances:write` | Everything else instances do: creating, starting, stopping, resizing and deleting them, `exec` and `cp`, and restoring or forking a snapshot into one. |
 | `snapshots:read`, `snapshots:write` | Listing and showing snapshots; taking and deleting them. |
 | `networks:read`, `networks:write` | Listing and showing networks and their addresses; creating and deleting them. |

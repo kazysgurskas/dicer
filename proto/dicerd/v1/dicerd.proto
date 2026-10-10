@@ -96,6 +96,12 @@ service DaemonService {
   rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse);
   // GetInstance returns one instance.
   rpc GetInstance(GetInstanceRequest) returns (Instance);
+  // WaitInstance waits for an instance to stop, and sends how it ended, as
+  // the stream's one message. A restart is not a stop, and nor is standby.
+  // The daemon sends the response headers once it is waiting, so a caller
+  // that reads them before starting the instance cannot miss how it ends,
+  // even if it is deleted as it stops.
+  rpc WaitInstance(WaitInstanceRequest) returns (stream WaitInstanceResponse);
   // GetInstanceLogs streams an instance's log. The guest's console is kept
   // with the instance, so it can be read after a stop to explain one.
   rpc GetInstanceLogs(GetInstanceLogsRequest) returns (stream InstanceLogChunk);
@@ -753,6 +759,28 @@ message DeleteInstanceRequest {
 
 message GetInstanceRequest {
   string name = 1;
+}
+
+message WaitInstanceRequest {
+  string name = 1;
+  // If set, the instance with this ID: one given the name later is not
+  // waited for.
+  string id = 2;
+  // Wait for the instance's next stop, even if it is stopped now: for a
+  // caller about to start it. Otherwise a stopped instance is not waited
+  // for.
+  bool next_stop = 3;
+}
+
+message WaitInstanceResponse {
+  // STOPPED, or FAILED.
+  InstanceState state = 1;
+  // Why it failed.
+  string state_error = 2;
+  // The exit code the guest reported: its workload's, or 0 for a guest
+  // that powered itself off. Unset if it ended without saying how, or was
+  // stopped.
+  optional int32 exit_code = 3;
 }
 
 message ListInstancesRequest {}

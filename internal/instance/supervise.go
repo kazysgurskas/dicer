@@ -263,6 +263,7 @@ func (m *Manager) ended(ctx context.Context, instance Spec, prev Status, exit Ex
 		return
 	}
 
+	m.notifyWaiters(status)
 	m.scheduleRemoval(ctx, instance)
 
 	if exit.Clean() {

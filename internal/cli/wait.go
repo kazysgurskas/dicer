@@ -19,9 +19,11 @@ func newInstanceWaitCommand() *cobra.Command {
 		Long: "Waits until each instance stops and prints the status its guest ended with,\n" +
 			"a line for each: the workload's exit code, 0 for a guest that powered\n" +
 			"itself off, or 125 for one that ended without saying how.\n\n" +
-			"An instance that has already stopped is not waited for; its last status is\n" +
-			"reported at once, even if --rm has deleted it since. An instance its\n" +
-			"restart policy starts again has not stopped, so the wait goes on.\n\n" +
+			"An instance that has already stopped is not waited for. Its last status is\n" +
+			"reported at once. An instance its restart policy starts again has not\n" +
+			"stopped, so the wait goes on.\n\n" +
+			"An instance that --rm has deleted cannot be waited for. To read the status\n" +
+			"of a job run with -d, leave out --rm, and delete the job after the wait.\n\n" +
 			"As with docker wait, the statuses are printed, not exited with: the command\n" +
 			"fails only for an instance it cannot wait for.",
 		Example: "  dicer wait web\n" +

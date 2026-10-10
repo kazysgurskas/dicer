@@ -54,6 +54,8 @@ type fakeInstanceDaemon struct {
 	// history is what GetEvents streams before it has caught up: what
 	// happened before the command asked.
 	history []*dicerdv1.Event
+	// waiters hear each instance's next stop, by instance ID.
+	waiters map[string][]chan *dicerdv1.WaitInstanceResponse
 
 	// console is what each instance's console holds, and ran which
 	// instances have been started, and so have one.
@@ -70,6 +72,7 @@ func newFakeInstanceDaemon(instances ...*dicerdv1.Instance) *fakeInstanceDaemon 
 		digest:    "sha256:0123456789abcdef0123",
 		host:      &dicerdv1.GetHostInfoResponse{Version: "v9.9.9", Hostname: "compute-1"},
 		events:    make(chan *dicerdv1.Event, 8),
+		waiters:   make(map[string][]chan *dicerdv1.WaitInstanceResponse),
 		console:   make(map[string]string),
 		ran:       make(map[string]bool),
 	}
@@ -172,7 +175,12 @@ func (d *fakeInstanceDaemon) StartInstance(
 }
 
 func (d *fakeInstanceDaemon) StopInstance(_ context.Context, req *dicerdv1.StopInstanceRequest) (*dicerdv1.Instance, error) {
-	return d.setState("stop", req.GetName(), stateStopped, stateRunning, statePaused)
+	instance, err := d.setState("stop", req.GetName(), stateStopped, stateRunning, statePaused)
+	if err != nil {
+		return nil, err
+	}
+	d.notifyWaiters(instance.GetId(), &dicerdv1.WaitInstanceResponse{State: stateStopped})
+	return instance, nil
 }
 
 func (d *fakeInstanceDaemon) PauseInstance(
@@ -310,6 +318,48 @@ func (d *fakeInstanceDaemon) GetEvents(
 	}
 }
 
+// WaitInstance waits as the daemon does: it returns a stopped instance's
+// status at once, unless asked for the next stop, and otherwise the next
+// stop the test reports.
+func (d *fakeInstanceDaemon) WaitInstance(
+	req *dicerdv1.WaitInstanceRequest, stream grpc.ServerStreamingServer[dicerdv1.WaitInstanceResponse],
+) error {
+	d.mu.Lock()
+	instance, err := d.get(req.GetName())
+	if err != nil {
+		d.mu.Unlock()
+		return err
+	}
+	stopped := make(chan *dicerdv1.WaitInstanceResponse, 1)
+	d.waiters[instance.GetId()] = append(d.waiters[instance.GetId()], stopped)
+	now := &dicerdv1.WaitInstanceResponse{State: instance.GetState(), ExitCode: instance.ExitCode}
+	d.mu.Unlock()
+
+	if err := stream.SendHeader(nil); err != nil {
+		return err
+	}
+	if !req.GetNextStop() && (now.GetState() == stateStopped || now.GetState() == stateFailed) {
+		return stream.Send(now)
+	}
+	select {
+	case resp := <-stopped:
+		return stream.Send(resp)
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	}
+}
+
+// notifyWaiters tells those waiting on an instance how it stopped.
+func (d *fakeInstanceDaemon) notifyWaiters(id string, resp *dicerdv1.WaitInstanceResponse) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, stopped := range d.waiters[id] {
+		stopped <- resp
+	}
+	delete(d.waiters, id)
+}
+
 // stops records an instance as stopped with the given status, and reports it
 // as the daemon would.
 func (d *fakeInstanceDaemon) stops(name string, exitCode int32) {
@@ -322,6 +372,7 @@ func (d *fakeInstanceDaemon) stops(name string, exitCode int32) {
 	}
 	d.mu.Unlock()
 
+	d.notifyWaiters(id, &dicerdv1.WaitInstanceResponse{State: stateStopped, ExitCode: &exitCode})
 	d.emit(exitedEvent(id, name, exitCode))
 }
 
@@ -336,6 +387,7 @@ func (d *fakeInstanceDaemon) stopsAndRemoves(name string, exitCode int32) {
 	delete(d.instances, name)
 	d.mu.Unlock()
 
+	d.notifyWaiters(id, &dicerdv1.WaitInstanceResponse{State: stateStopped, ExitCode: &exitCode})
 	d.emit(exitedEvent(id, name, exitCode))
 	d.emit(&dicerdv1.Event{
 		Kind: dicerdv1.EventKind_EVENT_KIND_INSTANCE, Id: id, Name: name,

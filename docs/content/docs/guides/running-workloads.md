@@ -76,10 +76,22 @@ succeeds whatever the status, so a script reads the status from its output:
 turn and prints a line for each.
 
 If the instance has already stopped, `dicer wait` prints its last status at
-once, even if `--rm` has deleted it since. An instance that its
-[restart policy](../restarts) starts again, or that is on standby, has not
-stopped, so the wait goes on. `--timeout` gives up after a while, such as
-`--timeout 10m`.
+once. An instance that its [restart policy](../restarts) starts again, or
+that is on standby, has not stopped, so the wait goes on. `--timeout` gives
+up after a while, such as `--timeout 10m`.
+
+An instance that `--rm` has deleted cannot be waited for, and one run with
+`-d --rm` may be deleted before `dicer wait` begins. To read the status of a
+job in the background, leave out `--rm` and delete it after the wait:
+
+```console
+$ dicer run -d --name migrate ghcr.io/acme/api:3 ./migrate up
+$ status=$(dicer wait migrate)
+$ dicer rm migrate
+```
+
+`dicer run --rm` without `-d` has no such race, because it starts waiting
+before the job starts.
 
 ## Define now, start later
 

@@ -89,6 +89,7 @@ func TestAuditLeavesOutReads(t *testing.T) {
 	a, buf := auditLogTo()
 	caller := &peer.Peer{Addr: &net.UnixAddr{Name: "@", Net: "unix"}, AuthInfo: unixPeer{UID: 0, PID: 1}}
 	callUnary(t, a, caller, "", "GetInstance", &dicerdv1.GetInstanceRequest{Name: "web"})
+	callUnary(t, a, caller, "", "WaitInstance", &dicerdv1.WaitInstanceRequest{Name: "web"})
 
 	if buf.Len() != 0 {
 		t.Errorf("audit = %q, want nothing for a read", buf.String())

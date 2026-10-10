@@ -40,6 +40,7 @@ func (m *Manager) stop(ctx context.Context, instance Spec) (err error) {
 	case StateStandby:
 		m.record(instance, event.ActionStopped, "Stopped instance: discarded what it had frozen on standby", nil)
 		m.logger.InfoContext(ctx, "stopped instance", "instance", instance.Name)
+		m.notifyWaiters(Status{InstanceID: instance.ID, State: StateStopped})
 		m.scheduleRemoval(ctx, instance)
 		return nil
 	}
@@ -66,6 +67,7 @@ func (m *Manager) stop(ctx context.Context, instance Spec) (err error) {
 	m.record(instance, event.ActionStopped, stopMessage(outcome, m.stopGracePeriod, took, ranFor), nil)
 	m.logger.InfoContext(ctx, "stopped instance", "instance", instance.Name)
 
+	m.notifyWaiters(Status{InstanceID: instance.ID, State: StateStopped})
 	m.scheduleRemoval(ctx, instance)
 
 	return nil

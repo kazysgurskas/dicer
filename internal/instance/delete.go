@@ -56,6 +56,13 @@ func (m *Manager) delete(ctx context.Context, instance Spec, force bool) (err er
 
 	m.record(instance, event.ActionDeleted,
 		"Deleted instance: removed its definition and disks; released its address on network "+instance.NetworkName, nil)
+
+	// A deleted instance never runs again. One deleted as it ran was
+	// stopped by it.
+	if !isStopped(status.State) {
+		status = Status{InstanceID: instance.ID, State: StateStopped}
+	}
+	m.notifyWaiters(status)
 	m.logger.InfoContext(ctx, "deleted instance", "instance", instance.Name)
 	return nil
 }

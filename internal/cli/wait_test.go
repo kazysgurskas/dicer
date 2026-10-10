@@ -127,23 +127,3 @@ func TestWaitOnAMissingInstance(t *testing.T) {
 		t.Errorf("wait printed %q, want an error for a and the status of b", out)
 	}
 }
-
-// A job --rm deleted before wait began -- one that ended quickly -- reports
-// the status the events recorded for it.
-func TestWaitOnAnInstanceDeletedBeforeTheWait(t *testing.T) {
-	d := newFakeInstanceDaemon(&dicerdv1.Instance{
-		Id: "id-job", Name: "job", ImageRef: "alpine:3.21", State: stateRunning,
-	})
-	d.stopsAndRemoves("job", 4)
-	<-d.events
-	<-d.events
-	serveFakeDaemon(t, d)
-
-	out, err := run(t, "wait", "job")
-	if err != nil {
-		t.Fatalf("wait: %v\n%s", err, out)
-	}
-	if strings.TrimSpace(out) != "4" {
-		t.Errorf("wait printed %q, want the status the deleted instance ended with", out)
-	}
-}

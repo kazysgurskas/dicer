@@ -1576,9 +1576,15 @@ Update changes the definition of a stopped instance.
 func (s *Instances) Wait(ctx context.Context, name string, opts WaitOptions) (int, error)
 ```
 
-Wait waits for an instance to stop, and returns the status its guest ended with: its workload's exit code, 0 for a guest that powered itself off, or UnknownExitCode for one that ended without saying how.
+Wait waits for an instance to stop, and returns the status its guest ended with, as Waiter.Wait does. Without opts.NextStop, an instance that has already stopped is not waited for: its last status is returned at once. One that has been deleted is not found, so a caller that wants the status of an instance deleted as it stops, as RemoveOnExit does, waits for it with a Waiter made before it starts.
 
-An instance that has already stopped is not waited for: its last status is returned at once, even if it has been deleted since. An instance its restart policy starts again has not stopped, so the wait goes on.
+#### func (*Instances) Waiter {#instances-waiter}
+
+```go
+func (s *Instances) Waiter(ctx context.Context, name string, opts WaitOptions) (*Waiter, error)
+```
+
+Waiter begins waiting for an instance to stop, and returns once the daemon is waiting. An instance started after it returns cannot end unheard, even if it is deleted as it stops, so a caller that starts an instance and waits for it makes its Waiter, with NextStop, first. The caller must Close it. ctx bounds the whole wait.
 
 #### func (*Instances) WriteFile {#instances-writefile}
 
@@ -2606,7 +2612,37 @@ type WaitOptions struct {
 	// later one given the same name. Empty means whichever instance has the
 	// name.
 	ID string
+
+	// NextStop waits for the instance's next stop, even if it is stopped
+	// now: for a caller about to start it, with Instances.Waiter.
+	NextStop bool
 }
 ```
 
-WaitOptions say which instance Instances.Wait waits for.
+WaitOptions say which instance, and which of its stops, a wait is for.
+
+### type Waiter {#waiter}
+
+```go
+type Waiter struct {
+	// contains filtered or unexported fields
+}
+```
+
+Waiter is a wait for an instance to stop that the daemon has begun. See Instances.Waiter.
+
+#### func (*Waiter) Close {#waiter-close}
+
+```go
+func (w *Waiter) Close() error
+```
+
+Close ends the wait.
+
+#### func (*Waiter) Wait {#waiter-wait}
+
+```go
+func (w *Waiter) Wait() (int, error)
+```
+
+Wait returns the status the instance's guest ended with: its workload's exit code, 0 for a guest that powered itself off or was stopped, or UnknownExitCode for one that failed without saying how. An instance its restart policy starts again has not stopped, so the wait goes on.

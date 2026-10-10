@@ -8,9 +8,12 @@ Waits until each instance stops and prints the status its guest ended with,
 a line for each: the workload's exit code, 0 for a guest that powered
 itself off, or 125 for one that ended without saying how.
 
-An instance that has already stopped is not waited for; its last status is
-reported at once, even if `--rm` has deleted it since. An instance its
-restart policy starts again has not stopped, so the wait goes on.
+An instance that has already stopped is not waited for. Its last status is
+reported at once. An instance its restart policy starts again has not
+stopped, so the wait goes on.
+
+An instance that `--rm` has deleted cannot be waited for. To read the status
+of a job run with -d, leave out `--rm`, and delete the job after the wait.
 
 As with docker wait, the statuses are printed, not exited with: the command
 fails only for an instance it cannot wait for.

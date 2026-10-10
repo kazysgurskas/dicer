@@ -53,6 +53,13 @@ func (m *Manager) fail(instanceID string, cause error) {
 	if err := m.writeStatus(status); err != nil {
 		m.logger.Warn("cannot record failed state", "instance_id", instanceID, "error", err)
 	}
+
+	// A guest that failed to resume from standby is still frozen, to be
+	// resumed again, so it has not stopped.
+	if instance, err := m.store.Instance(instanceID); err == nil && m.onStandby(instance) {
+		return
+	}
+	m.notifyWaiters(status)
 }
 
 // forgetProcess clears a status's VMM and held resources.

@@ -61,6 +61,14 @@ func runAttached(cmd *cobra.Command, create instanceCreate) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
+	// Waited for before it starts, so that it cannot end unheard, even if
+	// it is deleted as it ends.
+	waiter, err := client.Instances.Waiter(ctx, name, dicer.WaitOptions{ID: instance.ID, NextStop: true})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = waiter.Close() }()
+
 	started := make(chan struct{})
 	console := make(chan error, 1)
 	go func() { console <- followConsole(ctx, client, name, started, cmd.OutOrStdout()) }()
@@ -88,7 +96,7 @@ func runAttached(cmd *cobra.Command, create instanceCreate) error {
 	}
 	exited := make(chan result, 1)
 	go func() {
-		code, err := client.Instances.Wait(ctx, name, dicer.WaitOptions{ID: instance.ID})
+		code, err := waiter.Wait()
 		exited <- result{code, err}
 	}()
 

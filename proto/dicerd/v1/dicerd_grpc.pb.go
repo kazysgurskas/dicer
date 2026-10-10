@@ -36,6 +36,7 @@ const (
 	DaemonService_DeleteInstance_FullMethodName         = "/dicerd.v1.DaemonService/DeleteInstance"
 	DaemonService_ListInstances_FullMethodName          = "/dicerd.v1.DaemonService/ListInstances"
 	DaemonService_GetInstance_FullMethodName            = "/dicerd.v1.DaemonService/GetInstance"
+	DaemonService_WaitInstance_FullMethodName           = "/dicerd.v1.DaemonService/WaitInstance"
 	DaemonService_GetInstanceLogs_FullMethodName        = "/dicerd.v1.DaemonService/GetInstanceLogs"
 	DaemonService_GetInstanceStats_FullMethodName       = "/dicerd.v1.DaemonService/GetInstanceStats"
 	DaemonService_ListInstanceProcesses_FullMethodName  = "/dicerd.v1.DaemonService/ListInstanceProcesses"
@@ -165,6 +166,12 @@ type DaemonServiceClient interface {
 	ListInstances(ctx context.Context, in *ListInstancesRequest, opts ...grpc.CallOption) (*ListInstancesResponse, error)
 	// GetInstance returns one instance.
 	GetInstance(ctx context.Context, in *GetInstanceRequest, opts ...grpc.CallOption) (*Instance, error)
+	// WaitInstance waits for an instance to stop, and sends how it ended, as
+	// the stream's one message. A restart is not a stop, and nor is standby.
+	// The daemon sends the response headers once it is waiting, so a caller
+	// that reads them before starting the instance cannot miss how it ends,
+	// even if it is deleted as it stops.
+	WaitInstance(ctx context.Context, in *WaitInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WaitInstanceResponse], error)
 	// GetInstanceLogs streams an instance's log. The guest's console is kept
 	// with the instance, so it can be read after a stop to explain one.
 	GetInstanceLogs(ctx context.Context, in *GetInstanceLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceLogChunk], error)
@@ -437,9 +444,28 @@ func (c *daemonServiceClient) GetInstance(ctx context.Context, in *GetInstanceRe
 	return out, nil
 }
 
+func (c *daemonServiceClient) WaitInstance(ctx context.Context, in *WaitInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WaitInstanceResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[0], DaemonService_WaitInstance_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WaitInstanceRequest, WaitInstanceResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WaitInstanceClient = grpc.ServerStreamingClient[WaitInstanceResponse]
+
 func (c *daemonServiceClient) GetInstanceLogs(ctx context.Context, in *GetInstanceLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceLogChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[0], DaemonService_GetInstanceLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[1], DaemonService_GetInstanceLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +484,7 @@ type DaemonService_GetInstanceLogsClient = grpc.ServerStreamingClient[InstanceLo
 
 func (c *daemonServiceClient) GetInstanceStats(ctx context.Context, in *GetInstanceStatsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetInstanceStatsResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[1], DaemonService_GetInstanceStats_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[2], DaemonService_GetInstanceStats_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +573,7 @@ func (c *daemonServiceClient) ForkSnapshot(ctx context.Context, in *ForkSnapshot
 
 func (c *daemonServiceClient) ExecInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInstanceRequest, ExecInstanceResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[2], DaemonService_ExecInstance_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[3], DaemonService_ExecInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +586,7 @@ type DaemonService_ExecInstanceClient = grpc.BidiStreamingClient[ExecInstanceReq
 
 func (c *daemonServiceClient) CopyToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyToInstanceRequest, emptypb.Empty], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[3], DaemonService_CopyToInstance_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[4], DaemonService_CopyToInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -573,7 +599,7 @@ type DaemonService_CopyToInstanceClient = grpc.ClientStreamingClient[CopyToInsta
 
 func (c *daemonServiceClient) CopyFromInstance(ctx context.Context, in *CopyFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CopyFromInstanceResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[4], DaemonService_CopyFromInstance_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[5], DaemonService_CopyFromInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +708,7 @@ func (c *daemonServiceClient) DeleteVolume(ctx context.Context, in *DeleteVolume
 
 func (c *daemonServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullImageProgress], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[5], DaemonService_PullImage_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[6], DaemonService_PullImage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +767,7 @@ func (c *daemonServiceClient) PruneImages(ctx context.Context, in *PruneImagesRe
 
 func (c *daemonServiceClient) ImportKernel(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ImportKernelRequest, Kernel], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[6], DaemonService_ImportKernel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[7], DaemonService_ImportKernel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -854,7 +880,7 @@ func (c *daemonServiceClient) GetResources(ctx context.Context, in *GetResources
 
 func (c *daemonServiceClient) GetEvents(ctx context.Context, in *GetEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetEventsResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[7], DaemonService_GetEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DaemonService_ServiceDesc.Streams[8], DaemonService_GetEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -960,6 +986,12 @@ type DaemonServiceServer interface {
 	ListInstances(context.Context, *ListInstancesRequest) (*ListInstancesResponse, error)
 	// GetInstance returns one instance.
 	GetInstance(context.Context, *GetInstanceRequest) (*Instance, error)
+	// WaitInstance waits for an instance to stop, and sends how it ended, as
+	// the stream's one message. A restart is not a stop, and nor is standby.
+	// The daemon sends the response headers once it is waiting, so a caller
+	// that reads them before starting the instance cannot miss how it ends,
+	// even if it is deleted as it stops.
+	WaitInstance(*WaitInstanceRequest, grpc.ServerStreamingServer[WaitInstanceResponse]) error
 	// GetInstanceLogs streams an instance's log. The guest's console is kept
 	// with the instance, so it can be read after a stop to explain one.
 	GetInstanceLogs(*GetInstanceLogsRequest, grpc.ServerStreamingServer[InstanceLogChunk]) error
@@ -1139,6 +1171,9 @@ func (UnimplementedDaemonServiceServer) ListInstances(context.Context, *ListInst
 }
 func (UnimplementedDaemonServiceServer) GetInstance(context.Context, *GetInstanceRequest) (*Instance, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInstance not implemented")
+}
+func (UnimplementedDaemonServiceServer) WaitInstance(*WaitInstanceRequest, grpc.ServerStreamingServer[WaitInstanceResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method WaitInstance not implemented")
 }
 func (UnimplementedDaemonServiceServer) GetInstanceLogs(*GetInstanceLogsRequest, grpc.ServerStreamingServer[InstanceLogChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method GetInstanceLogs not implemented")
@@ -1507,6 +1542,17 @@ func _DaemonService_GetInstance_Handler(srv interface{}, ctx context.Context, de
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _DaemonService_WaitInstance_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WaitInstanceRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DaemonServiceServer).WaitInstance(m, &grpc.GenericServerStream[WaitInstanceRequest, WaitInstanceResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DaemonService_WaitInstanceServer = grpc.ServerStreamingServer[WaitInstanceResponse]
 
 func _DaemonService_GetInstanceLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(GetInstanceLogsRequest)
@@ -2305,6 +2351,11 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WaitInstance",
+			Handler:       _DaemonService_WaitInstance_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "GetInstanceLogs",
 			Handler:       _DaemonService_GetInstanceLogs_Handler,

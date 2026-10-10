@@ -63,6 +63,7 @@ was, and whose message says it for a person:
 | `DeleteInstance` | [`DeleteInstanceRequest`](#deleteinstancerequest) | `google.protobuf.Empty` | DeleteInstance removes an instance and its overlay disk. It refuses a running instance unless force is set. |
 | `ListInstances` | [`ListInstancesRequest`](#listinstancesrequest) | [`ListInstancesResponse`](#listinstancesresponse) | ListInstances returns every defined instance. |
 | `GetInstance` | [`GetInstanceRequest`](#getinstancerequest) | [`Instance`](#instance) | GetInstance returns one instance. |
+| `WaitInstance` | [`WaitInstanceRequest`](#waitinstancerequest) | stream [`WaitInstanceResponse`](#waitinstanceresponse) | WaitInstance waits for an instance to stop, and sends how it ended, as the stream's one message. A restart is not a stop, and nor is standby. The daemon sends the response headers once it is waiting, so a caller that reads them before starting the instance cannot miss how it ends, even if it is deleted as it stops. |
 | `GetInstanceLogs` | [`GetInstanceLogsRequest`](#getinstancelogsrequest) | stream [`InstanceLogChunk`](#instancelogchunk) | GetInstanceLogs streams an instance's log. The guest's console is kept with the instance, so it can be read after a stop to explain one. |
 | `GetInstanceStats` | [`GetInstanceStatsRequest`](#getinstancestatsrequest) | stream [`GetInstanceStatsResponse`](#getinstancestatsresponse) | GetInstanceStats streams what running and paused instances use of the host, read from their hypervisor processes rather than asked of their guests: a batch a second while it follows, or a single batch. Each batch is read over a second, so the first comes a second after the call. |
 | `ListInstanceProcesses` | [`ListInstanceProcessesRequest`](#listinstanceprocessesrequest) | [`ListInstanceProcessesResponse`](#listinstanceprocessesresponse) | ListInstanceProcesses returns the processes running in a running instance, as its guest sees them: kernel threads are left out, and PIDs are the ones a command run by ExecInstance sees. Like ExecInstance, it waits for a guest that is still booting. |
@@ -1066,6 +1067,22 @@ Volume is a persistent block device that outlives the instances using it.
 | `size_bytes` | `int64` |  |
 | `create_time` | `google.protobuf.Timestamp` |  |
 | `update_time` | `google.protobuf.Timestamp` |  |
+
+### WaitInstanceRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` |  |
+| `id` | `string` | If set, the instance with this ID: one given the name later is not waited for. |
+| `next_stop` | `bool` | Wait for the instance's next stop, even if it is stopped now: for a caller about to start it. Otherwise a stopped instance is not waited for. |
+
+### WaitInstanceResponse
+
+| Field | Type | Description |
+|---|---|---|
+| `state` | [`InstanceState`](#instancestate) | STOPPED, or FAILED. |
+| `state_error` | `string` | Why it failed. |
+| `exit_code` | optional `int32` | One of `_exit_code`. The exit code the guest reported: its workload's, or 0 for a guest that powered itself off. Unset if it ended without saying how, or was stopped. |
 
 
 ## Enums

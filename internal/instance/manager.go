@@ -226,6 +226,11 @@ type Manager struct {
 	wakersMu sync.Mutex
 	wakers   map[string]*waker
 
+	// waiters are those waiting for each instance to stop, by instance ID.
+	// See wait.go.
+	waitersMu sync.Mutex
+	waiters   map[string]map[*Waiter]struct{}
+
 	// restarts holds each Restarting instance's pending restart, by
 	// instance ID; restarting counts restarts under way.
 	restartsMu sync.Mutex
@@ -289,6 +294,7 @@ func NewManager(cfg Config) *Manager {
 
 		vmms:     make(map[string]*supervised),
 		wakers:   make(map[string]*waker),
+		waiters:  make(map[string]map[*Waiter]struct{}),
 		restarts: make(map[string]*pendingRestart),
 		closing:  make(chan struct{}),
 	}

@@ -123,9 +123,9 @@ func (l auditLog) record(ctx context.Context, fullMethod, resource string, start
 	l.logger.InfoContext(ctx, "call finished", attrs...)
 }
 
-// isRead reports whether a method is a Get or List.
+// isRead reports whether a method changes nothing: a Get, a List or a Wait.
 func isRead(method string) bool {
-	return strings.HasPrefix(method, "Get") || strings.HasPrefix(method, "List")
+	return strings.HasPrefix(method, "Get") || strings.HasPrefix(method, "List") || strings.HasPrefix(method, "Wait")
 }
 
 // resourceOf returns the name of the resource a request names: an
