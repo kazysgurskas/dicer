@@ -137,6 +137,9 @@ func TestResourceOf(t *testing.T) {
 		{"copy, by its start", &dicerdv1.CopyToInstanceRequest{Payload: &dicerdv1.CopyToInstanceRequest_Start{
 			Start: &dicerdv1.CopyToInstanceStart{Name: "web", Path: "/tmp"},
 		}}, "web"},
+		{"a kernel import, by its start", &dicerdv1.ImportKernelRequest{Payload: &dicerdv1.ImportKernelRequest_Start{
+			Start: &dicerdv1.ImportKernelStart{Name: "custom"},
+		}}, "custom"},
 		{"a named snapshot", &dicerdv1.CreateSnapshotRequest{Instance: "web", Name: "before"}, "before"},
 		{"an unnamed snapshot, by its instance", &dicerdv1.CreateSnapshotRequest{Instance: "web"}, "web"},
 		{"nothing named", &dicerdv1.PruneImagesRequest{}, ""},

@@ -137,6 +137,8 @@ func resourceOf(req any) string {
 		return r.GetStart().GetName()
 	case *dicerdv1.CopyToInstanceRequest:
 		return r.GetStart().GetName()
+	case *dicerdv1.ImportKernelRequest:
+		return r.GetStart().GetName()
 	case *dicerdv1.CreateSnapshotRequest:
 		// A snapshot not given a name is only named once it is taken, so
 		// it is known by its instance.
