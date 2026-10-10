@@ -129,6 +129,10 @@ type PruneResult struct {
 // boot, and returns it once it is ready. onProgress, if not nil, is called
 // with each report of how far the pull has got.
 func (s *Images) Pull(ctx context.Context, ref string, onProgress func(PullProgress)) (Image, error) {
+	// Cancelled on return, which ends the stream: it is not read to its end.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	stream, err := s.api.PullImage(ctx, &dicerdv1.PullImageRequest{Ref: ref})
 	if err != nil {
 		return Image{}, fromStatus(err)
