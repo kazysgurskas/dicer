@@ -70,8 +70,8 @@ func TestMemorySetAsideForHotplugIsAligned(t *testing.T) {
 		want         *int64
 	}{
 		{"none", 0, nil},
-		{"aligned", 256 * mib, ptr(int64(256 * mib))},
-		{"unaligned", 300 * mib, ptr(int64(384 * mib))},
+		{"aligned", 256 * mib, new(int64(256 * mib))},
+		{"unaligned", 300 * mib, new(int64(384 * mib))},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

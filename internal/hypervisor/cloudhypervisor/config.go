@@ -162,8 +162,3 @@ func optionalSlice[T any](s []T) *[]T {
 	}
 	return &s
 }
-
-//go:fix inline
-func ptr[T any](v T) *T {
-	return new(v)
-}
