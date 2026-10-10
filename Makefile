@@ -281,12 +281,13 @@ DOCS_DIR := $(CURDIR)/docs
 # configuration, the compose file, the Go client and the metrics by
 # tools/docgen, and the API by protoc-gen-doc with its template.
 # They are committed, and CI checks they are current. tools/docgen reads the
-# metrics from the packages that serve them, and the kernel package embeds
-# the default kernel, so that has to be downloaded first.
+# metrics from the packages that serve them, and the kernel and virtiofs
+# packages embed the default kernel and virtiofsd, so those have to be
+# downloaded first.
 DOCS_API_TEMPLATE := {"version":"v2","plugins":[{"local":"$(PROTOC_GEN_DOC)","out":"docs/content/docs/reference","opt":["tools/docgen/api.md.tmpl,api.md"]}]}
 
 .PHONY: docs-gen
-docs-gen: $(BUF) $(PROTOC_GEN_DOC) $(KERNEL_BIN)/$(GOARCH)/$(KERNEL_VERSION)/vmlinux.zst ## Generate the documentation site's reference pages
+docs-gen: $(BUF) $(PROTOC_GEN_DOC) $(KERNEL_BIN)/$(GOARCH)/$(KERNEL_VERSION)/vmlinux.zst $(VIRTIOFSD_BIN)/$(GOARCH)/$(VIRTIOFSD_VERSION)/virtiofsd ## Generate the documentation site's reference pages
 	go run ./tools/docgen
 	$(BUF) generate --template '$(DOCS_API_TEMPLATE)' --path proto/dicerd/v1
 
