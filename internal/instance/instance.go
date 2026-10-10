@@ -139,6 +139,12 @@ func (s Spec) Validate() error {
 	case s.StandbyAfter != 0 && s.StandbyAfter < MinStandbyAfter:
 		return errdefs.InvalidArgument("standby_after %s is too short: idleness is judged a minute at a time, "+
 			"so give %s or more, or 0 for never", s.StandbyAfter, MinStandbyAfter)
+	case s.HasDirectoryMount() && s.EffectiveHypervisorType() != hypervisor.TypeCloudHypervisor:
+		return errdefs.InvalidArgument("directory mounts need %s: %s cannot share a directory with its guest",
+			hypervisor.TypeCloudHypervisor, s.EffectiveHypervisorType())
+	case s.HasDirectoryMount() && s.StandbyAfter != 0:
+		return errdefs.InvalidArgument("an instance that mounts a host directory cannot be put on standby: " +
+			"leave standby_after unset")
 	case s.RemoveOnExit && s.Restart.Restarts():
 		return errdefs.InvalidArgument(
 			"an instance cannot be deleted when it stops and restarted when it stops: "+

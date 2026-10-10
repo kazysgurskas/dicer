@@ -144,7 +144,9 @@ func (m *Manager) CreateSnapshot(ctx context.Context, nameOrID, name string) (Sn
 // pauses a running one while it does. Of a stopped or failed one it writes a
 // disk snapshot. A memory snapshot of an instance that can write to a volume
 // is refused, because the volume is not in the snapshot and would not match
-// what the restored guest remembers of it.
+// what the restored guest remembers of it. So is a memory snapshot of an
+// instance that mounts a host directory, because the hypervisor cannot save
+// its device.
 func (m *Manager) writeSnapshot(
 	ctx context.Context, instance Spec, dir string,
 ) (Snapshot, time.Duration, error) {
@@ -163,6 +165,10 @@ func (m *Manager) writeSnapshot(
 	snapshot := Snapshot{Instance: instance}
 	switch status.State {
 	case StateRunning, StatePaused:
+		if instance.HasDirectoryMount() {
+			return Snapshot{}, 0, errdefs.InvalidState("instance %q mounts a host directory, which a memory "+
+				"snapshot cannot hold; stop it first", instance.Name)
+		}
 		if slices.ContainsFunc(instance.Mounts, func(mount Mount) bool {
 			return mount.Type == MountTypeVolume && !mount.ReadOnly
 		}) {
@@ -572,7 +578,7 @@ func (m *Manager) restore(
 
 	// The restored VMM keeps the disks it was snapshotted with; only the
 	// config disk is written afresh.
-	mounts, _, err := m.resolveMounts(instance)
+	mounts, err := m.resolveMounts(instance)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -594,7 +600,7 @@ func (m *Manager) restore(
 	}
 
 	// The restored guest has already booted once.
-	if err := m.writeGuestDisks(ctx, instance, starter, image, mounts, setup, guest.Status{Boots: 1}); err != nil {
+	if err := m.writeGuestDisks(ctx, instance, starter, image, mounts.guest, setup, guest.Status{Boots: 1}); err != nil {
 		return nil, nil, err
 	}
 

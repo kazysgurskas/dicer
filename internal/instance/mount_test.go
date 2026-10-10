@@ -17,6 +17,7 @@ func TestValidateMountsAcceptsValidMounts(t *testing.T) {
 		{Type: MountTypeFile, Content: []byte("a=1"), Mode: 0o600, Target: "/data/a"},
 		{Type: MountTypeFile, Target: "/data/empty"},
 		{Type: MountTypeTmpfs, Target: "/tmp//x"},
+		{Type: MountTypeDirectory, Source: "/srv/app", Target: "/app"},
 	})
 	if err != nil {
 		t.Errorf("validateMounts = %v, want nil", err)
@@ -35,6 +36,12 @@ func TestValidateMountsRejectsInvalidMounts(t *testing.T) {
 			{Type: MountTypeFile, Mode: 0o4755, Target: "/a"},
 		},
 		"volume with contents": {{Type: MountTypeVolume, Source: "v", Target: "/a", Content: []byte("x")}},
+		"relative directory": {
+			{Type: MountTypeDirectory, Source: "src", Target: "/src"},
+		},
+		"directory with contents": {
+			{Type: MountTypeDirectory, Source: "/srv/src", Target: "/src", Content: []byte("x")},
+		},
 		"files over the limit": {
 			{Type: MountTypeFile, Target: "/a", Content: make([]byte, MaxFileMountBytes/2+1)},
 			{Type: MountTypeFile, Target: "/b", Content: make([]byte, MaxFileMountBytes/2)},

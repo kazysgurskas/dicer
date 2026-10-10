@@ -133,6 +133,9 @@ func TestRestartPolicyStartsOnBoot(t *testing.T) {
 
 // TestSpecValidate checks that a definition the daemon could never run as
 // written is refused, and one it can is not.
+// directoryMount shares a host directory with the guest.
+var directoryMount = []Mount{{Type: MountTypeDirectory, Source: "/srv/app", Target: "/app"}}
+
 func TestSpecValidate(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -248,6 +251,20 @@ func TestSpecValidate(t *testing.T) {
 		{
 			name:   "invalid mount",
 			modify: func(s *Spec) { s.Mounts = []Mount{{Type: MountTypeTmpfs, Target: "scratch"}} },
+		},
+		{
+			name:   "directory mount",
+			modify: func(s *Spec) { s.Mounts = directoryMount },
+			valid:  true,
+		},
+		// Only Cloud Hypervisor has virtio-fs.
+		{
+			name:   "directory mount on firecracker",
+			modify: func(s *Spec) { s.HypervisorType, s.Mounts = hypervisor.TypeFirecracker, directoryMount },
+		},
+		{
+			name:   "directory mount with standby",
+			modify: func(s *Spec) { s.StandbyAfter, s.Mounts = 15*time.Minute, directoryMount },
 		},
 	}
 

@@ -3,12 +3,16 @@
 
 package instance
 
-import "path/filepath"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // An instance's files live in two places. The persistent instance directory,
-// keyed by name, holds the overlay disk, the console and hypervisor logs and,
-// on standby, its frozen guest. The runtime directory under RunDir, keyed by
-// ID, holds the status, the sockets, and the config and status disks.
+// keyed by name, holds the overlay disk, the console, hypervisor and
+// virtiofsd logs and, on standby, its frozen guest. The runtime directory
+// under RunDir, keyed by ID, holds the status, the sockets, and the config and
+// status disks.
 //
 // The VMM runs in the runtime directory, where the overlay disk and console
 // log are linked in, and is given each of these files by its name alone. A
@@ -94,6 +98,24 @@ func (m *Manager) hypervisorSocketPath(instanceID string) string {
 // to, through a link in the runtime directory.
 func (m *Manager) hypervisorLogPath(instance Spec) string {
 	return filepath.Join(m.instanceDir(instance), hypervisorLogFile)
+}
+
+// shareSocketFile names the socket virtiofsd serves an instance's i-th
+// shared directory on, in its runtime directory.
+func shareSocketFile(i int) string {
+	return fmt.Sprintf("fs%d.sock", i)
+}
+
+// shareSocketPath returns the socket virtiofsd serves an instance's i-th
+// shared directory on.
+func (m *Manager) shareSocketPath(instanceID string, i int) string {
+	return filepath.Join(m.runtimeDir(instanceID), shareSocketFile(i))
+}
+
+// shareLogPath returns the log of the virtiofsd serving an instance's i-th
+// shared directory, beside the VMM's own, so that it outlives virtiofsd.
+func (m *Manager) shareLogPath(instance Spec, i int) string {
+	return filepath.Join(m.instanceDir(instance), fmt.Sprintf("virtiofsd-%d.log", i))
 }
 
 // vsockPath returns the host end of an instance's vsock device.

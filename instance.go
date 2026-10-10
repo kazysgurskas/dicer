@@ -320,13 +320,15 @@ var restartModes = enum[RestartMode, dicerdv1.RestartMode]{"restart mode", map[R
 	RestartModeAlways:        dicerdv1.RestartMode_RESTART_MODE_ALWAYS,
 }}
 
-// Mount attaches a volume, a file or a tmpfs at Target in the guest.
+// Mount attaches a volume, a file, a host directory or a tmpfs at Target in
+// the guest.
 type Mount struct {
 	// Type is what is mounted: a volume, a file or a tmpfs.
 	Type MountType `json:"type,omitzero"`
 
-	// Source is the volume's name for a volume. A file and a tmpfs have
-	// none.
+	// Source is the volume's name for a volume, and the absolute path of a
+	// directory on the daemon's host for a directory. A file and a tmpfs
+	// have none.
 	Source string `json:"source,omitzero"`
 
 	// Target is the absolute path the mount appears at in the guest.
@@ -381,12 +383,19 @@ const (
 	// MountTypeTmpfs is an empty in-memory filesystem, lost when the guest
 	// stops.
 	MountTypeTmpfs MountType = "tmpfs"
+
+	// MountTypeDirectory is a directory on the daemon's host, shared with
+	// the guest while it runs: a change on either side is seen on the
+	// other. The daemon allows only the directories its configuration
+	// lists, and only on Cloud Hypervisor.
+	MountTypeDirectory MountType = "directory"
 )
 
 var mountTypes = enum[MountType, dicerdv1.MountType]{"mount type", map[MountType]dicerdv1.MountType{
-	MountTypeVolume: dicerdv1.MountType_MOUNT_TYPE_VOLUME,
-	MountTypeFile:   dicerdv1.MountType_MOUNT_TYPE_FILE,
-	MountTypeTmpfs:  dicerdv1.MountType_MOUNT_TYPE_TMPFS,
+	MountTypeVolume:    dicerdv1.MountType_MOUNT_TYPE_VOLUME,
+	MountTypeFile:      dicerdv1.MountType_MOUNT_TYPE_FILE,
+	MountTypeTmpfs:     dicerdv1.MountType_MOUNT_TYPE_TMPFS,
+	MountTypeDirectory: dicerdv1.MountType_MOUNT_TYPE_DIRECTORY,
 }}
 
 // PortMapping publishes a guest port on the host, so that the guest can be

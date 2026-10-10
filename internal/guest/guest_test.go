@@ -163,6 +163,14 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: "device not set",
 		},
 		{
+			name: "directory without tag",
+			cfg: Config{
+				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
+				Mounts: []Mount{{Target: "/app", Directory: &DirectorySource{}}},
+			},
+			wantErr: "directory tag not set",
+		},
+		{
 			name: "valid mounts",
 			cfg: Config{
 				Mode: InitModeExec, Entrypoint: []string{"/bin/sh"},
@@ -171,6 +179,7 @@ func TestConfig_Validate(t *testing.T) {
 					{Target: "/etc/app.conf", File: &FileSource{Data: []byte("k=v"), Mode: 0o644}},
 					{Target: "/run/secrets/empty", File: &FileSource{Mode: 0o400}},
 					{Target: "/scratch", Tmpfs: &TmpfsSource{}},
+					{Target: "/app", Directory: &DirectorySource{Tag: "dicerfs0"}},
 				},
 			},
 		},

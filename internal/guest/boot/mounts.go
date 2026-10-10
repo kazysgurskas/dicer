@@ -81,6 +81,8 @@ func mountOne(i int, m guest.Mount) error {
 		return mountFile(i, m.File, target, m.ReadOnly)
 	case m.Tmpfs != nil:
 		return mountTmpfs(target)
+	case m.Directory != nil:
+		return mountDirectory(m.Directory, target, m.ReadOnly)
 	default:
 		return errors.New("nothing to mount")
 	}
@@ -110,6 +112,23 @@ func mountVolume(volume *guest.VolumeSource, target string, readOnly bool) error
 
 	if err := syscall.Mount(volume.Device, target, volume.FilesystemType, flags, data); err != nil {
 		return fmt.Errorf("mount %s: %w", volume.Device, err)
+	}
+	return nil
+}
+
+// mountDirectory mounts a host directory the VMM shares over virtio-fs, by
+// its tag.
+func mountDirectory(dir *guest.DirectorySource, target string, readOnly bool) error {
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return err
+	}
+
+	var flags uintptr
+	if readOnly {
+		flags = syscall.MS_RDONLY
+	}
+	if err := syscall.Mount(dir.Tag, target, "virtiofs", flags, ""); err != nil {
+		return fmt.Errorf("mount shared directory %s: %w", dir.Tag, err)
 	}
 	return nil
 }

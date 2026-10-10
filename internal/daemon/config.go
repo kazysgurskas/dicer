@@ -24,6 +24,7 @@ import (
 
 	"github.com/konradasb/dicer/internal/defaults"
 	"github.com/konradasb/dicer/internal/event"
+	"github.com/konradasb/dicer/internal/hostfs"
 	"github.com/konradasb/dicer/internal/hostnet"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/instance"
@@ -92,6 +93,9 @@ type Config struct {
 
 	// Events bounds the events log that dicer events shows.
 	Events EventsConfig `yaml:"events"`
+
+	// Mounts is what instances may mount from the host.
+	Mounts MountsConfig `yaml:"mounts"`
 
 	// Registries are the credentials for private registries, by host as an
 	// image's name gives it: docker.io, ghcr.io, or a registry's host:port.
@@ -450,6 +454,26 @@ type EventsConfig struct {
 	MaxAge time.Duration `yaml:"max_age,omitempty"`
 }
 
+// MountsConfig is what instances may mount from the host.
+type MountsConfig struct {
+	// AllowedDirectories are the host directories that instances may mount
+	// with `--mount type=directory`, each with everything under it, such as
+	// /srv/shared. An instance can share no other host directory, so these
+	// are all of the host that the API can reach this way. A symbolic link
+	// under one is followed only as far as it. Unset, no instance can mount
+	// a host directory.
+	AllowedDirectories []string `yaml:"allowed_directories,omitempty"`
+}
+
+// validate reports whether the allowed directories are absolute, clean
+// paths. Whether they exist is checked when an instance mounts one.
+func (m *MountsConfig) validate() error {
+	if err := hostfs.AllowedDirectories(m.AllowedDirectories).Validate(); err != nil {
+		return fmt.Errorf("mounts.allowed_directories: %w", err)
+	}
+	return nil
+}
+
 // validate reports whether the events log's bounds are usable.
 func (e *EventsConfig) validate() error {
 	switch {
@@ -483,6 +507,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Events.validate(); err != nil {
+		return err
+	}
+	if err := c.Mounts.validate(); err != nil {
 		return err
 	}
 	for host, r := range c.Registries {

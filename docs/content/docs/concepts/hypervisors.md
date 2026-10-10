@@ -94,6 +94,7 @@ Disk snapshots need no hypervisor and are unaffected.
 | Restoring a memory snapshot | v53: on demand, then the rest in the background. v48 and v49: all of the memory before the guest resumes | On demand, only the pages the guest uses |
 | Kernel command line | `console=ttyS0 reboot=k panic=1` | The same, and `pci=off` |
 | How the guest ends its hypervisor | It powers off | It resets, as Firecracker has no power button |
+| Directory mounts | Yes, through the virtiofsd that `dicerd` carries | No |
 
 How a guest ends its hypervisor is `dicer-init`'s business, so that
 difference does not show: an instance ends the same way under either.

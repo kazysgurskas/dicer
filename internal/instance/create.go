@@ -50,7 +50,8 @@ func (m *Manager) Create(ctx context.Context, instance Spec, pull image.PullPoli
 
 // checkCanStart refuses a definition that could never start on this host: a
 // missing kernel, network or volume, a static IP its network cannot assign,
-// or more resources than the host allows.
+// a host directory the daemon does not allow or cannot find, or more
+// resources than the host allows.
 func (m *Manager) checkCanStart(instance Spec) error {
 	if _, err := m.store.Kernel(instance.KernelName); err != nil {
 		return errdefs.InvalidArgument("%v", err)
@@ -72,11 +73,16 @@ func (m *Manager) checkCanStart(instance Spec) error {
 		}
 	}
 	for _, mount := range instance.Mounts {
-		if mount.Type != MountTypeVolume {
-			continue
-		}
-		if _, err := m.store.Volume(mount.Source); err != nil {
-			return errdefs.InvalidArgument("%v", err)
+		switch mount.Type {
+		case MountTypeVolume:
+			if _, err := m.store.Volume(mount.Source); err != nil {
+				return errdefs.InvalidArgument("%v", err)
+			}
+		case MountTypeDirectory:
+			// Checked again at each start, which is what shares it.
+			if _, err := m.allowedDirectories.Resolve(mount.Source); err != nil {
+				return errdefs.InvalidArgument("mount on %s: %v", mount.Target, err)
+			}
 		}
 	}
 	return m.CheckResources(instance.MaxResources())

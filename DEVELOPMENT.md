@@ -128,6 +128,7 @@ internal/
   dns/                  each network's nameserver: guests' names, and forwarding
   image/ registry/      pulling images and converting them to disks
   kernel/ volume/       the other resources an instance uses
+  virtiofs/             sharing host directories with guests, through the virtiofsd it embeds
   initrd/               the guest's initramfs
   hypervisor/           the hypervisor interface, and its two drivers
   process/              supervising hypervisor processes

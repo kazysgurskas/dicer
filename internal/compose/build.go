@@ -703,10 +703,16 @@ func (b *builder) mount(m rawMount) (dicer.Mount, error) {
 			return dicer.Mount{}, fmt.Errorf("volume %s is not declared under volumes", source)
 		}
 		return dicer.Mount{Type: dicer.MountTypeVolume, Source: v.Name, Target: target, ReadOnly: readOnly}, nil
-	case "bind":
+	case "bind", "directory":
 		path, err := b.resolvePath(source)
 		if err != nil {
 			return dicer.Mount{}, err
+		}
+		// A directory is shared from the daemon's host, which a bind takes to
+		// be this machine. A file is read here and its contents sent. With a
+		// remote daemon, a directory is given with type: directory.
+		if info, err := os.Stat(path); kind == "directory" || (err == nil && info.IsDir()) {
+			return dicer.Mount{Type: dicer.MountTypeDirectory, Source: path, Target: target, ReadOnly: readOnly}, nil
 		}
 		file, err := dicer.FileMount(path, target)
 		if err != nil {
@@ -720,7 +726,7 @@ func (b *builder) mount(m rawMount) (dicer.Mount, error) {
 		}
 		return dicer.Mount{Type: dicer.MountTypeTmpfs, Target: target}, nil
 	default:
-		return dicer.Mount{}, fmt.Errorf("invalid volume type %q: want volume, bind or tmpfs", kind)
+		return dicer.Mount{}, fmt.Errorf("invalid volume type %q: want volume, bind, directory or tmpfs", kind)
 	}
 }
 

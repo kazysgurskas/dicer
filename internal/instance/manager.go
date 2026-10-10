@@ -22,11 +22,13 @@ import (
 	"github.com/konradasb/dicer/internal/defaults"
 	"github.com/konradasb/dicer/internal/guest"
 	"github.com/konradasb/dicer/internal/health"
+	"github.com/konradasb/dicer/internal/hostfs"
 	"github.com/konradasb/dicer/internal/hypervisor"
 	"github.com/konradasb/dicer/internal/image"
 	"github.com/konradasb/dicer/internal/kernel"
 	"github.com/konradasb/dicer/internal/network"
 	"github.com/konradasb/dicer/internal/process"
+	"github.com/konradasb/dicer/internal/virtiofs"
 	"github.com/konradasb/dicer/internal/volume"
 	diceragentv1 "github.com/konradasb/dicer/proto/diceragent/v1"
 )
@@ -120,6 +122,13 @@ type DNSServers interface {
 	Stop(network string)
 }
 
+// Shares shares host directories with guests: it starts virtiofsd for a
+// share, on a socket the VMM connects to. The process ends when the VMM
+// does.
+type Shares interface {
+	Start(ctx context.Context, s virtiofs.Share) (*process.Process, error)
+}
+
 // Config holds the dependencies for a Manager.
 type Config struct {
 	Store    Store
@@ -138,6 +147,12 @@ type Config struct {
 	// DNSServers, if set, lets guests find each other by name. Without it,
 	// they are given the network's upstream nameservers.
 	DNSServers DNSServers
+	// Shares, if set, lets instances mount host directories. Without it,
+	// an instance that mounts one cannot start.
+	Shares Shares
+	// AllowedDirectories are the host directories instances may mount. An
+	// instance that mounts any other cannot start.
+	AllowedDirectories hostfs.AllowedDirectories
 
 	// Capacity limits the CPU and memory instances may be given. The zero
 	// value is unlimited.
@@ -161,10 +176,13 @@ type Manager struct {
 	hostNetwork HostNetwork
 	starters    map[hypervisor.Type][]hypervisor.Starter
 	dnsServers  DNSServers
+	shares      Shares
 	capacity    Capacity
 	metrics     metrics
 	events      Recorder
 	logger      *slog.Logger
+
+	allowedDirectories hostfs.AllowedDirectories
 
 	// procDir is where procfs is mounted, from which stats are read.
 	procDir string
@@ -248,11 +266,14 @@ func NewManager(cfg Config) *Manager {
 		hostNetwork: cfg.HostNetwork,
 		starters:    cfg.Starters,
 		dnsServers:  cfg.DNSServers,
+		shares:      cfg.Shares,
 		capacity:    cfg.Capacity,
 		metrics:     newMetrics(),
 		events:      cfg.Events,
 		logger:      cfg.Logger.With("component", "instance"),
 		procDir:     procfs.DefaultMountPoint,
+
+		allowedDirectories: cfg.AllowedDirectories,
 
 		provisionConfigDisk: provisionConfigDisk,
 		attach:              process.Attach,

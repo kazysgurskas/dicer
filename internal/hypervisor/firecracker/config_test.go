@@ -145,6 +145,9 @@ func TestNewSetupRejectsUnsupported(t *testing.T) {
 		{"gpu", func(s *hypervisor.VMSpec) {
 			s.GPU = &hypervisor.GPUConfig{Profile: "nvidia-35"}
 		}},
+		{"shared directory", func(s *hypervisor.VMSpec) {
+			s.Filesystems = []hypervisor.FilesystemConfig{{Tag: "dicerfs0", Socket: "/run/fs0.sock"}}
+		}},
 	}
 
 	for _, tt := range tests {

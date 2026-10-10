@@ -125,6 +125,14 @@ type NetworkInterfaceConfig struct {
 	MTU       int
 }
 
+// FilesystemConfig shares a host directory with the guest over virtio-fs: a
+// vhost-user device served by virtiofsd on Socket, which the guest mounts
+// by Tag.
+type FilesystemConfig struct {
+	Tag    string
+	Socket string
+}
+
 // GPUConfig describes a mediated GPU device assigned to the guest.
 type GPUConfig struct {
 	// Profile is the vGPU profile's name, such as nvidia-35.
@@ -136,10 +144,12 @@ type GPUConfig struct {
 
 // VMSpec is the full specification of a guest, handed to a Starter to boot.
 type VMSpec struct {
-	Boot              BootConfig
-	CPU               CPUConfig
-	Memory            MemoryConfig
-	Disks             []DiskConfig
+	Boot   BootConfig
+	CPU    CPUConfig
+	Memory MemoryConfig
+	Disks  []DiskConfig
+	// Filesystems are host directories shared over virtio-fs.
+	Filesystems       []FilesystemConfig
 	PCIDevices        []PCIDeviceConfig
 	NetworkInterfaces []NetworkInterfaceConfig
 	Console           ConsoleConfig

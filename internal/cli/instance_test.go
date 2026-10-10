@@ -143,6 +143,25 @@ func TestBuildCreateRequestMountFlags(t *testing.T) {
 	}
 }
 
+// TestBuildCreateRequestDirectoryMounts checks that a directory's source is
+// sent as given: it is a path on the daemon's host, not on this machine.
+func TestBuildCreateRequestDirectoryMounts(t *testing.T) {
+	got, err := runBuild(t, "web",
+		"--mount", "type=directory,source=/srv/shared/src,target=/app",
+		"--mount", "type=directory,src=/srv/shared/docs,dst=/docs,ro")
+	if err != nil {
+		t.Fatalf("buildCreateRequest: %v", err)
+	}
+
+	want := []dicer.Mount{
+		{Type: dicer.MountTypeDirectory, Source: "/srv/shared/src", Target: "/app"},
+		{Type: dicer.MountTypeDirectory, Source: "/srv/shared/docs", Target: "/docs", ReadOnly: true},
+	}
+	if !reflect.DeepEqual(got.spec.Mounts, want) {
+		t.Errorf("mounts = %+v, want %+v", got.spec.Mounts, want)
+	}
+}
+
 func TestBuildCreateRequestRejectsBadMounts(t *testing.T) {
 	for _, argv := range [][]string{
 		{"--mount", "type=volume,source=data"},

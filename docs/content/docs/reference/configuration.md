@@ -234,6 +234,18 @@ The daemon's own settings. The sections after them are the server, resources, ne
 
 `max_age` drops events older than this, such as 720h. Unset is no limit.
 
+## `mounts` {#mounts}
+
+*mapping*
+
+`mounts` is what instances may mount from the host.
+
+### `mounts.allowed_directories` {#mounts-allowed-directories}
+
+*list of strings*
+
+`allowed_directories` are the host directories that instances may mount with `--mount type=directory`, each with everything under it, such as /srv/shared. An instance can share no other host directory, so these are all of the host that the API can reach this way. A symbolic link under one is followed only as far as it. Unset, no instance can mount a host directory.
+
 ## `registries.*` {#registries}
 
 *mapping of names to mappings*

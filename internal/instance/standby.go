@@ -67,6 +67,10 @@ func (m *Manager) standby(ctx context.Context, instance Spec, idleFor time.Durat
 			instance.Name, status.State.Lowercase())
 	}
 
+	if instance.HasDirectoryMount() {
+		return errdefs.InvalidState("instance %q mounts a host directory, whose device cannot be frozen", instance.Name)
+	}
+
 	allocation, err := m.allocationOf(instance)
 	if err != nil {
 		return err

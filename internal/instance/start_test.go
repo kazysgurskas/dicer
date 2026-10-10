@@ -37,7 +37,8 @@ func TestResolveMountsAttachesExistingDisk(t *testing.T) {
 	instance := seedInstance(t, store, "web")
 	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
-	mounts, disks, err := manager.resolveMounts(instance)
+	resolved, err := manager.resolveMounts(instance)
+	mounts, disks := resolved.guest, resolved.disks
 	if err != nil {
 		t.Fatalf("resolveMounts: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestResolveMountsMissingDisk(t *testing.T) {
 	instance := seedInstance(t, store, "web")
 	instance.Mounts = []Mount{{Type: MountTypeVolume, Source: "data", Target: "/data"}}
 
-	if _, _, err := manager.resolveMounts(instance); err == nil {
+	if _, err := manager.resolveMounts(instance); err == nil {
 		t.Error("resolveMounts succeeded for a volume whose disk is gone")
 	}
 }
@@ -88,7 +89,8 @@ func TestResolveMountsMixed(t *testing.T) {
 		{Type: MountTypeVolume, Source: "b", Target: "/b", ReadOnly: true},
 	}
 
-	mounts, disks, err := manager.resolveMounts(instance)
+	resolved, err := manager.resolveMounts(instance)
+	mounts, disks := resolved.guest, resolved.disks
 	if err != nil {
 		t.Fatalf("resolveMounts: %v", err)
 	}

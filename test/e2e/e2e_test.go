@@ -79,6 +79,9 @@ type paths struct {
 	// api is the address the daemon serves the API on over the network.
 	// Loopback too, for the same reason: the tests reach it from the host.
 	api string
+
+	// shared is the host directory instances may mount directories under.
+	shared string
 }
 
 // newPaths returns the paths of this run's own prefix.
@@ -95,6 +98,7 @@ func newPaths() paths {
 		runDir:  "/run/dicer-e2e",
 		unit:    "dicer-e2e",
 		metrics: "127.0.0.1:9101",
+		shared:  root + "/shared",
 
 		api: "127.0.0.1:17443",
 	}
@@ -211,7 +215,10 @@ network:
 metrics:
   enable: true
   listen: %s
-`, e.paths.dataDir, e.paths.runDir, e.paths.api, e.paths.socket, defaultSubnet, e.paths.metrics)
+mounts:
+  allowed_directories:
+    - %s
+`, e.paths.dataDir, e.paths.runDir, e.paths.api, e.paths.socket, defaultSubnet, e.paths.metrics, e.paths.shared)
 
 	// A heredoc keeps the file's content out of the command line, where it
 	// would have to survive two levels of shell quoting.
