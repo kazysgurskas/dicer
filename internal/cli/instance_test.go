@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v3"
@@ -528,6 +530,22 @@ func TestUpdateSetsAndRemovesRateLimits(t *testing.T) {
 	if _, err := run(t, "update", "db", "--upload-rate", "fast"); err == nil ||
 		!strings.Contains(err.Error(), "invalid --upload-rate") {
 		t.Errorf("an invalid rate should be refused, got %v", err)
+	}
+}
+
+// TestInspectWithoutEvents checks that inspect shows an instance to a token
+// that cannot read events, without them.
+func TestInspectWithoutEvents(t *testing.T) {
+	daemon := newFakeInstanceDaemon(fakeInstances()...)
+	daemon.eventsErr = status.Error(codes.PermissionDenied, `token "ci" lacks scope events:read`)
+	serveFakeDaemon(t, daemon)
+
+	out, err := run(t, "inspect", "web")
+	if err != nil {
+		t.Fatalf("inspect: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "● web") || strings.Contains(out, "Events") {
+		t.Errorf("inspect = \n%s\nwant the instance without events", out)
 	}
 }
 

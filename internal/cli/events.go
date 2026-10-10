@@ -277,7 +277,8 @@ func eventTime(t time.Time) string {
 }
 
 // recentEvents returns an instance's last events, for inspect. A daemon too
-// old to keep events has none to show, which is no error.
+// old to keep events, or a token without events:read, has none to show,
+// which is no error.
 func recentEvents(ctx context.Context, client *dicer.Client, instanceID string) ([]dicer.Event, error) {
 	stream, err := client.Events(ctx, dicer.EventOptions{
 		Kind:  dicer.EventKindInstance,
@@ -295,7 +296,7 @@ func recentEvents(ctx context.Context, client *dicer.Client, instanceID string) 
 		switch {
 		case errors.Is(err, io.EOF):
 			return out, nil
-		case errors.Is(err, dicer.ErrUnimplemented):
+		case errors.Is(err, dicer.ErrUnimplemented), errors.Is(err, dicer.ErrPermissionDenied):
 			return nil, nil
 		case err != nil:
 			return nil, err

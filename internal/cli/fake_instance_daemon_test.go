@@ -54,6 +54,8 @@ type fakeInstanceDaemon struct {
 	// history is what GetEvents streams before it has caught up: what
 	// happened before the command asked.
 	history []*dicerdv1.Event
+	// eventsErr, if set, is what GetEvents fails with instead.
+	eventsErr error
 	// waiters hear each instance's next stop, by instance ID.
 	waiters map[string][]chan *dicerdv1.WaitInstanceResponse
 
@@ -296,8 +298,11 @@ func (d *fakeInstanceDaemon) GetEvents(
 	req *dicerdv1.GetEventsRequest, stream grpc.ServerStreamingServer[dicerdv1.GetEventsResponse],
 ) error {
 	d.mu.Lock()
-	history := slices.Clone(d.history)
+	history, eventsErr := slices.Clone(d.history), d.eventsErr
 	d.mu.Unlock()
+	if eventsErr != nil {
+		return eventsErr
+	}
 
 	if err := stream.Send(&dicerdv1.GetEventsResponse{Events: history, CaughtUp: true}); err != nil {
 		return err
