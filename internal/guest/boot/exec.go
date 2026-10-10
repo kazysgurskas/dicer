@@ -88,16 +88,28 @@ func runWorkload(log *slog.Logger, cmd *exec.Cmd, signals <-chan os.Signal) int 
 	}
 	go forwardSignals(log, signals, cmd.Process)
 
-	err := cmd.Wait()
-	var exitErr *exec.ExitError
-	switch {
-	case err == nil:
-		return 0
-	case errors.As(err, &exitErr):
-		return guest.ExitStatus(exitErr.ProcessState)
-	default:
-		log.Error("entrypoint wait failed", "error", err)
-		return 0
+	return reapUntilExit(log, cmd.Process.Pid)
+}
+
+// reapUntilExit reaps each of dicer-init's children as it ends, and returns
+// the workload's exit code once the workload has ended. As PID 1, dicer-init
+// is given every process whose parent ends first, such as one that a command
+// run by dicer exec left in the background. Reaping them keeps them from
+// staying zombies. All waiting is done here, because any other wait could
+// take the workload's exit status.
+func reapUntilExit(log *slog.Logger, workloadPID int) int {
+	for {
+		var status syscall.WaitStatus
+		reaped, err := syscall.Wait4(-1, &status, 0, nil)
+		switch {
+		case errors.Is(err, syscall.EINTR):
+			// A signal arrived during the wait, which goes on.
+		case err != nil:
+			log.Error("entrypoint wait failed", "error", err)
+			return 0
+		case reaped == workloadPID:
+			return guest.ExitStatus(status)
+		}
 	}
 }
 

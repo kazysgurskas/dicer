@@ -5,6 +5,7 @@ package guest
 
 import (
 	"os/exec"
+	"syscall"
 	"testing"
 )
 
@@ -19,7 +20,11 @@ func TestExitStatus(t *testing.T) {
 		t.Run(script, func(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), "sh", "-c", script)
 			_ = cmd.Run()
-			if got := ExitStatus(cmd.ProcessState); got != want {
+			status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+			if !ok {
+				t.Fatalf("Sys = %T, want a syscall.WaitStatus", cmd.ProcessState.Sys())
+			}
+			if got := ExitStatus(status); got != want {
 				t.Errorf("ExitStatus = %d, want %d", got, want)
 			}
 		})

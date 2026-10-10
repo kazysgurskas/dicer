@@ -3,18 +3,15 @@
 
 package guest
 
-import (
-	"os"
-	"syscall"
-)
+import "syscall"
 
 // ExitStatus returns a finished process's exit status as a shell reports it:
 // its exit code, or 128 plus the signal that killed it.
-func ExitStatus(ps *os.ProcessState) int {
-	if ws, ok := ps.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+func ExitStatus(ws syscall.WaitStatus) int {
+	if ws.Signaled() {
 		return 128 + int(ws.Signal())
 	}
-	return ps.ExitCode()
+	return ws.ExitStatus()
 }
 
 // ShutdownSignal asks the guest's PID 1 to shut down: SIGRTMIN+4, systemd's

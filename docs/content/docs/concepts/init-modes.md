@@ -31,6 +31,13 @@ them.
 reports its exit code to the host and ends the machine, so the instance ends
 with it.
 
+As the machine's PID 1, `dicer-init` also cleans up after
+[`dicer exec`](../../guides/working-inside-guests#run-a-command). A process
+that a command left running in the background is reaped when it exits, so
+it does not stay behind as a zombie. Inside the command's own PID namespace,
+the command is PID 1, so there that job is the command's, as it is in a
+container.
+
 If the command cannot be started, the instance ends at once, with the exit
 code a shell would give: 127 if the image does not have the command, or 126
 if it cannot be run.

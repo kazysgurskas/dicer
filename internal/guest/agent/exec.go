@@ -280,5 +280,7 @@ func exitCodeOf(ctx context.Context, cmd *exec.Cmd, waitErr error) int32 {
 	if !state.Exited() && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return exitTimedOut
 	}
-	return int32(guest.ExitStatus(state))
+	// Sys is a syscall.WaitStatus on every Unix.
+	status, _ := state.Sys().(syscall.WaitStatus)
+	return int32(guest.ExitStatus(status))
 }
